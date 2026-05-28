@@ -1,0 +1,13 @@
+# Node
+node_modules/
+frontend/.next/
+frontend/out/
+
+# Java
+backend/target/
+
+# Env
+.env
+
+# Logs
+*.log
