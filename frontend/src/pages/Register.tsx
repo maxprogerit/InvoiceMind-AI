@@ -12,12 +12,17 @@ export default function Register() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
+    if (password !== confirmPassword) {
+      pushToast("Password confirmation does not match.", "error");
+      return;
+    }
     try {
       register({ name, email, password });
-      pushToast("Account created.", "success");
+      pushToast("Account created with empty workspace.", "success");
       navigate("/");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Registration failed";
@@ -32,6 +37,13 @@ export default function Register() {
           <Input placeholder="Full name" value={name} onChange={(event) => setName(event.target.value)} required />
           <Input placeholder="Email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
           <Input placeholder="Password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
+          <Input
+            placeholder="Confirm password"
+            type="password"
+            value={confirmPassword}
+            onChange={(event) => setConfirmPassword(event.target.value)}
+            required
+          />
           <Button type="submit">Register</Button>
         </form>
         <p className="muted">

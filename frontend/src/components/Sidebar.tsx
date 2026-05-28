@@ -1,4 +1,5 @@
 import { NavLink } from "react-router-dom";
+import { useCRMStore } from "../store/crmStore";
 
 const links = [
   { to: "/", label: "Dashboard" },
@@ -17,9 +18,12 @@ const links = [
 ];
 
 export function Sidebar() {
+  const workspace = useCRMStore((state) => state.settings.workspaceLabel);
+  const companyName = useCRMStore((state) => state.settings.companyName);
   return (
     <aside className="sidebar">
-      <h2>InvoiceMind CRM</h2>
+      <h2>{companyName}</h2>
+      <p className="muted">{workspace}</p>
       <nav>
         {links.map((link) => (
           <NavLink

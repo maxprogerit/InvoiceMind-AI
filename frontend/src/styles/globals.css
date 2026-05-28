@@ -12,6 +12,30 @@ body,
   color: #111827;
 }
 
+body[data-theme="dark"] {
+  background: #0b1220;
+  color: #e5e7eb;
+}
+
+body[data-theme="dark"] .card,
+body[data-theme="dark"] .modal,
+body[data-theme="dark"] .assistant-panel {
+  background: #111827;
+  border-color: #1f2937;
+}
+
+body[data-theme="dark"] .input,
+body[data-theme="dark"] .table th,
+body[data-theme="dark"] .table td {
+  background: #0f172a;
+  color: #e5e7eb;
+  border-color: #1f2937;
+}
+
+body[data-theme="dark"] .muted {
+  color: #94a3b8;
+}
+
 a {
   color: #2563eb;
 }

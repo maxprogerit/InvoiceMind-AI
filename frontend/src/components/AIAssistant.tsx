@@ -1,47 +1,63 @@
 import { useState } from "react";
-import { askAiAssistant } from "../services/api";
 import { Button } from "./Button";
 import { Input } from "./Input";
-
-interface Message {
-  role: "user" | "assistant";
-  content: string;
-}
+import { useCRMStore } from "../store/crmStore";
 
 export function AIAssistant() {
-  const [open, setOpen] = useState(false);
+  const open = useCRMStore((state) => state.assistantOpen);
+  const messages = useCRMStore((state) => state.assistantMessages);
+  const loading = useCRMStore((state) => state.assistantTyping);
+  const toggleAssistant = useCRMStore((state) => state.toggleAssistant);
+  const sendAssistantMessage = useCRMStore((state) => state.sendAssistantMessage);
   const [prompt, setPrompt] = useState("");
-  const [messages, setMessages] = useState<Message[]>([
-    { role: "assistant", content: "Hi! I can help summarize pipeline risk, cashflow, and task priorities." },
-  ]);
-  const [loading, setLoading] = useState(false);
+
+  const quickPrompts = [
+    "Summarize dashboard",
+    "Find overdue invoices",
+    "Show top clients",
+    "Analyze sales pipeline",
+    "Suggest follow ups",
+    "Show missing documents",
+    "Forecast revenue",
+  ];
 
   const send = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!prompt.trim()) return;
     const question = prompt.trim();
     setPrompt("");
-    setMessages((prev) => [...prev, { role: "user", content: question }]);
-    setLoading(true);
-    const answer = await askAiAssistant(question);
-    setMessages((prev) => [...prev, { role: "assistant", content: answer }]);
-    setLoading(false);
+    await sendAssistantMessage(question);
   };
 
   return (
     <div className={`assistant ${open ? "open" : ""}`}>
-      <button className="assistant-toggle" onClick={() => setOpen((value) => !value)}>
-        AI Assistant
+      <button className="assistant-toggle" onClick={toggleAssistant}>
+        Open AI Assistant
       </button>
       {open && (
         <div className="assistant-panel">
+          <div className="row" style={{ flexWrap: "wrap", marginBottom: 8 }}>
+            {quickPrompts.map((quickPrompt) => (
+              <Button
+                key={quickPrompt}
+                variant="secondary"
+                type="button"
+                onClick={() => {
+                  setPrompt(quickPrompt);
+                  void sendAssistantMessage(quickPrompt);
+                }}
+              >
+                {quickPrompt}
+              </Button>
+            ))}
+          </div>
           <div className="assistant-messages">
-            {messages.map((message, index) => (
-              <p key={index} className={message.role === "assistant" ? "assistant-bubble" : "user-bubble"}>
+            {messages.map((message) => (
+              <p key={message.id} className={message.role === "assistant" ? "assistant-bubble" : "user-bubble"}>
                 {message.content}
               </p>
             ))}
-            {loading && <p className="assistant-bubble">Thinking...</p>}
+            {loading && <p className="assistant-bubble">Typing...</p>}
           </div>
           <form onSubmit={send} className="row">
             <Input value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Ask about CRM performance..." />

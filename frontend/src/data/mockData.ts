@@ -1,83 +1,330 @@
-import type {
-  AppSettings,
-  CalendarEvent,
-  Client,
-  Company,
-  Contact,
-  Deal,
-  DocumentItem,
-  Invoice,
-  Receipt,
-  TeamMember,
-  User,
-} from "../types/types";
+import type { User, WorkspaceData } from "../types/types";
 
-export const users: User[] = [
-  { id: "user-1", name: "Admin User", email: "admin@invoicemind.ai", password: "admin123" },
-];
-
-export const clients: Client[] = [
-  { id: "client-1", name: "Apex Labs", email: "billing@apexlabs.com", phone: "+1 555 0001", status: "active" },
-  { id: "client-2", name: "Northstar Retail", email: "finance@northstar.com", phone: "+1 555 0002", status: "active" },
-];
-
-export const companies: Company[] = [
-  { id: "company-1", name: "Apex Labs", industry: "SaaS", size: "51-200", website: "https://apexlabs.com" },
-  { id: "company-2", name: "Northstar Retail", industry: "Retail", size: "201-500", website: "https://northstar.com" },
-];
-
-export const contacts: Contact[] = [
-  {
-    id: "contact-1",
-    firstName: "Nora",
-    lastName: "Reyes",
-    email: "nora@apexlabs.com",
-    phone: "+1 555 1010",
-    companyId: "company-1",
-  },
-  {
-    id: "contact-2",
-    firstName: "Leo",
-    lastName: "Trent",
-    email: "leo@northstar.com",
-    phone: "+1 555 2020",
-    companyId: "company-2",
-  },
-];
-
-export const deals: Deal[] = [
-  { id: "deal-1", title: "Apex Annual Contract", clientId: "client-1", value: 28000, stage: "proposal", closeDate: "2026-06-30" },
-  { id: "deal-2", title: "Northstar Expansion", clientId: "client-2", value: 42000, stage: "qualified", closeDate: "2026-07-15" },
-];
-
-export const calendarEvents: CalendarEvent[] = [
-  { id: "event-1", title: "Client Kickoff", date: "2026-06-01", type: "meeting", notes: "Apex onboarding call" },
-  { id: "event-2", title: "Invoice Review", date: "2026-06-03", type: "finance", notes: "Q2 cashflow review" },
-];
-
-export const documents: DocumentItem[] = [
-  { id: "doc-1", name: "Apex-MSA.pdf", type: "contract", size: 245000, uploadedAt: "2026-05-20", linkedTo: "Apex Labs" },
-  { id: "doc-2", name: "Northstar-NDA.pdf", type: "legal", size: 162000, uploadedAt: "2026-05-21", linkedTo: "Northstar Retail" },
-];
-
-export const invoices: Invoice[] = [
-  { id: "INV-1001", clientId: "client-1", amount: 8500, dueDate: "2026-06-10", issuedDate: "2026-05-20", status: "sent" },
-  { id: "INV-1002", clientId: "client-2", amount: 12600, dueDate: "2026-06-18", issuedDate: "2026-05-22", status: "draft" },
-];
-
-export const receipts: Receipt[] = [
-  { id: "REC-2001", invoiceId: "INV-1001", amount: 8500, date: "2026-05-26", method: "Bank Transfer" },
-];
-
-export const teamMembers: TeamMember[] = [
-  { id: "team-1", name: "Maya Cole", email: "maya@invoicemind.ai", role: "Sales", status: "active" },
-  { id: "team-2", name: "Ivan Ross", email: "ivan@invoicemind.ai", role: "Finance", status: "active" },
-];
-
-export const settings: AppSettings = {
-  companyName: "InvoiceMind AI",
-  timezone: "UTC",
-  currency: "USD",
-  theme: "light",
-  notifications: true,
+export const DEMO_ACCOUNT = {
+  email: "demo@clientcore.com",
+  password: "demo123",
 };
+
+export const demoUser: User = {
+  id: "user-demo",
+  name: "Demo User",
+  email: DEMO_ACCOUNT.email,
+  password: DEMO_ACCOUNT.password,
+  createdAt: "2026-01-01",
+};
+
+export const demoWorkspace: WorkspaceData = {
+  clients: [
+    {
+      id: "client-1",
+      name: "Apex Labs",
+      email: "billing@apexlabs.com",
+      phone: "+1 555 0001",
+      company: "Apex Labs",
+      industry: "SaaS",
+      status: "active",
+      estimatedValue: 68000,
+      notes: "Interested in annual expansion and onboarding bundle.",
+      tags: ["Enterprise", "Renewal"],
+      lastContactDate: "2026-05-20",
+    },
+    {
+      id: "client-2",
+      name: "Northstar Retail",
+      email: "finance@northstar.com",
+      phone: "+1 555 0002",
+      company: "Northstar Retail",
+      industry: "Retail",
+      status: "active",
+      estimatedValue: 42000,
+      notes: "Needs legal review before final proposal.",
+      tags: ["Mid-Market"],
+      lastContactDate: "2026-05-24",
+    },
+  ],
+  deals: [
+    {
+      id: "deal-1",
+      title: "Apex Annual Contract",
+      clientId: "client-1",
+      company: "Apex Labs",
+      stage: "Proposal",
+      value: 28000,
+      probability: 70,
+      expectedCloseDate: "2026-06-30",
+      assignedTeamMemberId: "team-1",
+      notes: "Decision expected after finance review.",
+    },
+    {
+      id: "deal-2",
+      title: "Northstar Expansion",
+      clientId: "client-2",
+      company: "Northstar Retail",
+      stage: "Qualified",
+      value: 42000,
+      probability: 45,
+      expectedCloseDate: "2026-07-15",
+      assignedTeamMemberId: "team-1",
+      notes: "Waiting on implementation timeline.",
+    },
+  ],
+  contacts: [
+    {
+      id: "contact-1",
+      name: "Nora Reyes",
+      email: "nora@apexlabs.com",
+      phone: "+1 555 1010",
+      role: "Procurement Lead",
+      companyId: "company-1",
+      linkedClientId: "client-1",
+      communicationHistory: ["2026-05-20: Reviewed proposal updates."],
+      notes: "Prefers email communication.",
+      lastCommunication: "2026-05-20",
+    },
+    {
+      id: "contact-2",
+      name: "Leo Trent",
+      email: "leo@northstar.com",
+      phone: "+1 555 2020",
+      role: "Finance Director",
+      companyId: "company-2",
+      linkedClientId: "client-2",
+      communicationHistory: ["2026-05-24: Requested revised scope."],
+      notes: "Needs CFO sign-off.",
+      lastCommunication: "2026-05-24",
+    },
+  ],
+  companies: [
+    {
+      id: "company-1",
+      name: "Apex Labs",
+      industry: "SaaS",
+      website: "https://apexlabs.com",
+      size: "51-200",
+      revenue: 5600000,
+      status: "active",
+      notes: "Growing quickly in EMEA market.",
+    },
+    {
+      id: "company-2",
+      name: "Northstar Retail",
+      industry: "Retail",
+      website: "https://northstar.com",
+      size: "201-500",
+      revenue: 14200000,
+      status: "active",
+      notes: "Legacy process modernization initiative.",
+    },
+  ],
+  documents: [
+    {
+      id: "doc-1",
+      type: "Contract",
+      fileName: "Apex-MSA.pdf",
+      fileSize: 245000,
+      uploadDate: "2026-05-20",
+      linkedClientId: "client-1",
+      linkedCompanyId: "company-1",
+    },
+    {
+      id: "doc-2",
+      type: "Legal",
+      fileName: "Northstar-NDA.pdf",
+      fileSize: 162000,
+      uploadDate: "2026-05-21",
+      linkedClientId: "client-2",
+      linkedCompanyId: "company-2",
+    },
+  ],
+  invoices: [
+    {
+      id: "invoice-1",
+      invoiceNumber: "INV-1001",
+      clientId: "client-1",
+      items: [{ id: "item-1", description: "Implementation Sprint", quantity: 1, price: 8500 }],
+      subtotal: 8500,
+      tax: 850,
+      total: 9350,
+      dueDate: "2026-06-10",
+      issuedDate: "2026-05-20",
+      status: "Pending",
+      notes: "Net 21 terms.",
+    },
+    {
+      id: "invoice-2",
+      invoiceNumber: "INV-1002",
+      clientId: "client-2",
+      items: [{ id: "item-2", description: "Discovery Workshop", quantity: 1, price: 12600 }],
+      subtotal: 12600,
+      tax: 1260,
+      total: 13860,
+      dueDate: "2026-05-22",
+      issuedDate: "2026-05-10",
+      status: "Overdue",
+      notes: "Reminder sent.",
+    },
+  ],
+  receipts: [
+    {
+      id: "receipt-1",
+      receiptNumber: "REC-2001",
+      vendor: "Cloud Tools Inc.",
+      amount: 499,
+      category: "Software",
+      date: "2026-05-26",
+      paymentMethod: "Card",
+      linkedClientId: "client-1",
+      linkedDealId: "deal-1",
+      notes: "Monthly automation suite fee.",
+    },
+  ],
+  calendarEvents: [
+    {
+      id: "event-1",
+      title: "Apex Kickoff",
+      type: "Meeting",
+      date: "2026-06-01",
+      time: "10:00",
+      linkedClientId: "client-1",
+      linkedDealId: "deal-1",
+      description: "Project scope alignment.",
+    },
+    {
+      id: "event-2",
+      title: "Northstar Follow-up",
+      type: "Call",
+      date: "2026-06-03",
+      time: "14:30",
+      linkedClientId: "client-2",
+      linkedDealId: "deal-2",
+      description: "Review implementation timeline.",
+    },
+  ],
+  tasks: [
+    {
+      id: "task-1",
+      title: "Send invoice reminder to Northstar",
+      dueDate: "2026-05-30",
+      status: "in_progress",
+      assignedTeamMemberId: "team-2",
+      linkedClientId: "client-2",
+    },
+  ],
+  teamMembers: [
+    {
+      id: "team-1",
+      name: "Maya Cole",
+      email: "maya@clientcore.com",
+      role: "Sales",
+      department: "Revenue",
+      status: "active",
+      assignedDeals: 4,
+      tasksCompleted: 29,
+      revenueGenerated: 168000,
+    },
+    {
+      id: "team-2",
+      name: "Ivan Ross",
+      email: "ivan@clientcore.com",
+      role: "Finance",
+      department: "Finance",
+      status: "active",
+      assignedDeals: 1,
+      tasksCompleted: 21,
+      revenueGenerated: 94000,
+    },
+  ],
+  settings: {
+    profileName: "Demo User",
+    companyName: "ClientCore CRM",
+    workspaceLabel: "Demo Workspace",
+    billingPlan: "Pro",
+    timezone: "UTC",
+    currency: "USD",
+    theme: "light",
+    notifications: {
+      deals: true,
+      invoices: true,
+      reminders: true,
+    },
+    security: {
+      twoFactor: false,
+    },
+    apiIntegrations: {
+      slackWebhook: "",
+    },
+  },
+  notifications: [
+    { id: "note-1", message: "2 invoices are pending action.", read: false, createdAt: "2026-05-26" },
+    { id: "note-2", message: "Apex kickoff meeting is upcoming.", read: false, createdAt: "2026-05-27" },
+  ],
+  assistantMessages: [
+    {
+      id: "ai-1",
+      role: "assistant",
+      content: "Hi! I can summarize dashboard, overdue invoices, top clients, and pipeline forecast.",
+      createdAt: "2026-05-27T10:00:00.000Z",
+    },
+  ],
+  activity: [
+    {
+      id: "activity-1",
+      entity: "deal",
+      entityId: "deal-1",
+      text: "Deal moved to Proposal",
+      createdAt: "2026-05-25T11:00:00.000Z",
+    },
+    {
+      id: "activity-2",
+      entity: "invoice",
+      entityId: "invoice-2",
+      text: "Invoice INV-1002 is overdue",
+      createdAt: "2026-05-26T09:30:00.000Z",
+    },
+  ],
+};
+
+export function createEmptyWorkspace(name = "New Workspace"): WorkspaceData {
+  return {
+    clients: [],
+    deals: [],
+    contacts: [],
+    companies: [],
+    documents: [],
+    invoices: [],
+    receipts: [],
+    calendarEvents: [],
+    tasks: [],
+    teamMembers: [],
+    settings: {
+      profileName: "New User",
+      companyName: "ClientCore CRM",
+      workspaceLabel: name,
+      billingPlan: "Starter",
+      timezone: "UTC",
+      currency: "USD",
+      theme: "light",
+      notifications: {
+        deals: true,
+        invoices: true,
+        reminders: true,
+      },
+      security: {
+        twoFactor: false,
+      },
+      apiIntegrations: {
+        slackWebhook: "",
+      },
+    },
+    notifications: [],
+    assistantMessages: [
+      {
+        id: "ai-welcome",
+        role: "assistant",
+        content: "Welcome! Your workspace is empty. Start by adding your first client.",
+        createdAt: new Date().toISOString(),
+      },
+    ],
+    activity: [],
+  };
+}
