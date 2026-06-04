@@ -27,12 +27,14 @@ export default function Register() {
 
   return (
     <div className="auth-wrap">
-      <Card title="Register" subtitle="Create a new CRM account">
+      <div className="auth-bg-particles" />
+      <Card title="Create Your AI Workspace" subtitle="Premium onboarding for InvoiceMind AI" className="auth-card">
+        <p className="kicker">Enterprise Setup</p>
         <form className="form" onSubmit={submit}>
           <Input placeholder="Full name" value={name} onChange={(event) => setName(event.target.value)} required />
           <Input placeholder="Email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
           <Input placeholder="Password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
-          <Button type="submit">Register</Button>
+          <Button type="submit">Create AI Account</Button>
         </form>
         <p className="muted">
           Already have an account? <Link to="/login">Login</Link>
