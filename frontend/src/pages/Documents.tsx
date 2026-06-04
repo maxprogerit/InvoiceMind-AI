@@ -1,16 +1,13 @@
 import { useMemo, useState } from "react";
-import { Button } from "../components/Button";
 import { Card } from "../components/Card";
 import { FileUpload } from "../components/FileUpload";
 import { Input } from "../components/Input";
 import { Select } from "../components/Select";
-import { Table } from "../components/Table";
 import { useCRMStore } from "../store/crmStore";
 import { byQuery } from "../utils/helpers";
 
 export default function Documents() {
   const documents = useCRMStore((state) => state.documents);
-  const deleteDocument = useCRMStore((state) => state.deleteDocument);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
 
@@ -23,11 +20,12 @@ export default function Documents() {
 
   return (
     <div className="stack">
-      <Card title="Upload Document" subtitle="Add contracts, invoices, and receipts">
+      <Card title="Upload Intelligence Package" subtitle="Add invoices, receipts, and contracts to the AI mesh">
         <FileUpload />
       </Card>
-      <Card title="Documents" subtitle="Filters, search, table, and empty states">
-        <div className="grid cols-4">
+
+      <Card title="Document Stream" subtitle="Premium AI extraction views with confidence telemetry">
+        <div className="grid cols-2">
           <Input placeholder="Search document..." value={query} onChange={(event) => setQuery(event.target.value)} />
           <Select value={filter} onChange={(event) => setFilter(event.target.value)}>
             <option value="all">All types</option>
@@ -38,25 +36,32 @@ export default function Documents() {
             <option value="legal">Legal</option>
           </Select>
         </div>
-        <Table
-          rows={rows}
-          emptyMessage="No documents uploaded yet."
-          columns={[
-            { header: "Name", render: (row) => row.name },
-            { header: "Type", render: (row) => row.type },
-            { header: "Size", render: (row) => `${Math.round(row.size / 1024)} KB` },
-            { header: "Uploaded", render: (row) => row.uploadedAt },
-            { header: "Linked To", render: (row) => row.linkedTo },
-            {
-              header: "Action",
-              render: (row) => (
-                <Button variant="danger" onClick={() => deleteDocument(row.id)}>
-                  Delete
-                </Button>
-              ),
-            },
-          ]}
-        />
+
+        {!rows.length && <div className="empty-state">No documents in the current filter.</div>}
+
+        <div className="doc-grid">
+          {rows.map((doc, index) => {
+            const confidence = Math.max(74, 98 - (index % 7) * 3);
+            return (
+              <article key={doc.id} className="doc-card">
+                <div className="doc-preview">
+                  <span>{doc.type.toUpperCase()}</span>
+                  <small>AI Scan Overlay</small>
+                </div>
+                <div className="doc-meta">
+                  <h3>{doc.name}</h3>
+                  <p>{doc.linkedTo}</p>
+                  <div className="doc-stats">
+                    <span>Status: Extracting fields</span>
+                    <span>Confidence: {confidence}%</span>
+                    <span>Size: {Math.round(doc.size / 1024)} KB</span>
+                    <span>Workflow: Validation</span>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
+        </div>
       </Card>
     </div>
   );

@@ -9,15 +9,16 @@ interface TableProps<T> {
   rows: T[];
   columns: TableColumn<T>[];
   emptyMessage: string;
+  className?: string;
 }
 
-export function Table<T>({ rows, columns, emptyMessage }: TableProps<T>) {
+export function Table<T>({ rows, columns, emptyMessage, className = "" }: TableProps<T>) {
   if (!rows.length) {
     return <div className="empty-state">{emptyMessage}</div>;
   }
 
   return (
-    <div className="table-wrap">
+    <div className={`table-wrap ${className}`.trim()}>
       <table className="table">
         <thead>
           <tr>

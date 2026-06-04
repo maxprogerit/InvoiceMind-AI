@@ -26,11 +26,13 @@ export default function Login() {
 
   return (
     <div className="auth-wrap">
-      <Card title="Login" subtitle="Access your CRM workspace">
+      <div className="auth-bg-particles" />
+      <Card title="InvoiceMind AI" subtitle="AI Document Automation Platform" className="auth-card">
+        <p className="kicker">Welcome Back</p>
         <form className="form" onSubmit={submit}>
           <Input placeholder="Email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
           <Input placeholder="Password" type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
-          <Button type="submit">Login</Button>
+          <Button type="submit">Launch Command Center</Button>
         </form>
         <p className="muted">
           No account? <Link to="/register">Create one</Link>

@@ -22,6 +22,8 @@ CREATE TABLE documents (
   file_type VARCHAR(100) NOT NULL,
   storage_path VARCHAR(500) NOT NULL,
   processing_status VARCHAR(50) NOT NULL,
+  confidence_score NUMERIC(6,4),
+  document_type VARCHAR(50),
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
@@ -31,7 +33,10 @@ CREATE TABLE vendors (
   name VARCHAR(255) NOT NULL,
   contact_email VARCHAR(255),
   payment_terms VARCHAR(100),
-  risk_score NUMERIC(8,4) NOT NULL DEFAULT 0.0
+  risk_score NUMERIC(8,4) NOT NULL DEFAULT 0.0,
+  country VARCHAR(100),
+  contact_phone VARCHAR(50),
+  address TEXT
 );
 
 CREATE TABLE invoices (
@@ -41,10 +46,12 @@ CREATE TABLE invoices (
   vendor_id BIGINT REFERENCES vendors(id),
   invoice_number VARCHAR(100) UNIQUE NOT NULL,
   total_amount NUMERIC(14,2) NOT NULL,
+  tax_amount NUMERIC(14,2) DEFAULT 0,
   currency VARCHAR(10) NOT NULL,
   invoice_date DATE,
   due_date DATE,
   status VARCHAR(50) NOT NULL,
+  payment_status VARCHAR(50) DEFAULT 'unpaid',
   confidence_score NUMERIC(6,4),
   duplicate_flag BOOLEAN NOT NULL DEFAULT FALSE,
   smart_category VARCHAR(100)
@@ -54,10 +61,17 @@ CREATE TABLE receipts (
   id BIGSERIAL PRIMARY KEY,
   organization_id BIGINT NOT NULL REFERENCES organizations(id),
   document_id BIGINT REFERENCES documents(id),
+  vendor_id BIGINT REFERENCES vendors(id),
+  uploaded_by BIGINT REFERENCES users(id),
   merchant_name VARCHAR(255),
   total_amount NUMERIC(14,2),
+  tax_amount NUMERIC(14,2) DEFAULT 0,
   expense_category VARCHAR(100),
-  confidence_score NUMERIC(6,4)
+  confidence_score NUMERIC(6,4),
+  receipt_date DATE,
+  merchant_category VARCHAR(100),
+  status VARCHAR(50) NOT NULL DEFAULT 'processed',
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE workflows (
@@ -66,7 +80,9 @@ CREATE TABLE workflows (
   name VARCHAR(255) NOT NULL,
   version VARCHAR(50) NOT NULL,
   definition_json TEXT NOT NULL,
-  published BOOLEAN NOT NULL DEFAULT FALSE
+  published BOOLEAN NOT NULL DEFAULT FALSE,
+  status VARCHAR(50) NOT NULL DEFAULT 'active',
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE workflow_executions (
@@ -78,7 +94,10 @@ CREATE TABLE workflow_executions (
   started_at TIMESTAMP NOT NULL DEFAULT NOW(),
   ended_at TIMESTAMP,
   duration_ms BIGINT,
-  kafka_trace_id VARCHAR(100)
+  kafka_trace_id VARCHAR(100),
+  progress_percent INT NOT NULL DEFAULT 0,
+  logs_json TEXT,
+  error_message VARCHAR(500)
 );
 
 CREATE TABLE approvals (
@@ -100,6 +119,10 @@ CREATE TABLE reports (
   format VARCHAR(20) NOT NULL,
   generated_by VARCHAR(255) NOT NULL,
   storage_path VARCHAR(500),
+  status VARCHAR(50) NOT NULL DEFAULT 'completed',
+  date_from DATE,
+  date_to DATE,
+  record_count INT DEFAULT 0,
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
@@ -142,5 +165,16 @@ CREATE TABLE processing_results (
   confidence_score NUMERIC(6,4),
   anomaly_score NUMERIC(6,4),
   status VARCHAR(50) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE instruction_rules (
+  id BIGSERIAL PRIMARY KEY,
+  organization_id BIGINT NOT NULL REFERENCES organizations(id),
+  rule_type VARCHAR(100) NOT NULL,
+  name VARCHAR(255) NOT NULL,
+  pattern TEXT NOT NULL,
+  action_config TEXT NOT NULL,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
   created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );

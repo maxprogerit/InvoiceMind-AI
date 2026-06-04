@@ -3,20 +3,15 @@ import { Navigate, createBrowserRouter } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { useCRMStore } from "./store/crmStore";
 import Analytics from "./pages/Analytics";
-import Calendar from "./pages/Calendar";
-import Clients from "./pages/Clients";
-import Companies from "./pages/Companies";
-import Contacts from "./pages/Contacts";
+import Approvals from "./pages/Approvals";
 import Dashboard from "./pages/Dashboard";
-import Deals from "./pages/Deals";
 import Documents from "./pages/Documents";
-import Invoices from "./pages/Invoices";
+import Executions from "./pages/Executions";
 import Login from "./pages/Login";
-import Receipts from "./pages/Receipts";
 import Register from "./pages/Register";
 import Reports from "./pages/Reports";
-import Settings from "./pages/Settings";
-import Team from "./pages/Team";
+import Vendors from "./pages/Vendors";
+import Workflows from "./pages/Workflows";
 
 function ProtectedRoute() {
   const isAuthenticated = useCRMStore((state) => state.isAuthenticated);
@@ -50,18 +45,14 @@ export const router = createBrowserRouter([
     element: <ProtectedRoute />,
     children: [
       { index: true, element: <Dashboard /> },
-      { path: "clients", element: <Clients /> },
-      { path: "deals", element: <Deals /> },
-      { path: "contacts", element: <Contacts /> },
-      { path: "companies", element: <Companies /> },
-      { path: "calendar", element: <Calendar /> },
       { path: "documents", element: <Documents /> },
-      { path: "invoices", element: <Invoices /> },
-      { path: "receipts", element: <Receipts /> },
-      { path: "reports", element: <Reports /> },
+      { path: "executions", element: <Executions /> },
+      { path: "workflows", element: <Workflows /> },
       { path: "analytics", element: <Analytics /> },
-      { path: "team", element: <Team /> },
-      { path: "settings", element: <Settings /> },
+      { path: "vendors", element: <Vendors /> },
+      { path: "approvals", element: <Approvals /> },
+      { path: "reports", element: <Reports /> },
+      { path: "*", element: <Navigate to="/" replace /> },
     ],
   },
 ]);

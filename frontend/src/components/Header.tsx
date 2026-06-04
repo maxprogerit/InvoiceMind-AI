@@ -4,18 +4,24 @@ import { useCRMStore } from "../store/crmStore";
 
 const titles: Record<string, string> = {
   "/": "Dashboard",
-  "/clients": "Clients",
-  "/deals": "Deals",
-  "/contacts": "Contacts",
-  "/companies": "Companies",
-  "/calendar": "Calendar",
   "/documents": "Documents",
-  "/invoices": "Invoices",
-  "/receipts": "Receipts",
-  "/reports": "Reports",
+  "/executions": "Executions",
+  "/workflows": "Workflows",
   "/analytics": "Analytics",
-  "/team": "Team",
-  "/settings": "Settings",
+  "/vendors": "Vendors",
+  "/approvals": "Approvals",
+  "/reports": "Reports",
+};
+
+const subtitles: Record<string, string> = {
+  "/": "AI Document Automation Platform",
+  "/documents": "Premium document intelligence layer",
+  "/executions": "Live orchestration and processing telemetry",
+  "/workflows": "Automation graph and neural routing",
+  "/analytics": "Enterprise intelligence center",
+  "/vendors": "Vendor intelligence profiles",
+  "/approvals": "Human-in-the-loop review center",
+  "/reports": "Automated reporting command deck",
 };
 
 export function Header() {
@@ -28,12 +34,12 @@ export function Header() {
     <header className="header">
       <div>
         <h1>{titles[location.pathname] ?? "CRM"}</h1>
-        <p className="muted">Portfolio-ready CRM workspace</p>
+        <p className="muted">{subtitles[location.pathname] ?? "AI Operating System for Business Documents"}</p>
       </div>
       <div className="row">
-        <span className="muted">Signed in as {user?.name ?? "Guest"}</span>
+        <span className="header-chip">Signed in as {user?.name ?? "Guest"}</span>
         <Button
-          variant="secondary"
+          variant="ghost"
           onClick={() => {
             logout();
             navigate("/login");

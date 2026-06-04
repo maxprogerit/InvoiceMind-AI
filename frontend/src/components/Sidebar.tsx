@@ -2,24 +2,22 @@ import { NavLink } from "react-router-dom";
 
 const links = [
   { to: "/", label: "Dashboard" },
-  { to: "/clients", label: "Clients" },
-  { to: "/deals", label: "Deals" },
-  { to: "/contacts", label: "Contacts" },
-  { to: "/companies", label: "Companies" },
-  { to: "/calendar", label: "Calendar" },
   { to: "/documents", label: "Documents" },
-  { to: "/invoices", label: "Invoices" },
-  { to: "/receipts", label: "Receipts" },
-  { to: "/reports", label: "Reports" },
+  { to: "/executions", label: "Executions" },
+  { to: "/workflows", label: "Workflows" },
   { to: "/analytics", label: "Analytics" },
-  { to: "/team", label: "Team" },
-  { to: "/settings", label: "Settings" },
+  { to: "/vendors", label: "Vendors" },
+  { to: "/approvals", label: "Approvals" },
+  { to: "/reports", label: "Reports" },
 ];
 
 export function Sidebar() {
   return (
     <aside className="sidebar">
-      <h2>InvoiceMind CRM</h2>
+      <div className="sidebar-brand">
+        <p className="kicker">AI Operating System</p>
+        <h2>InvoiceMind AI</h2>
+      </div>
       <nav>
         {links.map((link) => (
           <NavLink
@@ -32,6 +30,9 @@ export function Sidebar() {
           </NavLink>
         ))}
       </nav>
+      <div className="sidebar-footer">
+        <span className="badge badge-info">Neural Sync: Online</span>
+      </div>
     </aside>
   );
 }
