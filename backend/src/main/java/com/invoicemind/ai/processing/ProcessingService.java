@@ -20,6 +20,7 @@ import com.invoicemind.ai.user.Role;
 import com.invoicemind.ai.user.UserEntity;
 import com.invoicemind.ai.user.UserRepository;
 import com.invoicemind.ai.validation.ValidationService;
+import com.invoicemind.ai.webhook.WebhookOutbox;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
@@ -62,14 +63,15 @@ public class ProcessingService {
   private final AuditService audit;
   private final StatusPublisher status;
   private final NotificationService notifications;
+  private final WebhookOutbox webhooks;
   private final ObjectMapper mapper;
   private final Clock clock;
   private final TransactionTemplate tx;
 
   public ProcessingService(InvoiceRepository invoices, VendorService vendors, UserRepository users,
                            FileStorage storage, AiClient ai, ValidationService validation, AuditService audit,
-                           StatusPublisher status, NotificationService notifications, ObjectMapper mapper,
-                           Clock clock, PlatformTransactionManager txManager) {
+                           StatusPublisher status, NotificationService notifications, WebhookOutbox webhooks,
+                           ObjectMapper mapper, Clock clock, PlatformTransactionManager txManager) {
     this.invoices = invoices;
     this.vendors = vendors;
     this.users = users;
@@ -79,6 +81,7 @@ public class ProcessingService {
     this.audit = audit;
     this.status = status;
     this.notifications = notifications;
+    this.webhooks = webhooks;
     this.mapper = mapper;
     this.clock = clock;
     this.tx = new TransactionTemplate(txManager);
@@ -183,6 +186,7 @@ public class ProcessingService {
       long errors = inv.getIssues().stream().filter(i -> "ERROR".equals(i.getSeverity())).count();
       audit.log(inv.getOrganizationId(), null, "VALIDATION_COMPLETED", AuditService.INVOICE, inv.getId(),
           Map.of("status", next.name(), "errors", errors, "issues", inv.getIssues().size()));
+      webhooks.invoiceEvent(next == InvoiceStatus.NEEDS_REVIEW ? "invoice.needs_review" : "invoice.validated", inv);
       notifyAfterProcessing(inv, next);
       status.publish(inv);
     });
@@ -223,6 +227,7 @@ public class ProcessingService {
           Map.of("code", code, "reason", truncate(reason, 200)));
       notifications.notify(inv.getOrganizationId(), inv.getUploadedBy(), "FAILED", "Processing failed",
           label(inv) + ": " + truncate(reason, 200), inv.getId());
+      webhooks.invoiceEvent("invoice.failed", inv);
       status.publish(inv);
     }));
   }

@@ -20,6 +20,11 @@ app:
     auth-per-minute: 100000
     refresh-per-minute: 100000
     upload-per-minute: 100000
+  webhooks:
+    allow-private-targets: true   # the receiver double listens on 127.0.0.1
+    poll-ms: 100
+    retry-base-seconds: 1
+    max-attempts: 4
   fx:
     retry-after-minutes: 0   # tests flip the fake rate source on and off
   seed:

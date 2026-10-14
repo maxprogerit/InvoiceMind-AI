@@ -88,7 +88,8 @@ describe("unwrap", () => {
 
   it("throws a typed ApiError carrying the server's code, message and field errors", async () => {
     const response = json(400, { code: "validation_failed", message: "Request validation failed", fieldErrors: { password: "too short" }, requestId: "abc" });
-    const err = await unwrap(Promise.resolve({ error: {}, response })).catch((e: unknown) => e);
+    // openapi-fetch has already read the body by the time unwrap sees the response, so hand over the parsed error
+    const err = await unwrap(Promise.resolve({ error: await response.clone().json(), response })).catch((e: unknown) => e);
     expect(err).toBeInstanceOf(ApiError);
     expect(err).toMatchObject({ status: 400, code: "validation_failed", fieldErrors: { password: "too short" }, requestId: "abc" });
   });

@@ -21,6 +21,7 @@ import com.invoicemind.ai.storage.FileValidator;
 import com.invoicemind.ai.storage.FileValidator.ValidatedFile;
 import com.invoicemind.ai.user.Role;
 import com.invoicemind.ai.validation.ValidationService;
+import com.invoicemind.ai.webhook.WebhookOutbox;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Clock;
@@ -61,6 +62,7 @@ public class InvoiceService {
   private final AuditService audit;
   private final StatusPublisher status;
   private final NotificationService notifications;
+  private final WebhookOutbox webhooks;
   private final RateLimiter rateLimiter;
   private final ApplicationEventPublisher events;
   private final AppProperties props;
@@ -171,11 +173,13 @@ public class InvoiceService {
     if (!sameLines(inv.getLineItems(), items)) changes.put("lineItems", items.size() + " line(s) edited");
     inv.replaceLineItems(items);
 
+    InvoiceStatus before = inv.getStatus();
     inv.setHumanReviewed(true);
     InvoiceStatus next = validation.revalidate(inv);
     track(changes, "status", inv.getStatus(), next);
     inv.setStatus(next);
     invoices.saveAndFlush(inv);
+    if (next != before) webhooks.invoiceEvent(next == InvoiceStatus.VALIDATED ? "invoice.validated" : "invoice.needs_review", inv);
 
     audit.log(me.organizationId(), me.userId(), "INVOICE_CORRECTED", AuditService.INVOICE, inv.getId(), changes);
     status.publish(inv);
@@ -226,6 +230,7 @@ public class InvoiceService {
     details.put("to", target.name());
     if (comment != null) details.put("comment", comment);
     audit.log(me.organizationId(), me.userId(), action, AuditService.INVOICE, inv.getId(), details);
+    webhooks.invoiceEvent(target == InvoiceStatus.APPROVED ? "invoice.approved" : "invoice.rejected", inv);
 
     String label = inv.displayLabel();
     if (!inv.getUploadedBy().equals(me.userId())) {

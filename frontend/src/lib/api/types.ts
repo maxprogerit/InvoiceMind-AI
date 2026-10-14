@@ -22,6 +22,9 @@ export type ByStatus = S["ByStatus"];
 export type VolumeByDay = S["VolumeByDay"];
 export type Organization = S["OrganizationDto"];
 export type FxStatus = S["FxStatus"];
+export type WebhookEndpoint = S["EndpointDto"];
+export type CreatedWebhook = S["CreatedEndpointDto"];
+export type WebhookDelivery = S["DeliveryDto"];
 export type ManualRate = S["ManualRate"];
 /** Error envelope returned by every failing API call (see GlobalExceptionHandler in the backend). */
 export interface ErrorBody {

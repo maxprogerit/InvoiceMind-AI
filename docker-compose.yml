@@ -96,6 +96,7 @@ services:
       APP_STORAGE_ROOT: /data/storage
       APP_COOKIES_SECURE: "false" # the demo runs on plain HTTP; set true behind TLS
       APP_FX_ENABLED: ${FX_RATES_ENABLED:-true}
+      APP_WEBHOOKS_ALLOW_PRIVATE_TARGETS: ${WEBHOOKS_ALLOW_PRIVATE_TARGETS:-false}
       LOG_FORMAT: ecs
     volumes:
       - storage_data:/data/storage

@@ -154,6 +154,34 @@ test.describe.serial("invoice lifecycle in the browser", () => {
     await expect(page.getByText("Reporting currency is now EUR")).toBeVisible();
   });
 
+  test("an admin registers a webhook, sees the secret once and cannot target internal addresses", async () => {
+    await page.goto("/integrations");
+    await expect(page.getByText(/No webhooks yet/)).toBeVisible();
+
+    await page.getByRole("button", { name: /Add webhook/ }).first().click();
+    await page.fill("#wh-url", "http://169.254.169.254/latest/meta-data/");
+    await page.getByRole("dialog").getByRole("button", { name: "Add webhook" }).click();
+    await expect(page.getByText(/private or internal address/)).toBeVisible(); // SSRF guard, surfaced as an error toast
+    await expect(page.getByText(/No webhooks yet/)).toBeVisible();
+
+    await page.fill("#wh-url", "https://93.184.216.34/hooks/invoicemind");
+    await page.fill("#wh-desc", "ERP posting service");
+    await page.getByRole("dialog").getByRole("button", { name: "Add webhook" }).click();
+    const secret = page.getByTestId("webhook-secret");
+    await expect(secret).toContainText(/^whsec_/);
+    await page.getByRole("button", { name: "Done" }).click();
+    await expect(page.getByText("https://93.184.216.34/hooks/invoicemind")).toBeVisible();
+    await expect(page.getByText("ERP posting service")).toBeVisible();
+    await expect(page.getByText("invoice.approved", { exact: true })).toBeVisible();
+
+    await page.reload(); // the secret is gone for good
+    await expect(page.getByText(/whsec_/)).toHaveCount(0);
+    await page.getByRole("button", { name: "Disable" }).click();
+    await expect(page.getByText("disabled", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: /Delete the webhook/ }).click();
+    await expect(page.getByText(/No webhooks yet/)).toBeVisible();
+  });
+
   test("an admin adds a plain user, who sees a restricted application", async () => {
     await page.goto("/team");
     await page.getByRole("button", { name: /Add member/ }).first().click();

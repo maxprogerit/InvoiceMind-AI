@@ -85,12 +85,19 @@ export async function authFetch(input: Request | string, init?: RequestInit): Pr
 
 export const api = createClient<paths>({ baseUrl: "", fetch: (req) => authFetch(req) });
 
-export async function toApiError(res: Response): Promise<ApiError> {
-  let body: Partial<ErrorBody> = {};
-  try {
-    body = (await res.clone().json()) as Partial<ErrorBody>;
-  } catch {
-    /* not JSON (proxy error page etc.) */
+/**
+ * `parsed` is the body openapi-fetch already read: it consumes the response stream, so cloning it afterwards fails
+ * and the server's message would be lost.
+ */
+export async function toApiError(res: Response, parsed?: unknown): Promise<ApiError> {
+  const known = parsed && typeof parsed === "object" && Object.keys(parsed).length > 0;
+  let body: Partial<ErrorBody> = known ? (parsed as Partial<ErrorBody>) : {};
+  if (!known) {
+    try {
+      body = (await res.clone().json()) as Partial<ErrorBody>;
+    } catch {
+      /* not JSON (proxy error page etc.) */
+    }
   }
   const fallback =
     res.status === 413 ? "The file is too large (max 15 MB)" : res.status >= 500 ? "Something went wrong on our side" : res.statusText;
@@ -99,8 +106,8 @@ export async function toApiError(res: Response): Promise<ApiError> {
 
 /** Unwraps an openapi-fetch result: returns data or throws a typed ApiError. */
 export async function unwrap<T>(result: Promise<{ data?: T; error?: unknown; response: Response }>): Promise<T> {
-  const { data, response } = await result;
-  if (!response.ok) throw await toApiError(response);
+  const { data, error, response } = await result;
+  if (!response.ok) throw await toApiError(response, error);
   return data as T;
 }
 

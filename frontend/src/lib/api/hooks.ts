@@ -6,6 +6,7 @@ import { api, authFetch, fetchBlob, toApiError, unwrap } from "./client";
 import {
   IN_FLIGHT,
   type AuditEntry,
+  type CreatedWebhook,
   type FxStatus,
   type Organization,
   type DocumentType,
@@ -23,6 +24,8 @@ import {
   type TeamMember,
   type UpdateInvoiceRequest,
   type VolumeByDay,
+  type WebhookDelivery,
+  type WebhookEndpoint,
 } from "./types";
 import { useLive } from "@/lib/ws/live-store";
 
@@ -347,5 +350,65 @@ export function useDeleteManualRate() {
       await unwrap(api.DELETE("/api/v1/fx/manual/{id}", { params: { path: { id } } }));
     },
     onSuccess: invalidate,
+  });
+}
+
+// ---------------------------------------------------------------- webhooks
+export const useWebhooks = (enabled = true) =>
+  useQuery({ enabled, queryKey: ["webhooks"], queryFn: () => unwrap(api.GET("/api/v1/webhooks")) as Promise<WebhookEndpoint[]> });
+
+export const useWebhookEvents = () =>
+  useQuery({ queryKey: ["webhooks", "events"], queryFn: () => unwrap(api.GET("/api/v1/webhooks/events")) as Promise<string[]>, staleTime: Infinity });
+
+export function useCreateWebhook() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { url: string; description?: string; events: string[] }) =>
+      unwrap(api.POST("/api/v1/webhooks", { body })) as Promise<CreatedWebhook>,
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["webhooks"] }),
+  });
+}
+
+export function useUpdateWebhook() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...body }: { id: string; enabled?: boolean; events?: string[]; url?: string; description?: string }) =>
+      unwrap(api.PATCH("/api/v1/webhooks/{id}", { params: { path: { id } }, body })),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["webhooks"] }),
+  });
+}
+
+export function useDeleteWebhook() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await unwrap(api.DELETE("/api/v1/webhooks/{id}", { params: { path: { id } } }));
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["webhooks"] }),
+  });
+}
+
+export const useWebhookDeliveries = (id: string, enabled: boolean) =>
+  useQuery({
+    enabled,
+    queryKey: ["webhooks", id, "deliveries"],
+    queryFn: () => unwrap(api.GET("/api/v1/webhooks/{id}/deliveries", { params: { path: { id } } })) as Promise<WebhookDelivery[]>,
+    refetchInterval: (q) => (q.state.data?.some((d) => d.status === "PENDING") ? 2000 : false),
+  });
+
+export function useTestWebhook(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => unwrap(api.POST("/api/v1/webhooks/{id}/test", { params: { path: { id } } })),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["webhooks", id, "deliveries"] }),
+  });
+}
+
+export function useRetryDelivery(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (deliveryId: string) =>
+      unwrap(api.POST("/api/v1/webhooks/{id}/deliveries/{deliveryId}/retry", { params: { path: { id, deliveryId } } })),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["webhooks", id, "deliveries"] }),
   });
 }
