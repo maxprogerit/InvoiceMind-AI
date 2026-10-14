@@ -3,6 +3,7 @@ package com.invoicemind.ai.auth;
 import com.invoicemind.ai.user.Role;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.util.UUID;
@@ -21,7 +22,8 @@ public final class AuthDtos {
 
   public record LoginRequest(@NotBlank @Email String email, @NotBlank @Size(max = 128) String password) {}
 
-  public record UserDto(UUID id, String email, String fullName, Role role, UUID organizationId, String organizationName) {}
+  public record UserDto(@NotNull UUID id, @NotNull String email, @NotNull String fullName, @NotNull Role role,
+                        @NotNull UUID organizationId, @NotNull String organizationName) {}
 
-  public record AuthResponse(String accessToken, long expiresIn, UserDto user) {}
+  public record AuthResponse(@NotNull String accessToken, @NotNull long expiresIn, @NotNull UserDto user) {}
 }

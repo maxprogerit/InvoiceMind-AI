@@ -4,6 +4,7 @@ import com.invoicemind.ai.common.ApiException;
 import com.invoicemind.ai.notification.NotificationService.NotificationDto;
 import com.invoicemind.ai.security.CurrentUser;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.NotNull;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -17,7 +18,7 @@ import org.springframework.web.bind.annotation.*;
 public class NotificationController {
   private final NotificationService service;
 
-  public record NotificationList(List<NotificationDto> items, long unreadCount) {}
+  public record NotificationList(@NotNull List<NotificationDto> items, @NotNull long unreadCount) {}
 
   @GetMapping
   public NotificationList list() {

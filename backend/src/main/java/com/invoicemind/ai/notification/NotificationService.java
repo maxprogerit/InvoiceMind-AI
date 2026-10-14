@@ -1,5 +1,6 @@
 package com.invoicemind.ai.notification;
 
+import jakarta.validation.constraints.NotNull;
 import java.time.Instant;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -14,8 +15,8 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @Service
 @RequiredArgsConstructor
 public class NotificationService {
-  public record NotificationDto(UUID id, String type, String title, String body, UUID invoiceId, boolean read,
-                                Instant createdAt) {}
+  public record NotificationDto(@NotNull UUID id, @NotNull String type, @NotNull String title, @NotNull String body,
+                                UUID invoiceId, @NotNull boolean read, @NotNull Instant createdAt) {}
 
   private final NotificationRepository repository;
   private final SimpMessagingTemplate messaging;

@@ -1,0 +1,110 @@
+@import "tailwindcss";
+@import "@fontsource-variable/space-grotesk";
+@import "@fontsource-variable/jetbrains-mono";
+
+/*
+ * Design tokens, sampled by eye from the product mockups: a warm near-black canvas,
+ * slightly lighter cards, hairline borders and a single coral accent.
+ */
+@theme {
+  --font-sans: "Space Grotesk Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  --color-bg: #110b0b;
+  --color-surface: #1a1213;
+  --color-surface-2: #221819;
+  --color-surface-3: #2a1e1f;
+  --color-line: #2c2122;
+  --color-line-strong: #3d2e2f;
+  --color-fg: #f5ecec;
+  --color-muted: #a39293;
+  --color-dim: #75666a;
+  --color-accent: #ff6b57;
+  --color-accent-hover: #ff8271;
+  --color-accent-fg: #1a0c0a;
+  --color-accent-soft: #3a1c19;
+
+  --color-ok: #5fd3a2;
+  --color-warn: #f3b74f;
+  --color-bad: #ff5a68;
+  --color-info: #8fa8ff;
+  --color-violet: #b69bff;
+
+  --radius-card: 14px;
+  --radius-control: 9px;
+
+  --shadow-glow: 0 0 0 1px rgb(255 107 87 / 0.25), 0 12px 40px -12px rgb(255 107 87 / 0.35);
+
+  --animate-pulse-soft: pulse-soft 1.8s ease-in-out infinite;
+  --animate-shimmer: shimmer 1.6s linear infinite;
+  --animate-flow: flow 2.4s linear infinite;
+
+  @keyframes pulse-soft {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.45; }
+  }
+  @keyframes shimmer {
+    from { background-position: 200% 0; }
+    to { background-position: -200% 0; }
+  }
+  @keyframes flow {
+    from { stroke-dashoffset: 24; }
+    to { stroke-dashoffset: 0; }
+  }
+}
+
+@layer base {
+  html {
+    color-scheme: dark;
+    background: var(--color-bg);
+  }
+  body {
+    @apply bg-bg text-fg font-sans antialiased;
+    font-feature-settings: "ss01", "cv11";
+    min-height: 100dvh;
+  }
+  ::selection {
+    background: var(--color-accent);
+    color: var(--color-accent-fg);
+  }
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-line-strong) transparent;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-accent);
+    outline-offset: 2px;
+  }
+  button, [role="button"] { cursor: pointer; }
+  button:disabled, [aria-disabled="true"] { cursor: not-allowed; }
+}
+
+@layer components {
+  /* Small monospaced uppercase label used for table headers, card titles, eyebrows. */
+  .label-mono {
+    @apply font-mono text-[11px] font-medium uppercase tracking-[0.18em] text-dim;
+  }
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+  .skeleton {
+    background: linear-gradient(90deg, var(--color-surface-2) 25%, var(--color-surface-3) 50%, var(--color-surface-2) 75%);
+    background-size: 200% 100%;
+    animation: var(--animate-shimmer);
+  }
+  .bg-grid {
+    background-image:
+      linear-gradient(to right, rgb(255 255 255 / 0.025) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(255 255 255 / 0.025) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(ellipse 70% 60% at 30% 40%, #000 30%, transparent 100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,0 +1,15 @@
+# UI end-to-end overlay (CI and local): swaps the OpenAI-backed ai-service for the test double in
+# e2e/fake-ai (real OCR, deterministic rule-based extraction) and publishes the app on 127.0.0.1.
+#   docker compose -f docker-compose.yml -f docker-compose.e2e.yml up --build -d
+# Never use this overlay for real deployments.
+services:
+  ai-service:
+    build:
+      context: .
+      dockerfile: e2e/fake-ai/Dockerfile
+      target: ""
+    environment:
+      OPENAI_API_KEY: ""
+  backend:
+    ports:
+      - "127.0.0.1:${DEV_BACKEND_PORT:-18080}:8080"

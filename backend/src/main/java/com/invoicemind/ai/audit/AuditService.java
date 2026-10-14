@@ -2,6 +2,7 @@ package com.invoicemind.ai.audit;
 
 import com.invoicemind.ai.user.UserEntity;
 import com.invoicemind.ai.user.UserRepository;
+import jakarta.validation.constraints.NotNull;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -19,8 +20,9 @@ public class AuditService {
   public static final String USER = "USER";
   public static final String EXPORT = "EXPORT";
 
-  public record AuditEntryDto(Long id, UUID userId, String userName, String action, String entityType,
-                              UUID entityId, Map<String, Object> details, Instant createdAt) {}
+  public record AuditEntryDto(@NotNull Long id, UUID userId, @NotNull String userName, @NotNull String action,
+                              @NotNull String entityType, UUID entityId, Map<String, Object> details,
+                              @NotNull Instant createdAt) {}
 
   private final AuditLogRepository repository;
   private final UserRepository users;

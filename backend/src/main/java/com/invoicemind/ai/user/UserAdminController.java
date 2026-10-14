@@ -37,7 +37,8 @@ public class UserAdminController {
   private final RefreshTokenRepository refreshTokens;
   private final AuditService audit;
 
-  public record TeamMember(UUID id, String email, String fullName, Role role, boolean enabled, Instant createdAt) {}
+  public record TeamMember(@NotNull UUID id, @NotNull String email, @NotNull String fullName, @NotNull Role role,
+                           @NotNull boolean enabled, @NotNull Instant createdAt) {}
 
   public record CreateUserRequest(
       @NotBlank @Email @Size(max = 254) String email,
