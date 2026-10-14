@@ -134,6 +134,26 @@ test.describe.serial("invoice lifecycle in the browser", () => {
     await expect(page.locator("tbody tr")).toHaveCount(1); // the type filter hides the invoices
   });
 
+  test("an admin sets the reporting currency and manages a manual exchange rate", async () => {
+    await page.goto("/settings");
+    await expect(page.getByText("Reporting currency")).toBeVisible();
+    await page.fill("#base-currency", "USD");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByText("Reporting currency is now USD")).toBeVisible();
+
+    await page.fill("#rate-currency", "RUB");
+    await page.fill("#rate-value", "100");
+    await page.getByRole("button", { name: /Add rate/ }).click();
+    await expect(page.getByText("Rate saved")).toBeVisible();
+    await expect(page.locator("tbody tr", { hasText: "RUB" })).toContainText("100");
+    await page.getByRole("button", { name: /Delete the RUB rate/ }).click();
+    await expect(page.getByText("No manual rates yet.")).toBeVisible();
+
+    await page.fill("#base-currency", "EUR");
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(page.getByText("Reporting currency is now EUR")).toBeVisible();
+  });
+
   test("an admin adds a plain user, who sees a restricted application", async () => {
     await page.goto("/team");
     await page.getByRole("button", { name: /Add member/ }).first().click();

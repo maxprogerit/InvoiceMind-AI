@@ -19,6 +19,7 @@ public class AuditService {
   public static final String INVOICE = "INVOICE";
   public static final String USER = "USER";
   public static final String EXPORT = "EXPORT";
+  public static final String ORGANIZATION = "ORGANIZATION";
 
   public record AuditEntryDto(@NotNull Long id, UUID userId, @NotNull String userName, @NotNull String action,
                               @NotNull String entityType, UUID entityId, Map<String, Object> details,

@@ -17,6 +17,7 @@ public record AppProperties(
     @Valid Ai ai,
     Processing processing,
     RateLimit rateLimit,
+    Fx fx,
     Seed seed) {
 
   public record Jwt(@NotBlank @Size(min = 32, message = "APP_JWT_SECRET must be at least 32 characters") String secret,
@@ -35,6 +36,9 @@ public record AppProperties(
   public record Processing(String topic, int stuckAfterMinutes, int requeueUploadedAfterMinutes) {}
 
   public record RateLimit(int authPerMinute, int refreshPerMinute, int uploadPerMinute) {}
+
+  /** Reference exchange rates (ECB, via the Frankfurter API). Only dates and currency codes ever leave the system. */
+  public record Fx(boolean enabled, String baseUrl, int timeoutMs, int retryAfterMinutes) {}
 
   public record Seed(String demoPassword) {}
 }

@@ -11,6 +11,9 @@ public final class AnalyticsDtos {
 
   public record MoneyByCurrency(@NotNull String currency, @NotNull BigDecimal amount, @NotNull long invoices) {}
 
+  /** Spend converted into the organisation base currency; {@code notConverted} lists what had no usable rate. */
+  public record ConvertedMoney(@NotNull BigDecimal amount, @NotNull long invoices, @NotNull List<MoneyByCurrency> notConverted) {}
+
   public record Summary(
       @NotNull long totalInvoices,
       @NotNull long awaitingDecision,
@@ -28,15 +31,20 @@ public final class AnalyticsDtos {
       @NotNull BigDecimal avgCostPerInvoiceUsd,
       @NotNull List<MoneyByCurrency> approvedSpend,
       @NotNull List<MoneyByCurrency> pendingAmount,
-      String defaultCurrency) {}
+      String defaultCurrency,
+      @NotNull String baseCurrency,
+      @NotNull ConvertedMoney approvedConverted,
+      @NotNull ConvertedMoney pendingConverted) {}
 
   public record VendorSpend(@NotNull String vendor, @NotNull BigDecimal amount, @NotNull long invoices) {}
 
-  public record SpendByVendor(@NotNull String currency, @NotNull List<VendorSpend> items) {}
+  public record SpendByVendor(@NotNull String currency, @NotNull List<VendorSpend> items,
+                            @NotNull List<MoneyByCurrency> notConverted) {}
 
   public record MonthSpend(@NotNull String month, @NotNull BigDecimal amount, @NotNull long invoices) {}
 
-  public record SpendByMonth(@NotNull String currency, @NotNull List<MonthSpend> items) {}
+  public record SpendByMonth(@NotNull String currency, @NotNull List<MonthSpend> items,
+                           @NotNull List<MoneyByCurrency> notConverted) {}
 
   public record StatusCount(@NotNull String status, @NotNull long count, @NotNull BigDecimal amount) {}
 

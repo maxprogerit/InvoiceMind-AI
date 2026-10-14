@@ -30,6 +30,7 @@ public abstract class AbstractIntegrationTest {
   @DynamicPropertySource
   static void properties(DynamicPropertyRegistry registry) {
     registry.add("app.ai.base-url", FakeAiServiceForTests::baseUrl);
+    registry.add("app.fx.base-url", FakeFrankfurterForTests::baseUrl);
   }
 
   @BeforeEach

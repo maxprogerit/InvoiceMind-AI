@@ -15,7 +15,7 @@ class JwtServiceTest {
   static final String SECRET = "unit-test-secret-unit-test-secret-0123456789";
 
   static JwtService service(String secret, long ttl) {
-    return new JwtService(new AppProperties(new AppProperties.Jwt(secret, ttl, 100), null, null, null, null, null, null, null));
+    return new JwtService(new AppProperties(new AppProperties.Jwt(secret, ttl, 100), null, null, null, null, null, null, null, null));
   }
 
   final AuthPrincipal principal = new AuthPrincipal(UUID.randomUUID(), UUID.randomUUID(), "a@b.io", Role.APPROVER);

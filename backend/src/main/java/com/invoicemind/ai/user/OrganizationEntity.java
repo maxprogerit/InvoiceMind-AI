@@ -13,6 +13,8 @@ public class OrganizationEntity {
   @Id @GeneratedValue(strategy = GenerationType.UUID)
   private UUID id;
   private String name;
+  /** ISO 4217 code analytics are reported in (amounts are converted at the rate of each invoice's date). */
+  private String baseCurrency = "EUR";
   private Instant createdAt = Instant.now();
 
   public OrganizationEntity(String name) { this.name = name; }

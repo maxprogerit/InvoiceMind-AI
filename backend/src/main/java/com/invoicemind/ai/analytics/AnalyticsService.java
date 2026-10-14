@@ -2,6 +2,7 @@ package com.invoicemind.ai.analytics;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.invoicemind.ai.analytics.AnalyticsDtos.ByStatus;
+import com.invoicemind.ai.analytics.AnalyticsDtos.ConvertedMoney;
 import com.invoicemind.ai.analytics.AnalyticsDtos.DayVolume;
 import com.invoicemind.ai.analytics.AnalyticsDtos.MoneyByCurrency;
 import com.invoicemind.ai.analytics.AnalyticsDtos.MonthSpend;
@@ -11,6 +12,7 @@ import com.invoicemind.ai.analytics.AnalyticsDtos.StatusCount;
 import com.invoicemind.ai.analytics.AnalyticsDtos.Summary;
 import com.invoicemind.ai.analytics.AnalyticsDtos.VendorSpend;
 import com.invoicemind.ai.analytics.AnalyticsDtos.VolumeByDay;
+import com.invoicemind.ai.fx.ExchangeRateService;
 import com.invoicemind.ai.invoice.InvoiceService;
 import com.invoicemind.ai.security.AuthPrincipal;
 import java.math.BigDecimal;
@@ -37,6 +39,7 @@ public class AnalyticsService {
   private final NamedParameterJdbcTemplate jdbc;
   private final AnalyticsCache cache;
   private final Clock clock;
+  private final ExchangeRateService fx;
 
   @Transactional(readOnly = true)
   public Summary summary(AuthPrincipal me) {
@@ -44,8 +47,9 @@ public class AnalyticsService {
   }
 
   @Transactional(readOnly = true)
-  public SpendByVendor spendByVendor(AuthPrincipal me, String currency, int limit) {
+  public SpendByVendor spendByVendor(AuthPrincipal me, String currency, int limit, boolean converted) {
     int n = Math.min(Math.max(limit, 1), 50);
+    if (converted) return convertedSpendByVendor(me, n);
     String cur = resolveCurrency(me, currency);
     return cached(me, "vendor:" + cur + ":" + n, new TypeReference<SpendByVendor>() {}, () -> {
       var items = jdbc.query("""
@@ -56,13 +60,14 @@ public class AnalyticsService {
           group by 1 order by amount desc limit :limit""",
           params(me).addValue("currency", cur).addValue("limit", n),
           (rs, i) -> new VendorSpend(rs.getString("vendor"), rs.getBigDecimal("amount"), rs.getLong("n")));
-      return new SpendByVendor(cur, items);
+      return new SpendByVendor(cur, items, List.of());
     });
   }
 
   @Transactional(readOnly = true)
-  public SpendByMonth spendByMonth(AuthPrincipal me, String currency, int months) {
+  public SpendByMonth spendByMonth(AuthPrincipal me, String currency, int months, boolean converted) {
     int m = Math.min(Math.max(months, 1), 36);
+    if (converted) return convertedSpendByMonth(me, m);
     String cur = resolveCurrency(me, currency);
     return cached(me, "month:" + cur + ":" + m, new TypeReference<SpendByMonth>() {}, () -> {
       LocalDate from = LocalDate.now(clock).withDayOfMonth(1).minusMonths(m - 1L);
@@ -83,7 +88,103 @@ public class AnalyticsService {
         filled.add(rows.stream().filter(r -> r.month().equals(key)).findFirst()
             .orElse(new MonthSpend(key, BigDecimal.ZERO, 0)));
       }
-      return new SpendByMonth(cur, filled);
+      return new SpendByMonth(cur, filled, List.of());
+    });
+  }
+
+  // ------------------------------------------------- converted to the base currency
+  /**
+   * Common table expressions that attach to every matching invoice its amount in the base currency. The rate of
+   * each invoice is the latest one on or before its date; ECB rates older than 14 days are not trusted (the ECB
+   * publishes every business day), manual rates stay valid until replaced. No rate means {@code base_amount} is NULL
+   * and the invoice is reported as "not converted" - never converted with a guess.
+   */
+  private static String convertedCte(String statusCondition) {
+    String rate = """
+        (select r.per_eur from exchange_rates r
+          where r.currency = %s and r.rate_date <= s.d
+            and (r.organization_id is null or r.organization_id = :org)
+            and (r.organization_id is not null or r.rate_date > s.d - 14)
+          order by r.rate_date desc, (r.organization_id is null) limit 1)""";
+    return """
+        with src as (
+          select vendor_name, total, currency, coalesce(invoice_date, created_at::date) as d
+          from invoices
+          where organization_id = :org and (cast(:uploader as uuid) is null or uploaded_by = cast(:uploader as uuid))
+            and %s and total is not null and currency is not null),
+        conv as (
+          select s.*,
+            case when s.currency = :base then s.total
+                 else s.total / nullif(case when s.currency = 'EUR' then 1::numeric else %s end, 0)
+                              * case when :base = 'EUR' then 1::numeric else %s end
+            end as base_amount
+          from src s)
+        """.formatted(statusCondition, rate.formatted("s.currency"), rate.formatted(":base"));
+  }
+
+  private MapSqlParameterSource convertedParams(AuthPrincipal me, String base) {
+    return params(me).addValue("base", base);
+  }
+
+  /** Makes sure the shared ECB rates reach back to the oldest invoice that needs one. */
+  private void prepareRates(AuthPrincipal me, String base) {
+    LocalDate earliest = jdbc.query("""
+        select min(coalesce(invoice_date, created_at::date)) from invoices
+        where organization_id = :org and total is not null and currency is not null and currency <> :base""",
+        new MapSqlParameterSource("org", me.organizationId()).addValue("base", base),
+        rs -> rs.next() && rs.getDate(1) != null ? rs.getDate(1).toLocalDate() : null);
+    if (earliest != null) fx.ensureCovered(earliest);
+  }
+
+  private List<MoneyByCurrency> notConverted(MapSqlParameterSource p, String statusCondition) {
+    return jdbc.query(convertedCte(statusCondition) + """
+        select currency, sum(total) as amount, count(*) as n from conv where base_amount is null
+        group by currency order by amount desc""", p,
+        (rs, i) -> new MoneyByCurrency(rs.getString("currency"), rs.getBigDecimal("amount"), rs.getLong("n")));
+  }
+
+  private ConvertedMoney convertedMoney(AuthPrincipal me, String base, String statusCondition) {
+    MapSqlParameterSource p = convertedParams(me, base);
+    var row = jdbc.queryForMap(convertedCte(statusCondition) + """
+        select coalesce(sum(base_amount), 0) as amount, count(base_amount) as n from conv""", p);
+    return new ConvertedMoney(((BigDecimal) row.get("amount")).setScale(2, RoundingMode.HALF_UP), num(row.get("n")),
+        notConverted(p, statusCondition));
+  }
+
+  private SpendByVendor convertedSpendByVendor(AuthPrincipal me, int limit) {
+    String base = fx.baseCurrency(me.organizationId());
+    return cached(me, "vendor-converted:" + base + ":" + limit, new TypeReference<SpendByVendor>() {}, () -> {
+      prepareRates(me, base);
+      MapSqlParameterSource p = convertedParams(me, base);
+      var items = jdbc.query(convertedCte("status = 'APPROVED'") + """
+          select coalesce(vendor_name, '(unknown)') as vendor, sum(base_amount) as amount, count(*) as n
+          from conv where base_amount is not null
+          group by 1 order by amount desc limit :limit""", p.addValue("limit", limit),
+          (rs, i) -> new VendorSpend(rs.getString("vendor"), rs.getBigDecimal("amount").setScale(2, RoundingMode.HALF_UP),
+              rs.getLong("n")));
+      return new SpendByVendor(base, items, notConverted(p, "status = 'APPROVED'"));
+    });
+  }
+
+  private SpendByMonth convertedSpendByMonth(AuthPrincipal me, int months) {
+    String base = fx.baseCurrency(me.organizationId());
+    return cached(me, "month-converted:" + base + ":" + months, new TypeReference<SpendByMonth>() {}, () -> {
+      prepareRates(me, base);
+      LocalDate from = LocalDate.now(clock).withDayOfMonth(1).minusMonths(months - 1L);
+      MapSqlParameterSource p = convertedParams(me, base);
+      var rows = jdbc.query(convertedCte("status = 'APPROVED'") + """
+          select to_char(date_trunc('month', d), 'YYYY-MM') as month, sum(base_amount) as amount, count(*) as n
+          from conv where base_amount is not null and d >= :from
+          group by 1 order by 1""", p.addValue("from", java.sql.Date.valueOf(from)),
+          (rs, i) -> new MonthSpend(rs.getString("month"), rs.getBigDecimal("amount").setScale(2, RoundingMode.HALF_UP),
+              rs.getLong("n")));
+      List<MonthSpend> filled = new java.util.ArrayList<>();
+      for (int k = 0; k < months; k++) {
+        String key = from.plusMonths(k).toString().substring(0, 7);
+        filled.add(rows.stream().filter(r -> r.month().equals(key)).findFirst()
+            .orElse(new MonthSpend(key, BigDecimal.ZERO, 0)));
+      }
+      return new SpendByMonth(base, filled, notConverted(p, "status = 'APPROVED'"));
     });
   }
 
@@ -153,6 +254,11 @@ public class AnalyticsService {
     String defaultCurrency = approved.isEmpty() ? (pending.isEmpty() ? null : pending.get(0).currency())
         : approved.get(0).currency();
 
+    String base = fx.baseCurrency(me.organizationId());
+    prepareRates(me, base);
+    ConvertedMoney approvedConverted = convertedMoney(me, base, "status = 'APPROVED'");
+    ConvertedMoney pendingConverted = convertedMoney(me, base, "status in ('NEEDS_REVIEW','VALIDATED')");
+
     return new Summary(total, num(k.get("awaiting")), num(k.get("approved")), num(k.get("rejected")), failed,
         k.get("avg_ms") == null ? null : round(((Number) k.get("avg_ms")).doubleValue() / 1000.0, 2),
         processed == 0 ? null : round(flagged / (double) processed, 4),
@@ -161,7 +267,7 @@ public class AnalyticsService {
         k.get("avg_ocr") == null ? null : round(((Number) k.get("avg_ocr")).doubleValue(), 4),
         num(k.get("in_tok")), num(k.get("out_tok")), cost.setScale(4, RoundingMode.HALF_UP),
         costed == 0 ? BigDecimal.ZERO : cost.divide(BigDecimal.valueOf(costed), 6, RoundingMode.HALF_UP),
-        approved, pending, defaultCurrency);
+        approved, pending, defaultCurrency, base, approvedConverted, pendingConverted);
   }
 
   /** {@code condition} is one of two fixed literals above, never user input. */

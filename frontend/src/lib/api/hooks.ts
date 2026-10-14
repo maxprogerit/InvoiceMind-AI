@@ -6,6 +6,8 @@ import { api, authFetch, fetchBlob, toApiError, unwrap } from "./client";
 import {
   IN_FLIGHT,
   type AuditEntry,
+  type FxStatus,
+  type Organization,
   type DocumentType,
   type ByStatus,
   type InvoiceDetail,
@@ -158,20 +160,25 @@ export function useDeleteInvoice(id: string) {
 export const useSummary = () =>
   useQuery({ queryKey: ["analytics", "summary"], queryFn: () => unwrap(api.GET("/api/v1/analytics/summary")) as Promise<Summary> });
 
-export const useSpendByVendor = (currency: string | undefined) =>
+/** `converted` reports every currency in the organisation base currency (the `currency` argument is then ignored). */
+export const useSpendByVendor = (currency: string | undefined, converted = false) =>
   useQuery({
-    enabled: !!currency,
-    queryKey: ["analytics", "vendor", currency],
+    enabled: converted || !!currency,
+    queryKey: ["analytics", "vendor", converted ? "converted" : currency],
     queryFn: () =>
-      unwrap(api.GET("/api/v1/analytics/spend-by-vendor", { params: { query: { currency, limit: 8 } } })) as Promise<SpendByVendor>,
+      unwrap(
+        api.GET("/api/v1/analytics/spend-by-vendor", { params: { query: { currency: converted ? undefined : currency, limit: 8, converted } } }),
+      ) as Promise<SpendByVendor>,
   });
 
-export const useSpendByMonth = (currency: string | undefined, months = 12) =>
+export const useSpendByMonth = (currency: string | undefined, converted = false, months = 12) =>
   useQuery({
-    enabled: !!currency,
-    queryKey: ["analytics", "month", currency, months],
+    enabled: converted || !!currency,
+    queryKey: ["analytics", "month", converted ? "converted" : currency, months],
     queryFn: () =>
-      unwrap(api.GET("/api/v1/analytics/spend-by-month", { params: { query: { currency, months } } })) as Promise<SpendByMonth>,
+      unwrap(
+        api.GET("/api/v1/analytics/spend-by-month", { params: { query: { currency: converted ? undefined : currency, months, converted } } }),
+      ) as Promise<SpendByMonth>,
   });
 
 export const useByStatus = () =>
@@ -298,5 +305,47 @@ export function useExplainInvoice(id: string) {
   return useMutation({
     mutationFn: (question?: string) =>
       unwrap(api.POST("/api/v1/invoices/{id}/explain", { params: { path: { id } }, body: question ? { question } : undefined })) as Promise<KnowledgeAnswer>,
+  });
+}
+
+// ---------------------------------------------------- organisation / currency
+export const useOrganization = () =>
+  useQuery({ queryKey: ["organization"], queryFn: () => unwrap(api.GET("/api/v1/organization")) as Promise<Organization> });
+
+export const useFxStatus = (enabled = true) =>
+  useQuery({ enabled, queryKey: ["fx"], queryFn: () => unwrap(api.GET("/api/v1/fx")) as Promise<FxStatus> });
+
+function useInvalidateMoney() {
+  const qc = useQueryClient();
+  return () => {
+    void qc.invalidateQueries({ queryKey: ["fx"] });
+    void qc.invalidateQueries({ queryKey: ["organization"] });
+    void qc.invalidateQueries({ queryKey: ["analytics"] });
+  };
+}
+
+export function useSetBaseCurrency() {
+  const invalidate = useInvalidateMoney();
+  return useMutation({
+    mutationFn: (baseCurrency: string) => unwrap(api.PUT("/api/v1/organization", { body: { baseCurrency } })) as Promise<Organization>,
+    onSuccess: invalidate,
+  });
+}
+
+export function useSetManualRate() {
+  const invalidate = useInvalidateMoney();
+  return useMutation({
+    mutationFn: (body: { currency: string; date: string; perEur: number }) => unwrap(api.PUT("/api/v1/fx/manual", { body })),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeleteManualRate() {
+  const invalidate = useInvalidateMoney();
+  return useMutation({
+    mutationFn: async (id: number) => {
+      await unwrap(api.DELETE("/api/v1/fx/manual/{id}", { params: { path: { id } } }));
+    },
+    onSuccess: invalidate,
   });
 }

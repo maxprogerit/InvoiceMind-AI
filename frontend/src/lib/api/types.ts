@@ -20,6 +20,9 @@ export type SpendByVendor = S["SpendByVendor"];
 export type SpendByMonth = S["SpendByMonth"];
 export type ByStatus = S["ByStatus"];
 export type VolumeByDay = S["VolumeByDay"];
+export type Organization = S["OrganizationDto"];
+export type FxStatus = S["FxStatus"];
+export type ManualRate = S["ManualRate"];
 /** Error envelope returned by every failing API call (see GlobalExceptionHandler in the backend). */
 export interface ErrorBody {
   timestamp: string;

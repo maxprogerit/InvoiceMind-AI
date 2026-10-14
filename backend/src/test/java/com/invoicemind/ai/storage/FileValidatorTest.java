@@ -11,7 +11,7 @@ import org.springframework.http.HttpStatus;
 
 class FileValidatorTest {
   final FileValidator validator = new FileValidator(new AppProperties(null, null, null,
-      new AppProperties.Storage("./storage", 1024), null, null, null, null));
+      new AppProperties.Storage("./storage", 1024), null, null, null, null, null));
 
   static byte[] bytes(String s) { return s.getBytes(StandardCharsets.ISO_8859_1); }
 

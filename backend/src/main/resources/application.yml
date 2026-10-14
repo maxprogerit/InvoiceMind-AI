@@ -100,5 +100,10 @@ app:
     auth-per-minute: 20     # login/register per IP (credential stuffing)
     refresh-per-minute: 300 # every page load refreshes the session; tokens are 256-bit, so this only protects the DB
     upload-per-minute: 60
+  fx:
+    enabled: ${APP_FX_ENABLED:true}
+    base-url: ${APP_FX_BASE_URL:https://api.frankfurter.dev/v1}
+    timeout-ms: 8000
+    retry-after-minutes: 15
   seed:
     demo-password: ${APP_DEMO_PASSWORD:}

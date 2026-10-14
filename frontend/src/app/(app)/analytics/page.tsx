@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 import { SpendByMonthChart, SpendByVendorChart, StatusBreakdown, VolumeChart } from "@/components/analytics/charts";
@@ -8,6 +9,7 @@ import { Card } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/misc";
 import { useByStatus, useSpendByMonth, useSpendByVendor, useSummary, useVolume } from "@/lib/api/hooks";
+import { useAuth } from "@/lib/auth/store";
 import { formatDuration, formatMoney, formatNumber, formatPercent } from "@/lib/format";
 
 function Kpi({ label, value, hint, loading }: { label: string; value: string; hint?: string; loading?: boolean }) {
@@ -20,20 +22,26 @@ function Kpi({ label, value, hint, loading }: { label: string; value: string; hi
   );
 }
 
+const BASE = "__base__";
+
 export default function AnalyticsPage() {
   const summary = useSummary();
   const s = summary.data;
+  const me = useAuth((u) => u.user);
   const currencies = [...new Set([...(s?.approvedSpend ?? []), ...(s?.pendingAmount ?? [])].map((m) => m.currency))];
   const [picked, setPicked] = useState<string>();
-  const currency = picked && currencies.includes(picked) ? picked : s?.defaultCurrency;
+  // With several currencies the converted view is the useful default; the picker offers each currency on its own.
+  const converted = currencies.length > 1 && (picked === undefined || picked === BASE);
+  const currency = converted ? undefined : picked && currencies.includes(picked) ? picked : s?.defaultCurrency;
 
-  const vendors = useSpendByVendor(currency);
-  const months = useSpendByMonth(currency);
+  const vendors = useSpendByVendor(currency, converted);
+  const months = useSpendByMonth(currency, converted);
   const byStatus = useByStatus();
   const volume = useVolume(30);
 
-  const approved = s?.approvedSpend.find((m) => m.currency === currency);
-  const pending = s?.pendingAmount.find((m) => m.currency === currency);
+  const approved = converted ? undefined : s?.approvedSpend.find((m) => m.currency === currency);
+  const pending = converted ? undefined : s?.pendingAmount.find((m) => m.currency === currency);
+  const notConverted = converted ? (s?.approvedConverted.notConverted ?? []) : [];
 
   return (
     <>
@@ -41,12 +49,13 @@ export default function AnalyticsPage() {
         title="Analysis"
         subtitle="Live numbers computed from your invoices. Nothing here is estimated."
         actions={
-          currencies.length > 1 && currency ? (
-            <Select value={currency} onValueChange={setPicked}>
-              <SelectTrigger className="w-28 font-mono" aria-label="Currency">
+          currencies.length > 1 ? (
+            <Select value={converted ? BASE : (currency ?? "")} onValueChange={setPicked}>
+              <SelectTrigger className="w-40 font-mono" aria-label="Currency">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value={BASE}>All in {s?.baseCurrency ?? ""}</SelectItem>
                 {currencies.map((c) => (
                   <SelectItem key={c} value={c}>
                     {c}
@@ -59,8 +68,18 @@ export default function AnalyticsPage() {
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Kpi label="Approved spend" loading={summary.isLoading} value={approved ? formatMoney(approved.amount, approved.currency) : "—"} hint={approved ? `${approved.invoices} approved invoices` : "Nothing approved yet"} />
-        <Kpi label="Awaiting decision" loading={summary.isLoading} value={s ? String(s.awaitingDecision) : "—"} hint={pending ? `${formatMoney(pending.amount, pending.currency)} pending` : undefined} />
+        <Kpi
+          label="Approved spend"
+          loading={summary.isLoading}
+          value={converted ? (s ? formatMoney(s.approvedConverted.amount, s.baseCurrency) : "—") : approved ? formatMoney(approved.amount, approved.currency) : "—"}
+          hint={converted ? `${s?.approvedConverted.invoices ?? 0} approved invoices, converted` : approved ? `${approved.invoices} approved invoices` : "Nothing approved yet"}
+        />
+        <Kpi
+          label="Awaiting decision"
+          loading={summary.isLoading}
+          value={s ? String(s.awaitingDecision) : "—"}
+          hint={converted && s ? `${formatMoney(s.pendingConverted.amount, s.baseCurrency)} pending, converted` : pending ? `${formatMoney(pending.amount, pending.currency)} pending` : undefined}
+        />
         <Kpi label="Avg. processing time" loading={summary.isLoading} value={formatDuration(s?.avgProcessingSeconds)} hint="Upload to validated" />
         <Kpi
           label="Needed human review"
@@ -78,6 +97,22 @@ export default function AnalyticsPage() {
           hint={s ? `${formatNumber(s.inputTokens + s.outputTokens)} tokens · $${Number(s.avgCostPerInvoiceUsd).toFixed(5)} per invoice` : undefined}
         />
       </div>
+
+      {converted && (
+        <p className="mt-4 text-xs text-dim">
+          Converted into {s?.baseCurrency} at the reference rate of each invoice date (ECB, or the manual rate you set).
+          {notConverted.length > 0 && (
+            <span className="ml-1 text-warn">
+              Not converted, no rate available: {notConverted.map((m) => `${formatMoney(m.amount, m.currency)} (${m.invoices})`).join(", ")}.{" "}
+              {me?.role === "ADMIN" && (
+                <Link href="/settings" className="underline underline-offset-2">
+                  Add a rate
+                </Link>
+              )}
+            </span>
+          )}
+        </p>
+      )}
 
       <div className="mt-6 grid gap-6 xl:grid-cols-2">
         <SpendByMonthChart data={months.data} loading={months.isLoading || summary.isLoading} />

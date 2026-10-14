@@ -27,14 +27,16 @@ public class AnalyticsController {
 
   @GetMapping("/spend-by-vendor")
   public SpendByVendor spendByVendor(@RequestParam(required = false) String currency,
-                                     @RequestParam(defaultValue = "10") int limit) {
-    return service.spendByVendor(CurrentUser.get(), currency, limit);
+                                     @RequestParam(defaultValue = "10") int limit,
+                                     @RequestParam(defaultValue = "false") boolean converted) {
+    return service.spendByVendor(CurrentUser.get(), currency, limit, converted);
   }
 
   @GetMapping("/spend-by-month")
   public SpendByMonth spendByMonth(@RequestParam(required = false) String currency,
-                                   @RequestParam(defaultValue = "12") int months) {
-    return service.spendByMonth(CurrentUser.get(), currency, months);
+                                   @RequestParam(defaultValue = "12") int months,
+                                   @RequestParam(defaultValue = "false") boolean converted) {
+    return service.spendByMonth(CurrentUser.get(), currency, months, converted);
   }
 
   @GetMapping("/by-status")
