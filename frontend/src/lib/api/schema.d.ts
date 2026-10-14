@@ -68,7 +68,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/invoices": {
+    "/api/v1/knowledge/documents": {
         parameters: {
             query?: never;
             header?: never;
@@ -77,7 +77,55 @@ export interface paths {
         };
         get: operations["list_1"];
         put?: never;
+        post: operations["addText"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/documents/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
         post: operations["upload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/ask": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ask"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/invoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_2"];
+        put?: never;
+        post: operations["upload_1"];
         delete?: never;
         options?: never;
         head?: never;
@@ -110,6 +158,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["reject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/invoices/{id}/explain": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["explain"];
         delete?: never;
         options?: never;
         head?: never;
@@ -219,7 +283,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_2"];
+        get: operations["list_3"];
         put?: never;
         post?: never;
         delete?: never;
@@ -315,7 +379,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_3"];
+        get: operations["list_4"];
         put?: never;
         post?: never;
         delete?: never;
@@ -399,6 +463,22 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/knowledge/documents/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["delete_1"];
         options?: never;
         head?: never;
         patch?: never;
@@ -522,6 +602,44 @@ export interface components {
             enabled: boolean;
             /** Format: date-time */
             createdAt: string;
+        };
+        CreateTextRequest: {
+            title: string;
+            content: string;
+        };
+        DocumentDto: {
+            /** Format: uuid */
+            id: string;
+            title: string;
+            sourceFilename?: string;
+            /** Format: int32 */
+            charCount: number;
+            /** Format: int32 */
+            chunkCount: number;
+            createdByName: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        AskRequest: {
+            question: string;
+        };
+        AnswerDto: {
+            answer: string;
+            insufficientContext: boolean;
+            injectionSuspected: boolean;
+            citations: number[];
+            sources: components["schemas"]["Source"][];
+            model?: string;
+        };
+        Source: {
+            /** Format: int32 */
+            n: number;
+            /** Format: uuid */
+            documentId: string;
+            title: string;
+            excerpt: string;
+            /** Format: double */
+            score: number;
         };
         InvoiceSummary: {
             /** Format: uuid */
@@ -885,6 +1003,103 @@ export interface operations {
     };
     list_1: {
         parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DocumentDto"][];
+                };
+            };
+        };
+    };
+    addText: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTextRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DocumentDto"];
+                };
+            };
+        };
+    };
+    upload: {
+        parameters: {
+            query?: {
+                title?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["DocumentDto"];
+                };
+            };
+        };
+    };
+    ask: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AskRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AnswerDto"];
+                };
+            };
+        };
+    };
+    list_2: {
+        parameters: {
             query?: {
                 status?: ("UPLOADED" | "PROCESSING" | "EXTRACTED" | "NEEDS_REVIEW" | "VALIDATED" | "APPROVED" | "REJECTED" | "FAILED")[];
                 q?: string;
@@ -915,7 +1130,7 @@ export interface operations {
             };
         };
     };
-    upload: {
+    upload_1: {
         parameters: {
             query?: never;
             header?: never;
@@ -986,6 +1201,32 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["InvoiceDetail"];
+                };
+            };
+        };
+    };
+    explain: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["AskRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AnswerDto"];
                 };
             };
         };
@@ -1136,7 +1377,7 @@ export interface operations {
             };
         };
     };
-    list_2: {
+    list_3: {
         parameters: {
             query?: never;
             header?: never;
@@ -1272,7 +1513,7 @@ export interface operations {
             };
         };
     };
-    list_3: {
+    list_4: {
         parameters: {
             query?: {
                 action?: string;
@@ -1405,6 +1646,26 @@ export interface operations {
                 content: {
                     "*/*": components["schemas"]["ByStatus"];
                 };
+            };
+        };
+    };
+    delete_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

@@ -2,6 +2,9 @@ package com.invoicemind.ai.ai;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.invoicemind.ai.ai.AiDtos.EmbedResponse;
+import com.invoicemind.ai.ai.AiDtos.ExplainRequest;
+import com.invoicemind.ai.ai.AiDtos.ExplainResponse;
 import com.invoicemind.ai.ai.AiDtos.ExtractResponse;
 import com.invoicemind.ai.ai.AiDtos.OcrResponse;
 import com.invoicemind.ai.common.RequestIdFilter;
@@ -14,6 +17,7 @@ import io.github.resilience4j.retry.Retry;
 import io.github.resilience4j.retry.RetryConfig;
 import java.net.http.HttpClient;
 import java.time.Duration;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 import lombok.extern.slf4j.Slf4j;
@@ -98,6 +102,30 @@ public class HttpAiClient implements AiClient {
         .retrieve()
         .onStatus(HttpStatusCode::isError, (req, res) -> { throw toException(res.getStatusCode().value(), res.getBody().readAllBytes()); })
         .body(ExtractResponse.class));
+  }
+
+  @Override
+  public EmbedResponse embed(List<String> texts) {
+    return call(() -> http.post().uri("/embed")
+        .header("X-Internal-Token", token)
+        .header(RequestIdFilter.HEADER, requestId())
+        .contentType(MediaType.APPLICATION_JSON)
+        .body(Map.of("texts", texts))
+        .retrieve()
+        .onStatus(HttpStatusCode::isError, (req, res) -> { throw toException(res.getStatusCode().value(), res.getBody().readAllBytes()); })
+        .body(EmbedResponse.class));
+  }
+
+  @Override
+  public ExplainResponse explain(ExplainRequest request) {
+    return call(() -> http.post().uri("/explain")
+        .header("X-Internal-Token", token)
+        .header(RequestIdFilter.HEADER, requestId())
+        .contentType(MediaType.APPLICATION_JSON)
+        .body(request)
+        .retrieve()
+        .onStatus(HttpStatusCode::isError, (req, res) -> { throw toException(res.getStatusCode().value(), res.getBody().readAllBytes()); })
+        .body(ExplainResponse.class));
   }
 
   private <T> T call(Supplier<T> supplier) {

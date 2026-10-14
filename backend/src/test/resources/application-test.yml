@@ -18,6 +18,7 @@ app:
     circuit-failure-rate: 100
   rate-limit:
     auth-per-minute: 100000
+    refresh-per-minute: 100000
     upload-per-minute: 100000
   seed:
     demo-password: ""

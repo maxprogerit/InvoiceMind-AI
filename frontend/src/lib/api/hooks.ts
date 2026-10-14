@@ -2,7 +2,7 @@
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { api, fetchBlob, unwrap } from "./client";
+import { api, authFetch, fetchBlob, toApiError, unwrap } from "./client";
 import {
   IN_FLIGHT,
   type AuditEntry,
@@ -10,6 +10,8 @@ import {
   type InvoiceDetail,
   type InvoiceStatus,
   type InvoiceSummary,
+  type KnowledgeAnswer,
+  type KnowledgeDocument,
   type NotificationItem,
   type Page,
   type SpendByMonth,
@@ -238,5 +240,61 @@ export function useAudit(filters: AuditFilters) {
     queryKey: ["audit", filters],
     queryFn: () => unwrap(api.GET("/api/v1/audit", { params: { query: clean(filters) } })) as Promise<Page<AuditEntry>>,
     placeholderData: keepPreviousData,
+  });
+}
+
+// --------------------------------------------------------------- knowledge
+export function useKnowledgeDocuments(enabled = true) {
+  return useQuery({
+    enabled,
+    queryKey: ["knowledge"],
+    queryFn: () => unwrap(api.GET("/api/v1/knowledge/documents")) as Promise<KnowledgeDocument[]>,
+  });
+}
+
+export function useAddKnowledgeText() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { title: string; content: string }) =>
+      unwrap(api.POST("/api/v1/knowledge/documents", { body })) as Promise<KnowledgeDocument>,
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["knowledge"] }),
+  });
+}
+
+export function useUploadKnowledge() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ file, title }: { file: File; title?: string }) => {
+      const form = new FormData();
+      form.append("file", file);
+      if (title) form.append("title", title);
+      const res = await authFetch("/api/v1/knowledge/documents/upload", { method: "POST", body: form });
+      if (!res.ok) throw await toApiError(res);
+      return (await res.json()) as KnowledgeDocument;
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["knowledge"] }),
+  });
+}
+
+export function useDeleteKnowledge() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await unwrap(api.DELETE("/api/v1/knowledge/documents/{id}", { params: { path: { id } } }));
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["knowledge"] }),
+  });
+}
+
+export function useAsk() {
+  return useMutation({
+    mutationFn: (question: string) => unwrap(api.POST("/api/v1/knowledge/ask", { body: { question } })) as Promise<KnowledgeAnswer>,
+  });
+}
+
+export function useExplainInvoice(id: string) {
+  return useMutation({
+    mutationFn: (question?: string) =>
+      unwrap(api.POST("/api/v1/invoices/{id}/explain", { params: { path: { id } }, body: question ? { question } : undefined })) as Promise<KnowledgeAnswer>,
   });
 }

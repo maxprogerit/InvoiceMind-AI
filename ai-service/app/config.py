@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     openai_max_output_tokens: int = 4000
     openai_price_input_per_1m: float = 0.0
     openai_price_output_per_1m: float = 0.0
+    openai_embedding_model: str = "text-embedding-3-small"
+    embedding_dimensions: int = 1536  # must match vector(1536) in the backend schema
+    openai_embedding_price_per_1m: float = 0.0
 
     # OCR
     ocr_engine: str = "tesseract"

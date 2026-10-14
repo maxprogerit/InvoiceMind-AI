@@ -56,7 +56,7 @@ public class AuthController {
       @RequestHeader(name = "X-Requested-With", required = false) String requestedWith,
       HttpServletRequest http) {
     requireCsrfHeader(requestedWith);
-    rateLimiter.check("auth", http.getRemoteAddr(), props.rateLimit().authPerMinute());
+    rateLimiter.check("refresh", http.getRemoteAddr(), props.rateLimit().refreshPerMinute());
     return withCookie(authService.refresh(refreshToken), 200);
   }
 

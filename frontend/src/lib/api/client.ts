@@ -42,7 +42,8 @@ export function refreshSession(): Promise<boolean> {
         headers: { "X-Requested-With": "invoicemind" },
       });
       if (!res.ok) {
-        useAuth.getState().clear();
+        // Only a 401 means the session is really gone; a 429/5xx must not sign anyone out.
+        if (res.status === 401) useAuth.getState().clear();
         return false;
       }
       const body = (await res.json()) as AuthResponse;
@@ -84,7 +85,7 @@ export async function authFetch(input: Request | string, init?: RequestInit): Pr
 
 export const api = createClient<paths>({ baseUrl: "", fetch: (req) => authFetch(req) });
 
-async function toApiError(res: Response): Promise<ApiError> {
+export async function toApiError(res: Response): Promise<ApiError> {
   let body: Partial<ErrorBody> = {};
   try {
     body = (await res.clone().json()) as Partial<ErrorBody>;

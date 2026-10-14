@@ -41,4 +41,19 @@ public final class AiDtos {
   @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
   @JsonIgnoreProperties(ignoreUnknown = true)
   public record ExtractResponse(Extraction extraction, boolean injectionSuspected, Usage usage) {}
+
+  @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+  @JsonIgnoreProperties(ignoreUnknown = true)
+  public record EmbedResponse(List<List<Float>> vectors, String model, int dimensions, int inputTokens, double costUsd) {}
+
+  @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+  public record Passage(int id, String title, String text) {}
+
+  @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+  public record ExplainRequest(String question, String facts, List<Passage> passages) {}
+
+  @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+  @JsonIgnoreProperties(ignoreUnknown = true)
+  public record ExplainResponse(String answer, List<Integer> citations, boolean insufficientContext,
+                                boolean injectionSuspected, Usage usage) {}
 }

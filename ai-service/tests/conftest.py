@@ -4,6 +4,7 @@ from types import SimpleNamespace
 os.environ.setdefault("AI_SERVICE_TOKEN", "test-token")
 os.environ["OPENAI_PRICE_INPUT_PER_1M"] = "0.10"
 os.environ["OPENAI_PRICE_OUTPUT_PER_1M"] = "0.50"
+os.environ["OPENAI_EMBEDDING_PRICE_PER_1M"] = "0.02"
 
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402

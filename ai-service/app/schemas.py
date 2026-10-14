@@ -75,3 +75,44 @@ class ExtractResponse(BaseModel):
     extraction: InvoiceExtraction
     injection_suspected: bool
     usage: Usage
+
+
+# ---------------------------------------------------------------- knowledge / RAG ----
+class EmbedRequest(BaseModel):
+    texts: list[str] = Field(min_length=1, max_length=64)
+
+
+class EmbedResponse(BaseModel):
+    vectors: list[list[float]]
+    model: str
+    dimensions: int
+    input_tokens: int
+    cost_usd: float
+
+
+class Passage(BaseModel):
+    id: int
+    title: str = Field(max_length=300)
+    text: str = Field(max_length=4000)
+
+
+class ExplainRequest(BaseModel):
+    question: str = Field(min_length=1, max_length=1000)
+    facts: str = Field(max_length=6000)  # what the system knows about the invoice (validation issues etc.)
+    passages: list[Passage] = Field(max_length=10)
+
+
+class ExplainResult(BaseModel):
+    """Structured-output contract for the model: strict-mode friendly (no defaults)."""
+
+    answer: str
+    cited_passage_ids: list[int]
+    insufficient_context: bool
+
+
+class ExplainResponse(BaseModel):
+    answer: str
+    citations: list[int]
+    insufficient_context: bool
+    injection_suspected: bool
+    usage: Usage

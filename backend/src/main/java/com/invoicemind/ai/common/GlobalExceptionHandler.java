@@ -1,6 +1,7 @@
 package com.invoicemind.ai.common;
 
 import jakarta.servlet.http.HttpServletRequest;
+import com.invoicemind.ai.ai.AiClientException;
 import com.invoicemind.ai.ratelimit.RateLimitedException;
 import jakarta.validation.ConstraintViolationException;
 import java.time.Instant;
@@ -41,6 +42,13 @@ public class GlobalExceptionHandler {
         .header("Retry-After", String.valueOf(ex.retryAfterSeconds()))
         .body(new ErrorResponse(Instant.now(), 429, "rate_limited", ex.getMessage(), req.getRequestURI(),
             MDC.get(RequestIdFilter.MDC_KEY), null));
+  }
+
+  /** The AI service failed for a synchronous request (knowledge base). The message was written to be user-safe. */
+  @ExceptionHandler(AiClientException.class)
+  ResponseEntity<ErrorResponse> ai(AiClientException ex, HttpServletRequest req) {
+    boolean unavailable = ex.status() == 503 || ex.status() == 0 || ex.code().equals("ai_circuit_open");
+    return build(unavailable ? HttpStatus.SERVICE_UNAVAILABLE : HttpStatus.BAD_GATEWAY, ex.code(), ex.getMessage(), req, null);
   }
 
   @ExceptionHandler(MethodArgumentNotValidException.class)

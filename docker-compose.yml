@@ -10,7 +10,7 @@ x-restart: &restart
 services:
   postgres:
     <<: *restart
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-invoicemind}
       POSTGRES_USER: ${POSTGRES_USER:-invoicemind}
@@ -75,6 +75,8 @@ services:
       OPENAI_REASONING_EFFORT: ${OPENAI_REASONING_EFFORT:-}
       OPENAI_PRICE_INPUT_PER_1M: ${OPENAI_PRICE_INPUT_PER_1M:-0}
       OPENAI_PRICE_OUTPUT_PER_1M: ${OPENAI_PRICE_OUTPUT_PER_1M:-0}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      OPENAI_EMBEDDING_PRICE_PER_1M: ${OPENAI_EMBEDDING_PRICE_PER_1M:-0}
 
   backend:
     <<: *restart
@@ -116,6 +118,8 @@ services:
       OPENAI_REASONING_EFFORT: ${OPENAI_REASONING_EFFORT:-}
       OPENAI_PRICE_INPUT_PER_1M: ${OPENAI_PRICE_INPUT_PER_1M:-0}
       OPENAI_PRICE_OUTPUT_PER_1M: ${OPENAI_PRICE_OUTPUT_PER_1M:-0}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      OPENAI_EMBEDDING_PRICE_PER_1M: ${OPENAI_EMBEDDING_PRICE_PER_1M:-0}
       EVAL_EXTRACTOR: ${EVAL_EXTRACTOR:-}
       PYTHONPATH: /srv
     volumes:

@@ -90,6 +90,26 @@ test.describe.serial("invoice lifecycle in the browser", () => {
     expect(Buffer.concat(chunks).subarray(0, 2).toString()).toBe("PK"); // a real zip/xlsx container
   });
 
+  test("a rules document explains why an invoice was flagged, with its source", async () => {
+    await page.goto("/knowledge");
+    await expect(page.getByText(/No documents yet/)).toBeVisible();
+    await page.getByRole("button", { name: /Add document/ }).first().click();
+    await page.fill("#k-title", "Totals policy");
+    await page.fill("#k-content", "Totals policy: the subtotal plus tax must always equal the invoice total. If the total does not match, return the invoice to the supplier for correction.");
+    await page.getByRole("dialog").getByRole("button", { name: "Add document" }).click();
+    await expect(page.getByText("1 passages")).toBeVisible();
+
+    // the same mismatching document again: a flagged duplicate that needs review
+    await page.goto("/upload");
+    await page.setInputFiles("input[type=file]", path.join(FIXTURES, "e2e-mismatch.pdf"));
+    await page.getByRole("link", { name: /Review now/ }).click();
+    await page.waitForURL(/\/invoices\/[0-9a-f-]{36}$/);
+    await page.getByRole("button", { name: "Why was this flagged?" }).click();
+    await expect(page.getByText(/Per rule/)).toBeVisible();
+    await expect(page.getByRole("link", { name: "Source 1" })).toBeVisible(); // [1] is rendered as a citation chip
+    await expect(page.locator("#source-1")).toContainText("Totals policy");
+  });
+
   test("an admin adds a plain user, who sees a restricted application", async () => {
     await page.goto("/team");
     await page.getByRole("button", { name: /Add member/ }).first().click();

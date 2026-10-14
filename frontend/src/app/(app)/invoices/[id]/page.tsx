@@ -10,6 +10,7 @@ import { AuditTimeline } from "@/components/invoices/audit-timeline";
 import { DecisionDialog } from "@/components/invoices/decision-dialog";
 import { DocumentViewer } from "@/components/invoices/document-viewer";
 import { IssuesPanel } from "@/components/invoices/issues-panel";
+import { ExplainPanel } from "@/components/knowledge/explain-panel";
 import { PipelineStepper } from "@/components/invoices/pipeline-stepper";
 import { ReviewForm } from "@/components/invoices/review-form";
 import { StatusBadge } from "@/components/invoices/status-badge";
@@ -179,6 +180,7 @@ export default function InvoiceDetailPage() {
             <PipelineStepper status={inv.status} />
           </Card>
           <IssuesPanel invoice={inv} />
+          <ExplainPanel invoice={inv} />
           <ReviewForm invoice={inv} />
           <ProcessingCard inv={inv} />
           <AuditTimeline invoiceId={inv.id} />

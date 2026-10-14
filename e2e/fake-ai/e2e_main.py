@@ -10,6 +10,7 @@ from contextlib import asynccontextmanager
 from datetime import date
 
 from app import main as real
+from app.config import get_settings
 from app.extraction.postprocess import finalize
 from app.schemas import ExtractResponse, FieldConfidence, InvoiceExtraction, LineItem, Usage
 
@@ -83,9 +84,46 @@ _original = real.app.router.lifespan_context
 async def _lifespan(app):
     async with _original(app):
         app.state.extractor = RulesExtractorForTests()
+        app.state.knowledge = KnowledgeForTests(get_settings())
         yield
 
 
 real.app.router.lifespan_context = _lifespan
 app = real.app
 _ = date  # keep import used for readers extending the rules
+
+
+class KnowledgeForTests:
+    """Offline stand-in for the embedding + explanation model: hashed bag-of-words vectors (similar wording ->
+    similar vectors) and a templated answer quoting the best passage. Test double only."""
+
+    def __init__(self, settings):
+        self.settings = settings
+
+    def embed(self, texts):
+        from app.schemas import EmbedResponse
+
+        dim = self.settings.embedding_dimensions
+        vectors = []
+        for text in texts:
+            v = [0.0] * dim
+            for token in re.split(r"[^\w]+", text.lower()):
+                if len(token) >= 3:
+                    # stable across processes (Python's hash() is salted per run)
+                    v[sum(ord(c) * 31**i for i, c in enumerate(token)) % dim] += 1.0
+            norm = sum(x * x for x in v) ** 0.5 or 1.0
+            vectors.append([x / norm for x in v])
+        return EmbedResponse(vectors=vectors, model="hashing-for-tests", dimensions=dim, input_tokens=5 * len(texts), cost_usd=0.0)
+
+    def explain(self, req):
+        from app.schemas import ExplainResponse
+
+        if not req.passages:
+            answer, cites, insufficient = "No company rule covers this.", [], True
+        else:
+            first = req.passages[0]
+            answer, cites, insufficient = f"Per rule [{first.id}]: {first.text[:100]}", [first.id], False
+        return ExplainResponse(
+            answer=answer, citations=cites, insufficient_context=insufficient, injection_suspected=False,
+            usage=Usage(model="rules-for-tests", input_tokens=100, output_tokens=40, cost_usd=0.0, latency_ms=1),
+        )

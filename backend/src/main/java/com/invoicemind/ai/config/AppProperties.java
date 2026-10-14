@@ -34,7 +34,7 @@ public record AppProperties(
 
   public record Processing(String topic, int stuckAfterMinutes, int requeueUploadedAfterMinutes) {}
 
-  public record RateLimit(int authPerMinute, int uploadPerMinute) {}
+  public record RateLimit(int authPerMinute, int refreshPerMinute, int uploadPerMinute) {}
 
   public record Seed(String demoPassword) {}
 }

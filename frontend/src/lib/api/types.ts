@@ -59,3 +59,7 @@ export interface StatusEvent {
   failureReason?: string;
   at: string;
 }
+
+export type KnowledgeDocument = S["DocumentDto"];
+export type KnowledgeAnswer = S["AnswerDto"];
+export type KnowledgeSource = S["Source"];

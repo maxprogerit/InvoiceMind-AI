@@ -15,7 +15,8 @@ from .extraction.extractor import OpenAIExtractor
 from .logging_setup import log, request_id_var, setup_logging
 from .ocr.registry import build_engine
 from .ocr.service import OcrService
-from .schemas import ExtractRequest, ExtractResponse, OcrResponse
+from .knowledge.service import KnowledgeService
+from .schemas import EmbedRequest, EmbedResponse, ExplainRequest, ExplainResponse, ExtractRequest, ExtractResponse, OcrResponse
 
 logger = logging.getLogger("ai-service")
 
@@ -26,6 +27,7 @@ async def lifespan(app: FastAPI):
     setup_logging(settings.log_level)
     app.state.ocr = OcrService(build_engine(settings), settings)
     app.state.extractor = OpenAIExtractor.from_settings(settings)
+    app.state.knowledge = KnowledgeService(app.state.extractor.client, settings) if app.state.extractor else None
     log(
         logger,
         "ai-service started",
@@ -136,3 +138,20 @@ async def extract(body: ExtractRequest, request: Request):
     if extractor is None:
         raise ApiError(503, "llm_not_configured", "OPENAI_API_KEY is not configured")
     return await run_in_threadpool(extractor.extract, body.text)
+
+
+def _knowledge(request: Request) -> KnowledgeService:
+    service: KnowledgeService | None = request.app.state.knowledge
+    if service is None:
+        raise ApiError(503, "llm_not_configured", "OPENAI_API_KEY is not configured")
+    return service
+
+
+@app.post("/embed", response_model=EmbedResponse, dependencies=[Depends(require_internal_token)])
+async def embed(body: EmbedRequest, request: Request):
+    return await run_in_threadpool(_knowledge(request).embed, body.texts)
+
+
+@app.post("/explain", response_model=ExplainResponse, dependencies=[Depends(require_internal_token)])
+async def explain(body: ExplainRequest, request: Request):
+    return await run_in_threadpool(_knowledge(request).explain, body)

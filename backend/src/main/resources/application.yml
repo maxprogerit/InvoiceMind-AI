@@ -97,7 +97,8 @@ app:
     stuck-after-minutes: 10
     requeue-uploaded-after-minutes: 2
   rate-limit:
-    auth-per-minute: 20
+    auth-per-minute: 20     # login/register per IP (credential stuffing)
+    refresh-per-minute: 300 # every page load refreshes the session; tokens are 256-bit, so this only protects the DB
     upload-per-minute: 60
   seed:
     demo-password: ${APP_DEMO_PASSWORD:}
