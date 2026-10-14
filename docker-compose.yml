@@ -101,6 +101,17 @@ services:
       APP_WEBHOOKS_ALLOW_PRIVATE_TARGETS: ${WEBHOOKS_ALLOW_PRIVATE_TARGETS:-false}
       # Invoice files: STORAGE_TYPE=local keeps them on a volume, s3 uses an S3-compatible store
       # (the bundled one: docker compose --profile s3 up; or AWS S3 by clearing S3_ENDPOINT and setting real keys).
+      # E-mail ingestion (off by default): invoices sent to <mailbox>+<token>@<domain> are imported. See README.
+      MAIL_INGEST_ENABLED: ${MAIL_INGEST_ENABLED:-false}
+      MAIL_INGEST_ADDRESS: ${MAIL_INGEST_ADDRESS:-}
+      MAIL_IMAP_HOST: ${MAIL_IMAP_HOST:-}
+      MAIL_IMAP_PORT: ${MAIL_IMAP_PORT:-993}
+      MAIL_IMAP_USER: ${MAIL_IMAP_USER:-}
+      MAIL_IMAP_PASSWORD: ${MAIL_IMAP_PASSWORD:-}
+      MAIL_IMAP_SSL: ${MAIL_IMAP_SSL:-true}
+      MAIL_IMAP_FOLDER: ${MAIL_IMAP_FOLDER:-INBOX}
+      MAIL_POLL_SECONDS: ${MAIL_POLL_SECONDS:-60}
+      MAIL_REQUIRE_AUTH_RESULTS: ${MAIL_REQUIRE_AUTH_RESULTS:-false}
       STORAGE_TYPE: ${STORAGE_TYPE:-local}
       S3_ENDPOINT: ${S3_ENDPOINT-http://seaweedfs:8333}
       S3_BUCKET: ${S3_BUCKET:-invoicemind}
@@ -120,6 +131,20 @@ services:
       kafka: { condition: service_healthy }
       ai-service: { condition: service_healthy }
       seaweedfs: { condition: service_healthy, required: false } # only when the s3 profile is active
+
+  # Optional local test mailbox for e-mail ingestion (GreenMail: SMTP on 127.0.0.1:3025, IMAP inside the network).
+  # Use with MAIL_INGEST_ENABLED=true MAIL_INGEST_ADDRESS=invoices@example.com MAIL_IMAP_HOST=greenmail
+  # MAIL_IMAP_PORT=3143 MAIL_IMAP_SSL=false MAIL_IMAP_USER=invoices MAIL_IMAP_PASSWORD=mailbox-secret
+  greenmail:
+    profiles: ["mail"]
+    <<: *restart
+    image: greenmail/standalone:2.1.2
+    environment:
+      GREENMAIL_OPTS: >-
+        -Dgreenmail.setup.test.smtp -Dgreenmail.setup.test.imap -Dgreenmail.hostname=0.0.0.0
+        -Dgreenmail.users=invoices:mailbox-secret@example.com
+    ports:
+      - "127.0.0.1:3025:3025"
 
   # Optional trace viewer (OpenTelemetry). Start with  TRACING_ENABLED=true docker compose --profile tracing up --build
   # and open http://localhost:16686 : one upload is one trace across backend, Kafka and ai-service.

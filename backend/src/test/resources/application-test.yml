@@ -25,6 +25,13 @@ app:
     poll-ms: 100
     retry-base-seconds: 1
     max-attempts: 4
+  mail:
+    enabled: true
+    address: invoices@example.com
+    ssl: false
+    username: invoices-user
+    password: mailbox-secret
+    scheduled: false     # the tests call pollOnce() themselves
   fx:
     retry-after-minutes: 0   # tests flip the fake rate source on and off
   seed:

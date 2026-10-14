@@ -7,6 +7,7 @@ import {
   IN_FLIGHT,
   type AuditEntry,
   type CreatedWebhook,
+  type EmailIngestStatus,
   type FxStatus,
   type Organization,
   type DocumentType,
@@ -410,5 +411,22 @@ export function useRetryDelivery(id: string) {
     mutationFn: (deliveryId: string) =>
       unwrap(api.POST("/api/v1/webhooks/{id}/deliveries/{deliveryId}/retry", { params: { path: { id, deliveryId } } })),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["webhooks", id, "deliveries"] }),
+  });
+}
+
+// ------------------------------------------------------------- e-mail ingestion
+export const useEmailIngest = (enabled = true) =>
+  useQuery({
+    enabled,
+    queryKey: ["ingest", "email"],
+    queryFn: () => unwrap(api.GET("/api/v1/ingest/email")) as Promise<EmailIngestStatus>,
+    refetchInterval: 15_000, // new mail shows up without a reload
+  });
+
+export function useRotateEmailAddress() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => unwrap(api.POST("/api/v1/ingest/email/token")) as Promise<EmailIngestStatus>,
+    onSuccess: (data) => qc.setQueryData(["ingest", "email"], data),
   });
 }

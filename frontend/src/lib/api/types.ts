@@ -22,6 +22,7 @@ export type ByStatus = S["ByStatus"];
 export type VolumeByDay = S["VolumeByDay"];
 export type Organization = S["OrganizationDto"];
 export type FxStatus = S["FxStatus"];
+export type EmailIngestStatus = S["EmailIngestStatus"];
 export type WebhookEndpoint = S["EndpointDto"];
 export type CreatedWebhook = S["CreatedEndpointDto"];
 export type WebhookDelivery = S["DeliveryDto"];

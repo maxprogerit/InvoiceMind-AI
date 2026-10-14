@@ -69,8 +69,12 @@ public class InvoiceService {
   private final Clock clock;
 
   // ------------------------------------------------------------------ upload
+  @Transactional // the delegate below is a self-call, so this method must open the transaction itself
+  public InvoiceSummary upload(MultipartFile file, AuthPrincipal me) { return upload(file, me, "web"); }
+
+  /** {@code source} ("web", "email") is recorded in the audit trail so it is clear how a document arrived. */
   @Transactional
-  public InvoiceSummary upload(MultipartFile file, AuthPrincipal me) {
+  public InvoiceSummary upload(MultipartFile file, AuthPrincipal me, String source) {
     rateLimiter.check("upload", me.userId().toString(), props.rateLimit().uploadPerMinute());
     ValidatedFile vf = fileValidator.validate(file);
 
@@ -86,7 +90,7 @@ public class InvoiceService {
     inv.setStorageKey(storage.store(me.organizationId(), inv.getId(), vf.extension(), vf.data()));
 
     audit.log(me.organizationId(), me.userId(), "INVOICE_UPLOADED", AuditService.INVOICE, inv.getId(),
-        Map.of("filename", vf.safeName(), "bytes", vf.data().length, "sha256", vf.sha256().substring(0, 16)));
+        Map.of("filename", vf.safeName(), "bytes", vf.data().length, "sha256", vf.sha256().substring(0, 16), "source", source));
     status.publish(inv);
     events.publishEvent(new InvoiceQueuedEvent(inv.getId(), inv.getOrganizationId())); // -> Kafka after commit
     return mapper.toSummary(inv, nameOf(me));

@@ -125,6 +125,18 @@ app:
     timeout-ms: 8000
     max-attempts: 8
     retry-base-seconds: 30
+  mail:                                    # e-mail ingestion (off by default), see EmailIngestService
+    enabled: ${MAIL_INGEST_ENABLED:false}
+    scheduled: true                        # tests switch the poller off and call pollOnce() themselves
+    address: ${MAIL_INGEST_ADDRESS:}         # the mailbox people send to, e.g. invoices@example.com
+    host: ${MAIL_IMAP_HOST:}
+    port: ${MAIL_IMAP_PORT:993}
+    username: ${MAIL_IMAP_USER:}
+    password: ${MAIL_IMAP_PASSWORD:}
+    ssl: ${MAIL_IMAP_SSL:true}
+    folder: ${MAIL_IMAP_FOLDER:INBOX}
+    poll-seconds: ${MAIL_POLL_SECONDS:60}
+    require-auth-results: ${MAIL_REQUIRE_AUTH_RESULTS:false}
   fx:
     enabled: ${APP_FX_ENABLED:true}
     base-url: ${APP_FX_BASE_URL:https://api.frankfurter.dev/v1}

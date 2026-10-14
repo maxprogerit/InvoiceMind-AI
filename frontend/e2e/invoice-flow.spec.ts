@@ -137,6 +137,8 @@ test.describe.serial("invoice lifecycle in the browser", () => {
   test("an admin sets the reporting currency and manages a manual exchange rate", async () => {
     await page.goto("/settings");
     await expect(page.getByText("Reporting currency")).toBeVisible();
+    await expect(page.getByText("E-mail ingestion")).toBeVisible();
+    await expect(page.getByText(/Not switched on for this server/)).toBeVisible(); // no mailbox configured in this stack
     await page.fill("#base-currency", "USD");
     await page.getByRole("button", { name: "Save", exact: true }).click();
     await expect(page.getByText("Reporting currency is now USD")).toBeVisible();

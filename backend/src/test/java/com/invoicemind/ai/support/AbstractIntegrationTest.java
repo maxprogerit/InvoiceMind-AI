@@ -34,6 +34,8 @@ public abstract class AbstractIntegrationTest {
   static void properties(DynamicPropertyRegistry registry) {
     registry.add("app.ai.base-url", FakeAiServiceForTests::baseUrl);
     registry.add("app.fx.base-url", FakeFrankfurterForTests::baseUrl);
+    registry.add("app.mail.host", () -> "127.0.0.1");
+    registry.add("app.mail.port", MailServerForTests::imapPort);
   }
 
   @BeforeEach
