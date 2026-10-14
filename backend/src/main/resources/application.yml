@@ -125,6 +125,18 @@ app:
     timeout-ms: 8000
     max-attempts: 8
     retry-base-seconds: 30
+  oidc:                                    # single sign-on (off by default), see OidcProperties
+    enabled: ${OIDC_ENABLED:false}
+    issuer-uri: ${OIDC_ISSUER_URI:}
+    client-id: ${OIDC_CLIENT_ID:}
+    client-secret: ${OIDC_CLIENT_SECRET:}
+    scopes: ${OIDC_SCOPES:openid email profile}
+    button-label: ${OIDC_BUTTON_LABEL:Single sign-on}
+    public-url: ${OIDC_PUBLIC_URL:}          # https://invoices.example.com ; derived from the request if empty
+    require-email-verified: ${OIDC_REQUIRE_EMAIL_VERIFIED:true}
+    auto-provision-organization-id: ${OIDC_PROVISION_ORG_ID:}
+    default-role: ${OIDC_DEFAULT_ROLE:USER}
+    allowed-email-domains: ${OIDC_ALLOWED_EMAIL_DOMAINS:}
   mail:                                    # e-mail ingestion (off by default), see EmailIngestService
     enabled: ${MAIL_INGEST_ENABLED:false}
     scheduled: true                        # tests switch the poller off and call pollOnce() themselves

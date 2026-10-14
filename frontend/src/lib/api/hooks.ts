@@ -430,3 +430,12 @@ export function useRotateEmailAddress() {
     onSuccess: (data) => qc.setQueryData(["ingest", "email"], data),
   });
 }
+
+// ------------------------------------------------------------ public auth config
+/** What the login page may offer (single sign-on). Public: no session needed. */
+export const useAuthConfig = () =>
+  useQuery({
+    queryKey: ["auth", "config"],
+    queryFn: () => unwrap(api.GET("/api/v1/auth/config")) as Promise<{ sso: { enabled: boolean; label?: string } }>,
+    staleTime: 5 * 60_000,
+  });

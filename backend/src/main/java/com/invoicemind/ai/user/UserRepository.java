@@ -18,4 +18,6 @@ public interface UserRepository extends JpaRepository<UserEntity, UUID> {
   List<UserEntity> findByOrganizationIdAndRoleInAndEnabledTrue(UUID organizationId, List<Role> roles);
 
   Optional<UserEntity> findByIdAndOrganizationId(UUID id, UUID organizationId);
+
+  Optional<UserEntity> findByOidcIssuerAndOidcSubject(String issuer, String subject);
 }

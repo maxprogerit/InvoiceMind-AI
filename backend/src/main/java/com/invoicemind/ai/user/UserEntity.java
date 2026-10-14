@@ -19,5 +19,8 @@ public class UserEntity {
   @Enumerated(EnumType.STRING)
   private Role role;
   private boolean enabled = true;
+  /** Set on the first SSO login: (issuer, subject) identifies the person at the identity provider. */
+  private String oidcIssuer;
+  private String oidcSubject;
   private Instant createdAt = Instant.now();
 }

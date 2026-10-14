@@ -11,6 +11,7 @@ import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/input";
+import { useAuthConfig } from "@/lib/api/hooks";
 import { ApiError, api, unwrap } from "@/lib/api/client";
 import type { AuthUser } from "@/lib/api/types";
 import { useAuth } from "@/lib/auth/store";
@@ -56,6 +57,22 @@ function FieldError({ message }: { message?: string }) {
   ) : null;
 }
 
+/** Why the identity provider flow ended on the login page (?sso_error=code, set by the backend). */
+export const SSO_ERRORS: Record<string, string> = {
+  not_configured: "Single sign-on is not set up correctly. Ask an administrator.",
+  state_mismatch: "The sign-in attempt expired or could not be verified. Please try again.",
+  idp_unreachable: "The identity provider could not be reached. Try again in a moment.",
+  idp_error: "The identity provider refused the sign-in.",
+  token_exchange_failed: "The identity provider rejected the sign-in. Please try again.",
+  invalid_token: "The identity provider's answer could not be verified.",
+  no_email: "The identity provider did not share your e-mail address.",
+  email_unverified: "Your e-mail address is not verified at the identity provider.",
+  no_account: "There is no account for your e-mail address yet. Ask an administrator to add you.",
+  identity_mismatch: "This account is linked to a different identity at the identity provider.",
+  domain_not_allowed: "Accounts for your e-mail domain are not created automatically. Ask an administrator.",
+  disabled: "This account is disabled.",
+};
+
 function describe(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.status === 401) return "Invalid e-mail or password.";
@@ -69,7 +86,11 @@ function describe(error: unknown): string {
 export function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
-  const [error, setError] = useState<string | null>(null);
+  const ssoError = params.get("sso_error");
+  const [error, setError] = useState<string | null>(ssoError ? (SSO_ERRORS[ssoError] ?? "Single sign-on failed. Please try again.") : null);
+  const sso = useAuthConfig().data?.sso;
+  const nextParam = params.get("next");
+  const ssoHref = `/api/v1/auth/oidc/login?next=${encodeURIComponent(nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : "/invoices")}`;
   const form = useForm<z.infer<typeof loginSchema>>({ resolver: zodResolver(loginSchema), defaultValues: { email: "", password: "" } });
 
   const onSubmit = form.handleSubmit(async (values) => {
@@ -118,6 +139,17 @@ export function LoginForm() {
           Sign in
         </Button>
       </form>
+      {sso?.enabled && (
+        <div className="mt-6">
+          <div className="mb-4 flex items-center gap-3 font-mono text-[11px] uppercase tracking-wider text-dim">
+            <span className="h-px flex-1 bg-line" /> or <span className="h-px flex-1 bg-line" />
+          </div>
+          {/* a plain link: the browser must follow the redirects to the identity provider and back */}
+          <Button asChild variant="outline" size="lg" className="w-full">
+            <a href={ssoHref}>Continue with {sso.label ?? "single sign-on"}</a>
+          </Button>
+        </div>
+      )}
     </Shell>
   );
 }

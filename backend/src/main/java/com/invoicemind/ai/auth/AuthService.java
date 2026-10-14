@@ -120,6 +120,13 @@ public class AuthService {
     return users.save(user);
   }
 
+  /** A session for a user who has already been authenticated by other means (single sign-on). */
+  @Transactional
+  public Session startSessionFor(UserEntity user) {
+    audit.log(user.getOrganizationId(), user.getId(), "LOGIN_SSO", AuditService.USER, user.getId(), null);
+    return startSession(user, organizationName(user));
+  }
+
   private Session startSession(UserEntity user, String orgName) {
     AuthPrincipal principal = new AuthPrincipal(user.getId(), user.getOrganizationId(), user.getEmail(), user.getRole());
     String access = jwtService.generateAccessToken(principal);

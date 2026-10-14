@@ -46,7 +46,7 @@ public class SecurityConfig {
         .authorizeHttpRequests(auth -> auth
             .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
             .requestMatchers("/api/v1/auth/register", "/api/v1/auth/login", "/api/v1/auth/refresh",
-                "/api/v1/auth/logout").permitAll()
+                "/api/v1/auth/logout", "/api/v1/auth/config", "/api/v1/auth/oidc/**").permitAll()
             .requestMatchers("/actuator/health/**", "/actuator/info").permitAll()
             .requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**").permitAll()
             // STOMP authenticates in the CONNECT frame (see WebSocketConfig), not in the HTTP upgrade.
