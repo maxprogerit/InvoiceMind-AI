@@ -108,6 +108,30 @@ class HttpAiClientTest {
   }
 
   @Test
+  void misconfigurationIsPermanentEvenWhenReportedAs503() throws Exception {
+    // the real ai-service answers 503 llm_not_configured when OPENAI_API_KEY is missing
+    server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext("/", ex -> {
+      calls.incrementAndGet();
+      byte[] out = "{\"error\":{\"code\":\"llm_not_configured\",\"message\":\"OPENAI_API_KEY is not configured\"}}"
+          .getBytes(StandardCharsets.UTF_8);
+      ex.getResponseHeaders().add("Content-Type", "application/json");
+      ex.sendResponseHeaders(503, out.length);
+      ex.getResponseBody().write(out);
+      ex.close();
+    });
+    server.start();
+    HttpAiClient c = clientFor("http://127.0.0.1:" + server.getAddress().getPort(), 3);
+    for (int i = 0; i < 7; i++) { // more than the breaker's minimum number of calls
+      assertThatThrownBy(() -> c.extract("t")).isInstanceOfSatisfying(AiClientException.class, e -> {
+        assertThat(e.code()).isEqualTo("llm_not_configured");
+        assertThat(e.retryable()).isFalse();
+      });
+    }
+    assertThat(calls.get()).isEqualTo(7); // one call each: never retried, circuit never opened
+  }
+
+  @Test
   void givesUpAfterTheConfiguredAttempts() throws Exception {
     script.add(503);
     assertThatThrownBy(() -> client(3).extract("t")).isInstanceOfSatisfying(AiClientException.class, e -> {

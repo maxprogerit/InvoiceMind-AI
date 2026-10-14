@@ -128,8 +128,13 @@ public class HttpAiClient implements AiClient {
     } catch (Exception ignored) {
       // body was not our JSON error envelope; keep the generic message
     }
-    return new AiClientException(status, code, message, status == 502 || status == 503 || status == 504, null);
+    boolean serverSide = status == 502 || status == 503 || status == 504;
+    return new AiClientException(status, code, message, serverSide && !PERMANENT_CODES.contains(code), null);
   }
+
+  /** 5xx responses that retrying cannot fix (misconfiguration): they must neither be retried nor trip the breaker. */
+  private static final java.util.Set<String> PERMANENT_CODES =
+      java.util.Set.of("llm_not_configured", "llm_misconfigured", "model_refused", "unauthorized");
 
   private static boolean isTransient(Throwable t) {
     return t instanceof AiClientException a && a.retryable();
