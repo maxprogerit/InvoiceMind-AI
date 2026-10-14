@@ -22,7 +22,8 @@ __pycache__/
 .ruff_cache/
 
 # Runtime data
-storage/
+/storage/
+/backend/storage/
 *.log
 .DS_Store
 eval/results/smoke-test.json
