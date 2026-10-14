@@ -1,0 +1,32 @@
+{
+  "meta": {
+    "file": "06-german-no-tax.pdf",
+    "layout": "german",
+    "kind": "text-pdf",
+    "adversarial": false
+  },
+  "expected": {
+    "vendor": "Dr. Helena Vogt - Steuerberatung",
+    "invoice_number": "2026-044",
+    "invoice_date": "2026-06-02",
+    "due_date": "2026-06-12",
+    "currency": "EUR",
+    "subtotal": 1810.0,
+    "tax": 0.0,
+    "total": 1810.0,
+    "line_items": [
+      {
+        "description": "Jahresabschluss 2025",
+        "quantity": 1,
+        "unit_price": 1450.0,
+        "total": 1450.0
+      },
+      {
+        "description": "Beratung (Stunden)",
+        "quantity": 3,
+        "unit_price": 120.0,
+        "total": 360.0
+      }
+    ]
+  }
+}

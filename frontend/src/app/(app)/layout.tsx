@@ -14,9 +14,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const status = useAuth((s) => s.status);
 
+  const signedOut = useAuth((s) => s.signedOut);
+
   useEffect(() => {
-    if (status === "anonymous") router.replace(`/login?next=${encodeURIComponent(pathname)}`);
-  }, [status, router, pathname]);
+    // An expired session remembers where the user was; an explicit sign-out does not.
+    if (status === "anonymous") router.replace(signedOut ? "/login" : `/login?next=${encodeURIComponent(pathname)}`);
+  }, [status, signedOut, router, pathname]);
 
   if (status !== "authenticated") return <Splash />;
 

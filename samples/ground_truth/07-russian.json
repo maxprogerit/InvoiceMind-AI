@@ -1,0 +1,32 @@
+{
+  "meta": {
+    "file": "07-russian.pdf",
+    "layout": "russian",
+    "kind": "text-pdf",
+    "adversarial": false
+  },
+  "expected": {
+    "vendor": "ООО «Северный Ветер»",
+    "invoice_number": "СВ-2026/117",
+    "invoice_date": "2026-03-05",
+    "due_date": "2026-03-12",
+    "currency": "RUB",
+    "subtotal": 257000.0,
+    "tax": 51400.0,
+    "total": 308400.0,
+    "line_items": [
+      {
+        "description": "Разработка модуля отчётности",
+        "quantity": 1,
+        "unit_price": 185000.0,
+        "total": 185000.0
+      },
+      {
+        "description": "Техническая поддержка (мес.)",
+        "quantity": 3,
+        "unit_price": 24000.0,
+        "total": 72000.0
+      }
+    ]
+  }
+}

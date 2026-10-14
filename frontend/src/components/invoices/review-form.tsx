@@ -15,6 +15,7 @@ import { ApiError } from "@/lib/api/client";
 import { useUpdateInvoice } from "@/lib/api/hooks";
 import type { InvoiceDetail, UpdateInvoiceRequest } from "@/lib/api/types";
 import { formatAmount } from "@/lib/format";
+import { isConsistent, parseAmount as parse, sumChecks } from "@/lib/sums";
 import { cn } from "@/lib/utils";
 
 // ------------------------------------------------------------------ schema
@@ -89,34 +90,6 @@ const CONFIDENCE_KEY: Partial<Record<keyof FormValues, string>> = {
 };
 
 const CURRENCIES = ["EUR", "USD", "GBP", "CHF", "PLN", "CZK", "SEK", "NOK", "DKK", "UAH", "TRY", "JPY", "CNY", "CAD", "AUD"];
-
-// -------------------------------------------------------------- live sums
-function parse(v: string | undefined): number | null {
-  if (v === undefined || v.trim() === "" || !Number.isFinite(Number(v))) return null;
-  return Number(v);
-}
-
-interface Check {
-  label: string;
-  expected: number;
-  actual: number;
-  tolerance: number;
-}
-
-function sumChecks(v: Partial<FormValues>): Check[] {
-  const checks: Check[] = [];
-  const lines = (v.lineItems ?? []).map((l) => parse(l?.total));
-  const subtotal = parse(v.subtotal);
-  const tax = parse(v.tax) ?? 0;
-  const total = parse(v.total);
-  if (lines.length > 0 && lines.every((l): l is number => l !== null) && subtotal !== null) {
-    checks.push({ label: "Line items = subtotal", expected: lines.reduce((a, b) => a + b, 0), actual: subtotal, tolerance: 0.01 * Math.max(1, lines.length) });
-  }
-  if (subtotal !== null && total !== null) {
-    checks.push({ label: "Subtotal + tax = total", expected: subtotal + tax, actual: total, tolerance: 0.01 });
-  }
-  return checks;
-}
 
 // -------------------------------------------------------------- component
 export function ReviewForm({ invoice }: { invoice: InvoiceDetail }) {
@@ -277,7 +250,7 @@ export function ReviewForm({ invoice }: { invoice: InvoiceDetail }) {
         {checks.length > 0 && (
           <ul className="mt-4 space-y-1.5 rounded-control border border-line bg-bg/40 p-3" aria-label="Live arithmetic check">
             {checks.map((c) => {
-              const ok = Math.abs(c.expected - c.actual) <= c.tolerance + 1e-9;
+              const ok = isConsistent(c);
               return (
                 <li key={c.label} className="flex items-center justify-between gap-3 font-mono text-xs">
                   <span className="flex items-center gap-2 text-muted">

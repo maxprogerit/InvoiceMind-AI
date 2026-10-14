@@ -1,0 +1,38 @@
+{
+  "meta": {
+    "file": "10-german-scan.png",
+    "layout": "german",
+    "kind": "scan",
+    "adversarial": false
+  },
+  "expected": {
+    "vendor": "Gärtnerei Lehmann",
+    "invoice_number": "R-1180",
+    "invoice_date": "2026-04-22",
+    "due_date": "2026-05-06",
+    "currency": "EUR",
+    "subtotal": 529.2,
+    "tax": 100.55,
+    "total": 629.75,
+    "line_items": [
+      {
+        "description": "Gartenpflege April",
+        "quantity": 1,
+        "unit_price": 320.0,
+        "total": 320.0
+      },
+      {
+        "description": "Rindenmulch (Sack)",
+        "quantity": 18,
+        "unit_price": 6.9,
+        "total": 124.2
+      },
+      {
+        "description": "Entsorgung Grünschnitt",
+        "quantity": 1,
+        "unit_price": 85.0,
+        "total": 85.0
+      }
+    ]
+  }
+}

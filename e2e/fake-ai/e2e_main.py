@@ -38,8 +38,8 @@ class RulesExtractorForTests:
         lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
         vendor = lines[0] if lines else None
         number = _find(r"invoice\s*(?:no|number|#)[:.]?\s*([A-Za-z0-9\-/]+)", text)
-        inv_date = _find(r"invoice date[:.]?\s*(\d{4}-\d{2}-\d{2})", text)
-        due = _find(r"due date[:.]?\s*(\d{4}-\d{2}-\d{2})", text)
+        inv_date = _find(r"^\s*(?:invoice\s+date|date|issued)[:.]?\s*(\d{4}-\d{2}-\d{2})", text, re.IGNORECASE | re.MULTILINE)
+        due = _find(r"^\s*due\s+date[:.]?\s*(\d{4}-\d{2}-\d{2})", text, re.IGNORECASE | re.MULTILINE)
         ml = re.IGNORECASE | re.MULTILINE
         subtotal = _to_float(_find(rf"^\s*(?:subtotal|net|zwischensumme)\s+({NUM})\s*$", text, ml) or "")
         tax = _to_float(_find(rf"^\s*(?:vat|tax|mwst|ust)\b[^\n]*?\s({NUM})\s*$", text, ml) or "")
@@ -49,10 +49,13 @@ class RulesExtractorForTests:
 
         items: list[LineItem] = []
         for ln in lines:
-            m = re.match(rf"^\d+\s+(.+?)\s+({NUM})\s+({NUM})\s+({NUM})$", ln)
-            if m:
-                items.append(LineItem(description=m.group(1).strip(), quantity=_to_float(m.group(2)),
-                                      unit_price=_to_float(m.group(3)), total=_to_float(m.group(4))))
+            m = re.match(rf"^(?:\d+\s+)?([^\d].*?)\s+({NUM})\s+({NUM})\s+({NUM})$", ln)
+            if not m:
+                continue
+            qty, unit, tot = _to_float(m.group(2)), _to_float(m.group(3)), _to_float(m.group(4))
+            # a real row satisfies quantity x unit price = total; this keeps IBANs and footers out
+            if None not in (qty, unit, tot) and abs(qty * unit - tot) < 0.02:
+                items.append(LineItem(description=m.group(1).strip(), quantity=qty, unit_price=unit, total=tot))
 
         def conf(value) -> float:
             return 0.0 if value is None else 0.9

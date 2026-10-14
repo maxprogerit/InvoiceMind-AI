@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 
 import { Logo } from "@/components/brand/logo";
 import { Badge } from "@/components/ui/badge";
-import { api, authFetch } from "@/lib/api/client";
+import { authFetch } from "@/lib/api/client";
 import { useInvoices } from "@/lib/api/hooks";
 import { isReviewer } from "@/lib/api/types";
 import { useAuth } from "@/lib/auth/store";
@@ -65,11 +65,10 @@ export function UserPanel() {
 
   async function signOut() {
     await authFetch("/api/v1/auth/logout", { method: "POST", headers: { "X-Requested-With": "invoicemind" } }).catch(() => undefined);
-    useAuth.getState().clear();
+    useAuth.getState().clear(true);
     qc.clear();
     router.replace("/login");
   }
-  void api;
 
   if (!user) return null;
   return (

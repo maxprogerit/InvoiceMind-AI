@@ -1,0 +1,121 @@
+import { expect, test, type Page } from "@playwright/test";
+import path from "node:path";
+
+const FIXTURES = path.resolve(__dirname, "../../samples/e2e");
+const suffix = Math.random().toString(36).slice(2, 8);
+const PASSWORD = "Passw0rd!long";
+
+/**
+ * One fresh organisation per run, so the test is repeatable and never collides with duplicate detection.
+ * The ai-service in this stack is the rule-based test double (docker-compose.e2e.yml): real OCR, no LLM.
+ */
+test.describe.serial("invoice lifecycle in the browser", () => {
+  let page: Page;
+  const adminEmail = `admin-${suffix}@e2e.example.com`;
+  const userEmail = `user-${suffix}@e2e.example.com`;
+
+  test.beforeAll(async ({ browser }) => {
+    page = await browser.newPage();
+  });
+  test.afterAll(async () => {
+    await page.close();
+  });
+
+  test("registers a new organisation and lands on an empty invoice list", async () => {
+    await page.goto("/register");
+    await page.fill("#org", `E2E Company ${suffix}`);
+    await page.fill("#name", "Eve Tester");
+    await page.fill("#email", adminEmail);
+    await page.fill("#password", PASSWORD);
+    await page.click("button[type=submit]");
+    await page.waitForURL("**/invoices");
+    await expect(page.getByText("Upload your first invoice")).toBeVisible();
+    await expect(page.getByRole("link", { name: /Approvals/ })).toBeVisible(); // first user is the admin
+  });
+
+  test("uploading shows live pipeline progress and the right outcome per document", async () => {
+    await page.goto("/upload");
+    await page.setInputFiles("input[type=file]", [path.join(FIXTURES, "e2e-valid.pdf"), path.join(FIXTURES, "e2e-mismatch.pdf")]);
+    const rows = page.locator("ul[aria-label=Uploads] > li");
+    await expect(rows).toHaveCount(2);
+    await expect(rows.filter({ hasText: "e2e-valid.pdf" }).getByText("Validated", { exact: true }).first()).toBeVisible();
+    await expect(rows.filter({ hasText: "e2e-mismatch.pdf" }).getByText("Needs review", { exact: true }).first()).toBeVisible();
+    await expect(rows.filter({ hasText: "e2e-valid.pdf" }).getByText("ACME", { exact: false }).or(rows.filter({ hasText: "E2E Fixtures GmbH" })).first()).toBeVisible();
+  });
+
+  test("the invoice list shows extracted data and a document preview", async () => {
+    await page.goto("/invoices");
+    const row = page.locator("tbody tr", { hasText: "E2E-1001" });
+    await expect(row).toBeVisible();
+    await expect(row).toContainText("1,428.00");
+    await row.click();
+    await expect(page.getByText("INVOICE DETAILS", { exact: false })).toBeVisible();
+    await expect(page.locator("iframe[title^='Document']")).toBeVisible();
+  });
+
+  test("a mismatching total is flagged, fixed by a human and then approved", async () => {
+    await page.goto("/invoices");
+    await page.locator("tbody tr", { hasText: "E2E-1002" }).click();
+    await page.getByRole("link", { name: /Review & edit/ }).click();
+    await page.waitForURL(/\/invoices\/[0-9a-f-]{36}$/);
+
+    await expect(page.getByText("Subtotal 1200.00 + tax 228.00 = 1428.00, but the total is 1500.00")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Approve" })).toHaveCount(0); // not approvable while invalid
+    await page.fill("#f-total", "1428.00");
+    await page.getByRole("button", { name: /Save & revalidate/ }).click();
+    await expect(page.getByText("Saved. All checks passed")).toBeVisible();
+
+    await page.getByRole("button", { name: "Approve" }).click();
+    await page.getByRole("dialog").locator("textarea").fill("Checked against the contract");
+    await page.getByRole("dialog").getByRole("button", { name: "Approve" }).click();
+    await expect(page.getByText("Invoice approved")).toBeVisible();
+    await expect(page.getByText("Checked against the contract").first()).toBeVisible(); // shown in the processing card and the history
+    await expect(page.getByText("Fields corrected")).toBeVisible(); // audit history
+  });
+
+  test("approvals queue, analytics and exports reflect what happened", async () => {
+    await page.goto("/approvals");
+    await expect(page.getByText(/Ready to approve \(1\)/)).toBeVisible(); // the other, valid invoice
+
+    await page.goto("/analytics");
+    await expect(page.getByText("€1,428.00").first()).toBeVisible(); // approved spend KPI
+
+    await page.goto("/export");
+    await expect(page.getByText(/2 invoices will be exported/)).toBeVisible();
+    const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Download" }).first().click()]);
+    expect(download.suggestedFilename()).toMatch(/^invoices-\d{4}-\d{2}-\d{2}\.xlsx$/);
+    const stream = await download.createReadStream();
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) chunks.push(chunk as Buffer);
+    expect(Buffer.concat(chunks).subarray(0, 2).toString()).toBe("PK"); // a real zip/xlsx container
+  });
+
+  test("an admin adds a plain user, who sees a restricted application", async () => {
+    await page.goto("/team");
+    await page.getByRole("button", { name: /Add member/ }).first().click();
+    await page.fill("#m-name", "Una User");
+    await page.fill("#m-email", userEmail);
+    await page.fill("#m-pass", PASSWORD);
+    await page.getByRole("dialog").getByRole("button", { name: "Add member" }).click();
+    await expect(page.getByText(userEmail)).toBeVisible();
+
+    await page.getByRole("button", { name: "Sign out" }).click();
+    await page.waitForURL("**/login");
+    await page.fill("#email", userEmail);
+    await page.fill("#password", PASSWORD);
+    await page.click("button[type=submit]");
+    await page.waitForURL("**/invoices");
+
+    await expect(page.getByRole("link", { name: "Team" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /Approvals/ })).toHaveCount(0);
+    await expect(page.getByText("Nothing here yet")).toBeVisible(); // sees none of the admin's invoices
+    await page.goto("/team");
+    await page.waitForURL("**/invoices"); // route guard
+  });
+
+  test("an expired session returns the visitor to sign-in", async () => {
+    await page.context().clearCookies();
+    await page.goto("/analytics");
+    await page.waitForURL(/\/login\?next=%2Fanalytics/);
+  });
+});

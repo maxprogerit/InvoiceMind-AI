@@ -1,0 +1,32 @@
+{
+  "meta": {
+    "file": "04-classic-gbp.pdf",
+    "layout": "classic",
+    "kind": "text-pdf",
+    "adversarial": false
+  },
+  "expected": {
+    "vendor": "Harrow & Finch Ltd",
+    "invoice_number": "HF/26/1093",
+    "invoice_date": "2026-04-09",
+    "due_date": "2026-05-07",
+    "currency": "GBP",
+    "subtotal": 1172.0,
+    "tax": 234.4,
+    "total": 1406.4,
+    "line_items": [
+      {
+        "description": "Legal review of supply agreement",
+        "quantity": 6,
+        "unit_price": 185.0,
+        "total": 1110.0
+      },
+      {
+        "description": "Filing fees",
+        "quantity": 1,
+        "unit_price": 62.0,
+        "total": 62.0
+      }
+    ]
+  }
+}

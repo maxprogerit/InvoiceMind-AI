@@ -9,18 +9,22 @@ interface AuthState {
   /** Access token lives in memory only. The long-lived refresh token is an httpOnly cookie JS cannot read. */
   token: string | null;
   user: AuthUser | null;
+  /** True after the user pressed "Sign out": the login page must not offer to return to the previous page. */
+  signedOut: boolean;
   setSession: (token: string, user: AuthUser) => void;
   setStatus: (status: Status) => void;
-  clear: () => void;
+  /** @param explicit pass true when the user chose to sign out (as opposed to an expired session) */
+  clear: (explicit?: boolean) => void;
 }
 
 export const useAuth = create<AuthState>((set) => ({
   status: "idle",
   token: null,
   user: null,
-  setSession: (token, user) => set({ token, user, status: "authenticated" }),
+  signedOut: false,
+  setSession: (token, user) => set({ token, user, status: "authenticated", signedOut: false }),
   setStatus: (status) => set({ status }),
-  clear: () => set({ token: null, user: null, status: "anonymous" }),
+  clear: (explicit = false) => set({ token: null, user: null, status: "anonymous", signedOut: explicit }),
 }));
 
 /** Milliseconds until the JWT expires (negative if already expired, 0 if unreadable). */

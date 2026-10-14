@@ -102,6 +102,29 @@ services:
       kafka: { condition: service_healthy }
       ai-service: { condition: service_healthy }
 
+  # Accuracy evaluation on samples/ with the real model:  docker compose --profile eval run --rm eval
+  eval:
+    profiles: ["eval"]
+    build:
+      context: ./ai-service
+      target: runtime
+    working_dir: /srv
+    environment:
+      AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:?Set AI_SERVICE_TOKEN in .env}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-6-luna}
+      OPENAI_REASONING_EFFORT: ${OPENAI_REASONING_EFFORT:-}
+      OPENAI_PRICE_INPUT_PER_1M: ${OPENAI_PRICE_INPUT_PER_1M:-0}
+      OPENAI_PRICE_OUTPUT_PER_1M: ${OPENAI_PRICE_OUTPUT_PER_1M:-0}
+      EVAL_EXTRACTOR: ${EVAL_EXTRACTOR:-}
+      PYTHONPATH: /srv
+    volumes:
+      - ./eval:/eval
+      - ./samples:/samples:ro
+      - ./docs:/out
+      - ./e2e/fake-ai:/e2e:ro
+    command: ["python", "/eval/run_eval.py", "--samples", "/samples", "--out", "/out", "--results", "/eval/results"]
+
   frontend:
     <<: *restart
     build:

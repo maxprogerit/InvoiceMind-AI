@@ -1,0 +1,32 @@
+{
+  "meta": {
+    "file": "14-low-quality-scan.jpg",
+    "layout": "modern",
+    "kind": "scan",
+    "adversarial": false
+  },
+  "expected": {
+    "vendor": "Sunrise Catering Co.",
+    "invoice_number": "SC-0963",
+    "invoice_date": "2026-06-17",
+    "due_date": "2026-06-24",
+    "currency": "EUR",
+    "subtotal": 3900.0,
+    "tax": 526.5,
+    "total": 4426.5,
+    "line_items": [
+      {
+        "description": "Wedding buffet (per guest)",
+        "quantity": 85,
+        "unit_price": 42.0,
+        "total": 3570.0
+      },
+      {
+        "description": "Staff service",
+        "quantity": 6,
+        "unit_price": 55.0,
+        "total": 330.0
+      }
+    ]
+  }
+}
