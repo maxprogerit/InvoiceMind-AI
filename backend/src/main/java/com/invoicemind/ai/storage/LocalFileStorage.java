@@ -7,10 +7,12 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.UUID;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 /** Files live under {root}/{orgId}/{invoiceId}.{ext}; every path is verified to stay inside the root. */
 @Service
+@ConditionalOnProperty(prefix = "app.storage", name = "type", havingValue = "local", matchIfMissing = true)
 public class LocalFileStorage implements FileStorage {
   private final Path root;
 
