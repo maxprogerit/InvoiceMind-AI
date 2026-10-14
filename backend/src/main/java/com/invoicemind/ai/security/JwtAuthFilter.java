@@ -1,43 +1,34 @@
 package com.invoicemind.ai.security;
 
-import com.invoicemind.ai.service.AuthService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+/** Invalid or missing tokens simply leave the request unauthenticated; the entry point answers 401. */
 @Component
 @RequiredArgsConstructor
 public class JwtAuthFilter extends OncePerRequestFilter {
   private final JwtService jwtService;
-  private final AuthService authService;
 
   @Override
-  protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
-    throws ServletException, IOException {
-    String authHeader = request.getHeader("Authorization");
-    if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-      filterChain.doFilter(request, response);
-      return;
+  protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
+      throws ServletException, IOException {
+    String header = request.getHeader("Authorization");
+    if (header != null && header.startsWith("Bearer ")) {
+      jwtService.parse(header.substring(7)).ifPresent(p -> {
+        var auth = new UsernamePasswordAuthenticationToken(p, null, List.of(new SimpleGrantedAuthority(p.role().authority())));
+        SecurityContextHolder.getContext().setAuthentication(auth);
+      });
     }
-
-    String jwt = authHeader.substring(7);
-    String username = jwtService.extractUsername(jwt);
-    if (username != null && SecurityContextHolder.getContext().getAuthentication() == null) {
-      var userDetails = authService.loadUserByUsername(username);
-      if (jwtService.isTokenValid(jwt, userDetails)) {
-        var authToken = new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
-        authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-        SecurityContextHolder.getContext().setAuthentication(authToken);
-      }
-    }
-    filterChain.doFilter(request, response);
+    chain.doFilter(request, response);
   }
 }

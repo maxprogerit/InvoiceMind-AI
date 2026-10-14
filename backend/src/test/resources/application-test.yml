@@ -1,0 +1,29 @@
+spring:
+  datasource:
+    password: provided-by-testcontainers
+  jpa:
+    show-sql: false
+
+app:
+  jwt:
+    secret: integration-test-secret-0123456789-abcdef
+    access-ttl-seconds: 900
+    refresh-ttl-seconds: 3600
+  storage:
+    root: ${java.io.tmpdir}/invoicemind-it-storage
+  ai:
+    token: test-token
+    retry-attempts: 2
+    retry-initial-backoff-ms: 20
+    circuit-failure-rate: 100
+  rate-limit:
+    auth-per-minute: 100000
+    upload-per-minute: 100000
+  seed:
+    demo-password: ""
+
+logging:
+  level:
+    org.apache.kafka: ERROR
+    org.testcontainers: WARN
+    com.zaxxer.hikari: WARN
