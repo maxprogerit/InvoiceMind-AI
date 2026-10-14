@@ -6,6 +6,7 @@
     "adversarial": false
   },
   "expected": {
+    "document_type": "invoice",
     "vendor": "Meridian Freight Forwarding LLC",
     "invoice_number": "MFF-2026-00488",
     "invoice_date": "2026-01-09",

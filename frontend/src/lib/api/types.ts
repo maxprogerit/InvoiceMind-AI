@@ -3,6 +3,7 @@ import type { components } from "./schema";
 type S = components["schemas"];
 
 export type InvoiceStatus = S["InvoiceSummary"]["status"];
+export type DocumentType = S["InvoiceSummary"]["documentType"];
 export type InvoiceSummary = S["InvoiceSummary"];
 export type InvoiceDetail = S["InvoiceDetail"];
 export type LineItem = S["LineItemDto"];

@@ -2,6 +2,7 @@ package com.invoicemind.ai.validation;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.invoicemind.ai.invoice.DocumentType;
 import com.invoicemind.ai.validation.InvoiceValidator.Code;
 import com.invoicemind.ai.validation.InvoiceValidator.Input;
 import com.invoicemind.ai.validation.InvoiceValidator.Issue;
@@ -23,7 +24,7 @@ class InvoiceValidatorTest {
 
   final InvoiceValidator validator = new InvoiceValidator();
   final Lookups noDuplicates = new Lookups() {
-    public Optional<UUID> duplicateOf(UUID o, UUID i, UUID v, String n, Instant c) { return Optional.empty(); }
+    public Optional<UUID> duplicateOf(UUID o, UUID i, DocumentType t, UUID v, String n, Instant c) { return Optional.empty(); }
     public boolean sameFileSeenBefore(UUID o, UUID i, String s) { return false; }
   };
 
@@ -34,12 +35,13 @@ class InvoiceValidatorTest {
   /** A fully valid baseline invoice; each test mutates one thing through {@code change}. */
   Input base(java.util.function.UnaryOperator<Fields> change) {
     Fields f = change.apply(new Fields());
-    return new Input(UUID.randomUUID(), ORG, VENDOR, f.vendorName, f.invoiceNumber, f.invoiceDate, f.dueDate,
+    return new Input(UUID.randomUUID(), ORG, f.type, VENDOR, f.vendorName, f.invoiceNumber, f.invoiceDate, f.dueDate,
         f.currency, f.subtotal, f.tax, f.total, f.lines, "sha", f.confidence, f.modelNeedsReview, f.modelReasons,
         f.injection, f.humanReviewed, Instant.now());
   }
 
   static class Fields {
+    DocumentType type = DocumentType.INVOICE;
     String vendorName = "ACME GmbH";
     String invoiceNumber = "INV-1";
     LocalDate invoiceDate = LocalDate.of(2026, 6, 1);
@@ -153,11 +155,60 @@ class InvoiceValidatorTest {
         .contains(Code.NEGATIVE_AMOUNT);
   }
 
+  /** A valid credit note: stored negative, arithmetic holds with signs. */
+  Input creditNote(java.util.function.UnaryOperator<Fields> change) {
+    return base(f -> {
+      f.type = DocumentType.CREDIT_NOTE;
+      f.subtotal = d("-200.00");
+      f.tax = d("-38.00");
+      f.total = d("-238.00");
+      f.lines = List.of(new Line("Returned hours", d("2"), d("-100.00"), d("-200.00")));
+      return change.apply(f);
+    });
+  }
+
+  @Test
+  void validCreditNoteHasNoIssues() {
+    assertThat(run(creditNote(f -> f))).isEmpty();
+  }
+
+  @Test
+  void creditNoteArithmeticIsStillChecked() {
+    assertThat(codes(run(creditNote(f -> { f.total = d("-250.00"); return f; })))).contains(Code.TOTAL_MISMATCH);
+    assertThat(codes(run(creditNote(f -> { f.subtotal = d("-150.00"); f.total = d("-188.00"); return f; }))))
+        .contains(Code.LINE_SUM_MISMATCH);
+  }
+
+  @Test
+  void creditNoteSignRulesAreTheMirrorOfInvoiceRules() {
+    assertThat(codes(run(creditNote(f -> {
+      f.subtotal = d("0.00"); f.tax = d("0.00"); f.total = d("0.00"); f.lines = List.of(); return f;
+    })))).contains(Code.NON_NEGATIVE_CREDIT_TOTAL);
+    assertThat(codes(run(creditNote(f -> { f.tax = d("38.00"); f.total = d("-162.00"); return f; }))))
+        .contains(Code.POSITIVE_CREDIT_AMOUNT);
+    // and a negative total on a plain invoice is still an error
+    assertThat(codes(run(base(f -> { f.subtotal = d("-1000.00"); f.tax = d("-190.00"); f.total = d("-1190.00"); return f; }))))
+        .contains(Code.NON_POSITIVE_TOTAL, Code.NEGATIVE_AMOUNT);
+  }
+
+  @Test
+  void documentTypeSignHelpersNormaliseWhateverWasPrinted() {
+    assertThat(DocumentType.CREDIT_NOTE.signed(d("523.60"))).isEqualByComparingTo("-523.60");
+    assertThat(DocumentType.CREDIT_NOTE.signed(d("-523.60"))).isEqualByComparingTo("-523.60");
+    assertThat(DocumentType.CREDIT_NOTE.signed(null)).isNull();
+    assertThat(DocumentType.INVOICE.signed(d("-5"))).isEqualByComparingTo("-5"); // invoices are never touched
+    assertThat(DocumentType.CREDIT_NOTE.signedQuantity(d("-2"))).isEqualByComparingTo("2");
+    assertThat(DocumentType.parse("credit_note")).isEqualTo(DocumentType.CREDIT_NOTE);
+    assertThat(DocumentType.parse("Credit-Note")).isEqualTo(DocumentType.CREDIT_NOTE);
+    assertThat(DocumentType.parse(null)).isEqualTo(DocumentType.INVOICE);
+    assertThat(DocumentType.parse("something else")).isEqualTo(DocumentType.INVOICE);
+  }
+
   @Test
   void duplicateInvoiceIsAnError() {
     UUID other = UUID.randomUUID();
     Lookups dup = new Lookups() {
-      public Optional<UUID> duplicateOf(UUID o, UUID i, UUID v, String n, Instant c) { return Optional.of(other); }
+      public Optional<UUID> duplicateOf(UUID o, UUID i, DocumentType t, UUID v, String n, Instant c) { return Optional.of(other); }
       public boolean sameFileSeenBefore(UUID o, UUID i, String s) { return true; }
     };
     List<Issue> issues = validator.validate(base(f -> f), dup, TODAY);
@@ -169,10 +220,10 @@ class InvoiceValidatorTest {
   @Test
   void duplicateLookupIsSkippedWithoutVendorOrNumber() {
     Lookups mustNotBeCalled = new Lookups() {
-      public Optional<UUID> duplicateOf(UUID o, UUID i, UUID v, String n, Instant c) { throw new AssertionError(); }
+      public Optional<UUID> duplicateOf(UUID o, UUID i, DocumentType t, UUID v, String n, Instant c) { throw new AssertionError(); }
       public boolean sameFileSeenBefore(UUID o, UUID i, String s) { return false; }
     };
-    Input in = new Input(UUID.randomUUID(), ORG, null, "ACME", "INV-1", TODAY, null, "EUR", d("1.00"), null, d("1.00"),
+    Input in = new Input(UUID.randomUUID(), ORG, DocumentType.INVOICE, null, "ACME", "INV-1", TODAY, null, "EUR", d("1.00"), null, d("1.00"),
         List.of(), "sha", Map.of(), false, List.of(), false, false, Instant.now());
     validator.validate(in, mustNotBeCalled, TODAY); // no exception == pass
   }

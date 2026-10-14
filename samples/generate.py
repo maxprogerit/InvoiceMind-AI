@@ -59,6 +59,8 @@ class Spec:
     extra_lines: list[str] = field(default_factory=list)
     filler_items: int = 0  # synthetic extra rows to force multiple pages
     printed_total: str | None = None  # print a total that disagrees with the arithmetic (e2e fixture)
+    credit_note: bool = False
+    negative_print: bool = False  # credit note that prints its amounts with a minus sign (otherwise positive)
 
 
 def fmt_money(v: Decimal, style: str) -> str:
@@ -97,7 +99,11 @@ def truth(spec: Spec) -> dict:
     subtotal = sum((l[3] for l in lines), Decimal("0"))
     tax = q(subtotal * Decimal(spec.tax_rate))
     total = subtotal + tax
+    if spec.credit_note and spec.negative_print:  # ground truth is what is printed, sign included
+        lines = [(d, qty, -u, -t) for d, qty, u, t in lines]
+        subtotal, tax, total = -subtotal, -tax, -total
     return {
+        "document_type": "credit_note" if spec.credit_note else "invoice",
         "vendor": spec.vendor,
         "invoice_number": spec.number,
         "invoice_date": iso(spec.date),
@@ -119,8 +125,16 @@ LABELS = {
 }
 
 
+CREDIT_LABELS = {
+    "classic": dict(title="CREDIT NOTE", no="Credit note No"),
+    "german": dict(title="GUTSCHRIFT", no="Gutschriftnummer"),
+}
+
+
 def render_pdf(spec: Spec) -> bytes:
-    L = LABELS[spec.layout]
+    L = dict(LABELS[spec.layout])
+    if spec.credit_note:
+        L.update(CREDIT_LABELS[spec.layout])
     font, bold = ("DejaVu", "DejaVu-Bold") if spec.layout == "russian" else ("Helvetica", "Helvetica-Bold")
     data = truth(spec)
     if spec.printed_total:
@@ -276,6 +290,11 @@ SPECS = [
          [("Social media campaign - February", 1, "3600.00"), ("Creative production", 1, "1850.00"), ("Media buy management fee", 1, "540.00")], "0.1025", date_style="long_en"),
     Spec("16-german-scan-2", "classic", "Weber Maschinenbau GmbH", "Industriestrasse 88, 70469 Stuttgart", "WM-2026-2210", (2026, 5, 15), 30, "EUR",
          [("Ersatzteil Lager 6205-2RS", 24, "11.40"), ("Wartung Fräsmaschine", 1, "890.00")], "0.19", number_style="de", date_style="dmy_dot", render="png", rotate=-1.4, noise=0.004, blur=0.6),
+    # credit notes: one prints a minus sign, one prints positive amounts (both exist in the wild)
+    Spec("17-credit-note-minus", "classic", "Nordlicht Software GmbH", "Hafenstrasse 14, 20457 Hamburg, Germany", "NL-CN-0031", (2026, 4, 2), None, "EUR",
+         [("Consulting services March (returned hours)", 4, "95.00"), ("Hosting (credit for outage)", 1, "60.00")], "0.19", credit_note=True, negative_print=True),
+    Spec("18-gutschrift", "german", "Bäckerei & Konditorei Schneider KG", "Marktplatz 3, 80331 München", "GS-2026-0045", (2026, 3, 1), None, "EUR",
+         [("Brötchen gemischt (Reklamation)", 2, "38.50"), ("Vollkornbrot (Rückgabe)", 5, "3.20")], "0.07", number_style="de", date_style="dmy_dot", credit_note=True),
 ]
 
 

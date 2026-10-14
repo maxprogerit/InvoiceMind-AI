@@ -6,6 +6,7 @@
     "adversarial": false
   },
   "expected": {
+    "document_type": "invoice",
     "vendor": "Kuhn Elektrotechnik GmbH",
     "invoice_number": "KE-30871",
     "invoice_date": "2026-03-30",

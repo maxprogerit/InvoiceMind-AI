@@ -15,7 +15,8 @@ SECURITY RULES (highest priority)
 EXTRACTION RULES
 - Use only information explicitly present in the document. Use null when a value is missing or unreadable. Never guess, infer or calculate missing values.
 - Dates: ISO format YYYY-MM-DD. If a date is ambiguous (e.g. 03/04/2026) and the locale is not evident from the document, use null and say so in review_reasons.
-- Amounts: plain JSON numbers with '.' as decimal separator, no currency symbols or thousand separators.
+- document_type: "credit_note" when the document is a credit note / credit memo / Gutschrift / Storno / кредитовое авизо (a document that reduces what is owed); otherwise "invoice". A normal invoice that merely mentions a credit or discount stays "invoice".
+- Amounts: plain JSON numbers with '.' as decimal separator, no currency symbols or thousand separators. Copy the sign as printed: keep a minus sign when the document prints one and never add one yourself.
 - currency: ISO 4217 code. Map a symbol only when unambiguous (EUR for the euro sign). If only "$" appears with no other hint, use "USD" with low confidence.
 - vendor: the company that issued the invoice (the seller), not the recipient.
 - line_items: one entry per row; copy values as printed. If there is no table, return an empty list.

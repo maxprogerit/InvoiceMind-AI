@@ -25,7 +25,7 @@ from app.extraction.extractor import OpenAIExtractor
 from app.ocr.registry import build_engine
 from app.ocr.service import OcrService
 
-SCALARS = ["vendor", "invoice_number", "invoice_date", "due_date", "currency", "subtotal", "tax", "total"]
+SCALARS = ["document_type", "vendor", "invoice_number", "invoice_date", "due_date", "currency", "subtotal", "tax", "total"]
 
 
 # ------------------------------------------------------------------ comparison
@@ -223,7 +223,7 @@ def render_markdown(r: dict, settings, docs: list[dict], adversarial: list[dict]
         "| Metric | Value |",
         "|---|---|",
         f"| Documents extracted completely correctly (every field and every line item) | **{r['exact_match']} / {r['documents']}** ({pct(r['exact_match'] / r['documents'])}) |",
-        f"| Macro-F1 over the 8 header fields | **{pct(r['macro_f1_scalars'])}** |",
+        f"| Macro-F1 over the {len(SCALARS)} header fields | **{pct(r['macro_f1_scalars'])}** |",
         f"| Line items: precision / recall / F1 | {pct(r['line_items']['precision'])} / {pct(r['line_items']['recall'])} / {pct(r['line_items']['f1'])} ({r['line_items']['tp']} matched, {r['line_items']['fp']} spurious, {r['line_items']['fn']} missed) |",
         f"| Documents with at least one wrong value | {r['wrong_documents']} |",
         f"| … of which flagged `needs_review` (a human would have looked) | {r['wrong_documents_flagged_for_review']} |",

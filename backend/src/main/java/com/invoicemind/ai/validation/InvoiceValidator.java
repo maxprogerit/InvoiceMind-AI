@@ -1,5 +1,6 @@
 package com.invoicemind.ai.validation;
 
+import com.invoicemind.ai.invoice.DocumentType;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.Instant;
@@ -25,6 +26,8 @@ public class InvoiceValidator {
     INVALID_CURRENCY(Severity.ERROR, false),
     NON_POSITIVE_TOTAL(Severity.ERROR, false),
     NEGATIVE_AMOUNT(Severity.ERROR, false),
+    NON_NEGATIVE_CREDIT_TOTAL(Severity.ERROR, false),
+    POSITIVE_CREDIT_AMOUNT(Severity.ERROR, false),
     TOTAL_MISMATCH(Severity.ERROR, false),
     LINE_SUM_MISMATCH(Severity.ERROR, false),
     FUTURE_INVOICE_DATE(Severity.ERROR, false),
@@ -51,7 +54,8 @@ public class InvoiceValidator {
   public record Line(String description, BigDecimal quantity, BigDecimal unitPrice, BigDecimal total) {}
 
   public record Input(
-      UUID invoiceId, UUID organizationId, UUID vendorId, String vendorName, String invoiceNumber,
+      UUID invoiceId, UUID organizationId, DocumentType documentType, UUID vendorId, String vendorName,
+      String invoiceNumber,
       LocalDate invoiceDate, LocalDate dueDate, String currency,
       BigDecimal subtotal, BigDecimal tax, BigDecimal total, List<Line> lines,
       String fileSha256, Map<String, Double> confidence,
@@ -65,8 +69,8 @@ public class InvoiceValidator {
   /** Database-backed lookups, injected so the rules stay unit-testable. */
   public interface Lookups {
     /** An older live invoice with the same vendor and number ("the older one wins" avoids flagging both). */
-    Optional<UUID> duplicateOf(UUID organizationId, UUID invoiceId, UUID vendorId, String invoiceNumber,
-                               Instant createdAt);
+    Optional<UUID> duplicateOf(UUID organizationId, UUID invoiceId, DocumentType type, UUID vendorId,
+                               String invoiceNumber, Instant createdAt);
 
     boolean sameFileSeenBefore(UUID organizationId, UUID invoiceId, String sha256);
   }
@@ -120,14 +124,27 @@ public class InvoiceValidator {
   }
 
   private void amounts(List<Issue> issues, Input in) {
-    if (in.total() != null && in.total().signum() <= 0) {
-      issues.add(new Issue(Code.NON_POSITIVE_TOTAL, "total", "Total must be greater than zero"));
-    }
-    if (in.subtotal() != null && in.subtotal().signum() < 0) {
-      issues.add(new Issue(Code.NEGATIVE_AMOUNT, "subtotal", "Subtotal must not be negative"));
-    }
-    if (in.tax() != null && in.tax().signum() < 0) {
-      issues.add(new Issue(Code.NEGATIVE_AMOUNT, "tax", "Tax must not be negative"));
+    if (type(in).isCredit()) {
+      // credit notes are stored negative (see DocumentType.signed); anything else is a data error
+      if (in.total() != null && in.total().signum() >= 0) {
+        issues.add(new Issue(Code.NON_NEGATIVE_CREDIT_TOTAL, "total", "A credit note total must be less than zero"));
+      }
+      if (in.subtotal() != null && in.subtotal().signum() > 0) {
+        issues.add(new Issue(Code.POSITIVE_CREDIT_AMOUNT, "subtotal", "A credit note subtotal must not be positive"));
+      }
+      if (in.tax() != null && in.tax().signum() > 0) {
+        issues.add(new Issue(Code.POSITIVE_CREDIT_AMOUNT, "tax", "A credit note tax must not be positive"));
+      }
+    } else {
+      if (in.total() != null && in.total().signum() <= 0) {
+        issues.add(new Issue(Code.NON_POSITIVE_TOTAL, "total", "Total must be greater than zero"));
+      }
+      if (in.subtotal() != null && in.subtotal().signum() < 0) {
+        issues.add(new Issue(Code.NEGATIVE_AMOUNT, "subtotal", "Subtotal must not be negative"));
+      }
+      if (in.tax() != null && in.tax().signum() < 0) {
+        issues.add(new Issue(Code.NEGATIVE_AMOUNT, "tax", "Tax must not be negative"));
+      }
     }
     if (in.subtotal() != null && in.total() != null) {
       BigDecimal expected = in.subtotal().add(nz(in.tax()));
@@ -187,9 +204,11 @@ public class InvoiceValidator {
 
   private void duplicates(List<Issue> issues, Input in, Lookups lookups) {
     if (in.vendorId() != null && in.invoiceNumber() != null && !in.invoiceNumber().isBlank()) {
-      lookups.duplicateOf(in.organizationId(), in.invoiceId(), in.vendorId(), in.invoiceNumber().trim(), in.createdAt())
+      lookups.duplicateOf(in.organizationId(), in.invoiceId(), type(in), in.vendorId(), in.invoiceNumber().trim(),
+              in.createdAt())
           .ifPresent(other -> issues.add(new Issue(Code.DUPLICATE_INVOICE, "invoiceNumber",
-              "Invoice " + in.invoiceNumber() + " from " + in.vendorName() + " already exists (id " + other + ")")));
+              type(in).label() + " " + in.invoiceNumber() + " from " + in.vendorName() + " already exists (id "
+                  + other + ")")));
     }
     if (in.fileSha256() != null && lookups.sameFileSeenBefore(in.organizationId(), in.invoiceId(), in.fileSha256())) {
       issues.add(new Issue(Code.DUPLICATE_FILE, null, "An identical file was uploaded before"));
@@ -207,6 +226,10 @@ public class InvoiceValidator {
   }
 
   // -------------------------------------------------------------- helpers
+  private static DocumentType type(Input in) {
+    return in.documentType() == null ? DocumentType.INVOICE : in.documentType();
+  }
+
   static boolean isIsoCurrency(String code) {
     if (code == null || !code.matches("[A-Za-z]{3}")) return false;
     try {

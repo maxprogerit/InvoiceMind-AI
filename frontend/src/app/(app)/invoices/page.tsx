@@ -28,6 +28,7 @@ export default function InvoicesPage() {
   const exportParams = new URLSearchParams();
   filters.status?.forEach((s) => exportParams.append("status", s));
   if (filters.q) exportParams.set("q", filters.q);
+  if (filters.documentType) exportParams.set("documentType", filters.documentType);
   if (filters.from) exportParams.set("from", filters.from);
   if (filters.to) exportParams.set("to", filters.to);
 
@@ -64,7 +65,7 @@ export default function InvoicesPage() {
             onSelect={(i) => setSelectedId(i.id)}
             onPage={(page) => setFilters((f) => ({ ...f, page }))}
             emptyHint={
-              filters.q || filters.status?.length || filters.from || filters.to ? (
+              filters.q || filters.status?.length || filters.documentType || filters.from || filters.to ? (
                 "No invoices match these filters."
               ) : (
                 <>

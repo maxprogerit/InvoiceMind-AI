@@ -6,6 +6,7 @@
     "adversarial": false
   },
   "expected": {
+    "document_type": "invoice",
     "vendor": "Sunrise Catering Co.",
     "invoice_number": "SC-0963",
     "invoice_date": "2026-06-17",

@@ -4,7 +4,7 @@ import { Search, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ALL_STATUSES, type InvoiceStatus } from "@/lib/api/types";
+import { ALL_STATUSES, type DocumentType, type InvoiceStatus } from "@/lib/api/types";
 import type { InvoiceFilters } from "@/lib/api/hooks";
 import { STATUS_META } from "@/lib/status";
 import { cn } from "@/lib/utils";
@@ -32,7 +32,8 @@ export function InvoiceFiltersBar({
   const selected = value.status ?? [];
   const toggle = (s: InvoiceStatus) =>
     onChange({ ...value, page: 0, status: selected.includes(s) ? selected.filter((x) => x !== s) : [...selected, s] });
-  const dirty = !!(value.q || value.from || value.to || selected.length);
+  const dirty = !!(value.q || value.from || value.to || value.documentType || selected.length);
+  const toggleType = (t: DocumentType) => onChange({ ...value, page: 0, documentType: value.documentType === t ? undefined : t });
 
   return (
     <div className="space-y-3 border-b border-line px-4 py-4">
@@ -85,6 +86,21 @@ export function InvoiceFiltersBar({
             </button>
           );
         })}
+        <span className="mx-1 w-px self-stretch bg-line" aria-hidden />
+        {(["INVOICE", "CREDIT_NOTE"] as const).map((t) => (
+          <button
+            key={t}
+            type="button"
+            aria-pressed={value.documentType === t}
+            onClick={() => toggleType(t)}
+            className={cn(
+              "rounded-md border px-2.5 py-1 font-mono text-[11px] transition-colors",
+              value.documentType === t ? TONE_ACTIVE.accent : "border-line text-dim hover:border-line-strong hover:text-muted",
+            )}
+          >
+            {t === "INVOICE" ? "Invoices" : "Credit notes"}
+          </button>
+        ))}
       </div>
     </div>
   );

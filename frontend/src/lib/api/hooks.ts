@@ -6,6 +6,7 @@ import { api, authFetch, fetchBlob, toApiError, unwrap } from "./client";
 import {
   IN_FLIGHT,
   type AuditEntry,
+  type DocumentType,
   type ByStatus,
   type InvoiceDetail,
   type InvoiceStatus,
@@ -25,6 +26,7 @@ import { useLive } from "@/lib/ws/live-store";
 
 export interface InvoiceFilters {
   status?: InvoiceStatus[];
+  documentType?: DocumentType;
   q?: string;
   vendor?: string;
   currency?: string;

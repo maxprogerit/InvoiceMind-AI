@@ -2,6 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 import path from "node:path";
 
 const FIXTURES = path.resolve(__dirname, "../../samples/e2e");
+const SAMPLES = path.resolve(__dirname, "../../samples/invoices");
 const suffix = Math.random().toString(36).slice(2, 8);
 const PASSWORD = "Passw0rd!long";
 
@@ -108,6 +109,29 @@ test.describe.serial("invoice lifecycle in the browser", () => {
     await expect(page.getByText(/Per rule/)).toBeVisible();
     await expect(page.getByRole("link", { name: "Source 1" })).toBeVisible(); // [1] is rendered as a citation chip
     await expect(page.locator("#source-1")).toContainText("Totals policy");
+  });
+
+  test("a credit note is recognised, stored negative and can be approved", async () => {
+    await page.goto("/upload");
+    await page.setInputFiles("input[type=file]", path.join(SAMPLES, "17-credit-note-minus.pdf"));
+    await page.getByRole("link", { name: "Open", exact: true }).click();
+    await page.waitForURL(/\/invoices\/[0-9a-f-]{36}$/);
+
+    await expect(page.getByRole("radio", { name: "Credit note" })).toHaveAttribute("aria-checked", "true");
+    await expect(page.locator("#f-total")).toHaveValue("-523.60");
+    await expect(page.locator("#f-invoiceNumber")).toHaveValue("NL-CN-0031");
+    await expect(page.getByText("Credit note number")).toBeVisible();
+
+    await page.getByRole("button", { name: "Approve" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Approve" }).click();
+    await expect(page.getByText("Invoice approved")).toBeVisible();
+
+    await page.goto("/invoices");
+    const row = page.locator("tbody tr", { hasText: "NL-CN-0031" });
+    await expect(row.getByText("Credit", { exact: true })).toBeVisible();
+    await expect(row).toContainText("-523.60");
+    await page.getByRole("button", { name: "Credit notes" }).click();
+    await expect(page.locator("tbody tr")).toHaveCount(1); // the type filter hides the invoices
   });
 
   test("an admin adds a plain user, who sees a restricted application", async () => {

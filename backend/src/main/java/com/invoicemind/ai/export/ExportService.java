@@ -60,14 +60,14 @@ public class ExportService {
   public record ExportFile(byte[] data, Format format, int rows) {}
 
   /** JSON export row (no permissions or storage internals). */
-  public record ExportInvoice(UUID id, String status, String vendor, String invoiceNumber, LocalDate invoiceDate,
+  public record ExportInvoice(UUID id, String status, String documentType, String vendor, String invoiceNumber, LocalDate invoiceDate,
                               LocalDate dueDate, String currency, BigDecimal subtotal, BigDecimal tax,
                               BigDecimal total, String file, Instant uploadedAt, Instant decidedAt,
                               String decisionComment, List<String> issues, List<ExportLine> lineItems) {}
 
   public record ExportLine(String description, BigDecimal quantity, BigDecimal unitPrice, BigDecimal total) {}
 
-  private static final String[] HEADERS = {"ID", "Status", "Vendor", "Invoice number", "Invoice date", "Due date",
+  private static final String[] HEADERS = {"ID", "Status", "Type", "Vendor", "Invoice number", "Invoice date", "Due date",
       "Currency", "Subtotal", "Tax", "Total", "Uploaded by", "Uploaded at", "Decided at", "Decision comment",
       "Issues", "File"};
 
@@ -97,7 +97,7 @@ public class ExportService {
          CSVPrinter printer = new CSVPrinter(writer, CSVFormat.DEFAULT.builder().setHeader(HEADERS).build())) {
       out.write(new byte[]{(byte) 0xEF, (byte) 0xBB, (byte) 0xBF}); // BOM so Excel detects UTF-8
       for (InvoiceEntity i : rows) {
-        printer.printRecord(i.getId(), i.getStatus(), safe(i.getVendorName()), safe(i.getInvoiceNumber()),
+        printer.printRecord(i.getId(), i.getStatus(), i.getDocumentType(), safe(i.getVendorName()), safe(i.getInvoiceNumber()),
             i.getInvoiceDate(), i.getDueDate(), i.getCurrency(), plain(i.getSubtotal()), plain(i.getTax()),
             plain(i.getTotal()), safe(names.getOrDefault(i.getUploadedBy(), "")), i.getCreatedAt(), i.getDecidedAt(),
             safe(i.getDecisionComment()), safe(issues(i)), safe(i.getOriginalFilename()));
@@ -136,6 +136,7 @@ public class ExportService {
         int c = 0;
         row.createCell(c++).setCellValue(i.getId().toString());
         row.createCell(c++).setCellValue(i.getStatus().name());
+        row.createCell(c++).setCellValue(i.getDocumentType().name());
         row.createCell(c++).setCellValue(nz(i.getVendorName()));
         row.createCell(c++).setCellValue(nz(i.getInvoiceNumber()));
         if (i.getInvoiceDate() != null) {
@@ -175,7 +176,7 @@ public class ExportService {
       }
       sheet.createFreezePane(0, 1);
       sheet.setAutoFilter(new org.apache.poi.ss.util.CellRangeAddress(0, Math.max(r - 1, 0), 0, HEADERS.length - 1));
-      int[] widths = {38, 14, 28, 18, 13, 13, 9, 14, 12, 14, 22, 18, 18, 30, 40, 28};
+      int[] widths = {38, 14, 13, 28, 18, 13, 13, 9, 14, 12, 14, 22, 18, 18, 30, 40, 28};
       for (int c = 0; c < widths.length; c++) sheet.setColumnWidth(c, widths[c] * 256);
 
       Sheet lines = wb.createSheet("Line items");
@@ -219,7 +220,7 @@ public class ExportService {
 
   // ------------------------------------------------------------------ json
   private byte[] json(List<InvoiceEntity> rows) {
-    List<ExportInvoice> items = rows.stream().map(i -> new ExportInvoice(i.getId(), i.getStatus().name(),
+    List<ExportInvoice> items = rows.stream().map(i -> new ExportInvoice(i.getId(), i.getStatus().name(), i.getDocumentType().name(),
         i.getVendorName(), i.getInvoiceNumber(), i.getInvoiceDate(), i.getDueDate(), i.getCurrency(),
         i.getSubtotal(), i.getTax(), i.getTotal(), i.getOriginalFilename(), i.getCreatedAt(), i.getDecidedAt(),
         i.getDecisionComment(),

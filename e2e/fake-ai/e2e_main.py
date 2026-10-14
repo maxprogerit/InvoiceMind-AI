@@ -38,7 +38,7 @@ class RulesExtractorForTests:
     def extract(self, text: str) -> ExtractResponse:
         lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
         vendor = lines[0] if lines else None
-        number = _find(r"invoice\s*(?:no|number|#)[:.]?\s*([A-Za-z0-9\-/]+)", text)
+        number = _find(r"(?:invoice|credit\s*note)\s*(?:no|number|#)[:.]?\s*([A-Za-z0-9\-/]+)", text)
         inv_date = _find(r"^\s*(?:invoice\s+date|date|issued)[:.]?\s*(\d{4}-\d{2}-\d{2})", text, re.IGNORECASE | re.MULTILINE)
         due = _find(r"^\s*due\s+date[:.]?\s*(\d{4}-\d{2}-\d{2})", text, re.IGNORECASE | re.MULTILINE)
         ml = re.IGNORECASE | re.MULTILINE
@@ -61,8 +61,9 @@ class RulesExtractorForTests:
         def conf(value) -> float:
             return 0.0 if value is None else 0.9
 
+        doc_type = "credit_note" if re.search(r"credit\s+note|gutschrift", text, re.IGNORECASE) else "invoice"
         extraction = InvoiceExtraction(
-            vendor=vendor, invoice_number=number, invoice_date=inv_date, due_date=due, currency=currency,
+            document_type=doc_type, vendor=vendor, invoice_number=number, invoice_date=inv_date, due_date=due, currency=currency,
             line_items=items, subtotal=subtotal, tax=tax, total=total,
             confidence=FieldConfidence(vendor=conf(vendor), invoice_number=conf(number), invoice_date=conf(inv_date),
                                        due_date=conf(due), currency=conf(currency), line_items=conf(items or None),

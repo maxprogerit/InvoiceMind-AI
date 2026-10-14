@@ -33,14 +33,15 @@ public class InvoiceMapper {
 
   public InvoiceSummary toSummary(InvoiceEntity i, String uploaderName) {
     int errors = (int) i.getIssues().stream().filter(x -> "ERROR".equals(x.getSeverity())).count();
-    return new InvoiceSummary(i.getId(), i.getStatus(), i.getOriginalFilename(), i.getVendorName(),
+    return new InvoiceSummary(i.getId(), i.getStatus(), i.getDocumentType(), i.getOriginalFilename(), i.getVendorName(),
         i.getInvoiceNumber(), i.getInvoiceDate(), i.getDueDate(), i.getCurrency(), i.getTotal(),
         i.getUploadedBy(), uploaderName, errors, i.getIssues().size() - errors, i.getCreatedAt());
   }
 
   public InvoiceDetail toDetail(InvoiceEntity i, AuthPrincipal viewer) {
     Map<UUID, String> names = names(java.util.Arrays.asList(i.getUploadedBy(), i.getDecidedBy()));
-    return new InvoiceDetail(i.getId(), i.getStatus(), i.getOriginalFilename(), i.getContentType(), i.getFileSize(),
+    return new InvoiceDetail(i.getId(), i.getStatus(), i.getDocumentType(), i.getOriginalFilename(), i.getContentType(),
+        i.getFileSize(),
         i.getVendorName(), i.getInvoiceNumber(), i.getInvoiceDate(), i.getDueDate(), i.getCurrency(),
         i.getSubtotal(), i.getTax(), i.getTotal(),
         i.getFieldConfidence(), i.getModelReviewReasons(), i.isInjectionSuspected(), i.isHumanReviewed(),

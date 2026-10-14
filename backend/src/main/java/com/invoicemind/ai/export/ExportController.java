@@ -3,6 +3,7 @@ package com.invoicemind.ai.export;
 import com.invoicemind.ai.common.ApiException;
 import com.invoicemind.ai.export.ExportService.ExportFile;
 import com.invoicemind.ai.export.ExportService.Format;
+import com.invoicemind.ai.invoice.DocumentType;
 import com.invoicemind.ai.invoice.InvoiceFilter;
 import com.invoicemind.ai.invoice.InvoiceStatus;
 import com.invoicemind.ai.security.CurrentUser;
@@ -40,14 +41,15 @@ public class ExportController {
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
       @RequestParam(required = false) BigDecimal minTotal,
-      @RequestParam(required = false) BigDecimal maxTotal) {
+      @RequestParam(required = false) BigDecimal maxTotal,
+      @RequestParam(required = false) DocumentType documentType) {
     Format fmt;
     try {
       fmt = Format.valueOf(format.trim().toUpperCase(java.util.Locale.ROOT));
     } catch (IllegalArgumentException e) {
       throw ApiException.badRequest("invalid_format", "format must be one of: csv, xlsx, json");
     }
-    var filter = new InvoiceFilter(status, q, vendor, currency, from, to, minTotal, maxTotal);
+    var filter = new InvoiceFilter(status, q, vendor, currency, from, to, minTotal, maxTotal, documentType);
     ExportFile file = service.export(fmt, filter, CurrentUser.get());
     return ResponseEntity.ok()
         .contentType(MediaType.parseMediaType(fmt.contentType))

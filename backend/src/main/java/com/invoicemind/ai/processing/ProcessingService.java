@@ -8,6 +8,7 @@ import com.invoicemind.ai.ai.AiDtos.ExtractResponse;
 import com.invoicemind.ai.ai.AiDtos.Extraction;
 import com.invoicemind.ai.ai.AiDtos.OcrResponse;
 import com.invoicemind.ai.audit.AuditService;
+import com.invoicemind.ai.invoice.DocumentType;
 import com.invoicemind.ai.invoice.InvoiceEntity;
 import com.invoicemind.ai.invoice.InvoiceRepository;
 import com.invoicemind.ai.invoice.InvoiceStatus;
@@ -130,6 +131,8 @@ public class ProcessingService {
       inv.setOcrConfidence(BigDecimal.valueOf(clamp01(ocr.confidence())).setScale(4, RoundingMode.HALF_UP));
       inv.setOcrPageCount(ocr.pageCount());
 
+      DocumentType type = DocumentType.parse(e.documentType());
+      inv.setDocumentType(type);
       String vendorName = trimToNull(e.vendor(), 300);
       inv.setVendorName(vendorName);
       inv.setVendorId(vendors.findOrCreate(inv.getOrganizationId(), vendorName));
@@ -137,10 +140,10 @@ public class ProcessingService {
       inv.setInvoiceDate(parseDate(e.invoiceDate()));
       inv.setDueDate(parseDate(e.dueDate()));
       inv.setCurrency(currency(e.currency()));
-      inv.setSubtotal(money(e.subtotal()));
-      inv.setTax(money(e.tax()));
-      inv.setTotal(money(e.total()));
-      inv.replaceLineItems(lineItems(e));
+      inv.setSubtotal(type.signed(money(e.subtotal())));
+      inv.setTax(type.signed(money(e.tax())));
+      inv.setTotal(type.signed(money(e.total())));
+      inv.replaceLineItems(lineItems(e, type));
 
       inv.setFieldConfidence(confidenceMap(e));
       inv.setModelNeedsReview(e.needsReview());
@@ -239,16 +242,16 @@ public class ProcessingService {
     }
   }
 
-  private List<LineItemEntity> lineItems(Extraction e) {
+  private List<LineItemEntity> lineItems(Extraction e, DocumentType type) {
     List<LineItemEntity> items = new ArrayList<>();
     if (e.lineItems() == null) return items;
     for (var li : e.lineItems().stream().limit(500).toList()) {
       LineItemEntity item = new LineItemEntity();
       String description = trimToNull(li.description(), 1000);
       item.setDescription(description == null ? "(no description)" : description);
-      item.setQuantity(li.quantity() == null ? null : li.quantity().setScale(4, RoundingMode.HALF_UP));
-      item.setUnitPrice(li.unitPrice() == null ? null : li.unitPrice().setScale(4, RoundingMode.HALF_UP));
-      item.setTotal(money(li.total()));
+      item.setQuantity(type.signedQuantity(li.quantity() == null ? null : li.quantity().setScale(4, RoundingMode.HALF_UP)));
+      item.setUnitPrice(type.signed(li.unitPrice() == null ? null : li.unitPrice().setScale(4, RoundingMode.HALF_UP)));
+      item.setTotal(type.signed(money(li.total())));
       items.add(item);
     }
     return items;
@@ -305,7 +308,5 @@ public class ProcessingService {
     return s.length() <= max ? s : s.substring(0, max);
   }
 
-  private static String label(InvoiceEntity inv) {
-    return inv.getInvoiceNumber() != null ? "Invoice " + inv.getInvoiceNumber() : inv.getOriginalFilename();
-  }
+  private static String label(InvoiceEntity inv) { return inv.displayLabel(); }
 }

@@ -88,6 +88,11 @@ export function InvoiceTable({ page, loading, error, onRetry, selectedId, onSele
                   </TD>
                   <TD className={cn("whitespace-nowrap border-y border-transparent font-mono text-[13px] text-muted", selected && "border-accent bg-surface-2/60 text-accent")}>
                     {inv.invoiceNumber ?? "—"}
+                    {inv.documentType === "CREDIT_NOTE" && (
+                      <span className="ml-2 rounded border border-info/40 bg-info/10 px-1.5 py-px align-middle font-mono text-[9px] uppercase tracking-wider text-info">
+                        Credit
+                      </span>
+                    )}
                   </TD>
                   <TD className={cn("whitespace-nowrap border-y border-transparent font-mono text-[13px] text-muted", selected && "border-accent bg-surface-2/60 text-accent")}>
                     {formatDate(inv.invoiceDate)}

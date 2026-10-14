@@ -35,6 +35,8 @@ public class InvoiceEntity {
   private String fileSha256;
 
   // extracted / corrected fields
+  @Enumerated(EnumType.STRING)
+  private DocumentType documentType = DocumentType.INVOICE;
   private String vendorName;
   private String invoiceNumber;
   private LocalDate invoiceDate;
@@ -91,6 +93,11 @@ public class InvoiceEntity {
 
   @PreUpdate
   void touch() { this.updatedAt = Instant.now(); }
+
+  /** "Invoice INV-1" / "Credit note CN-7", or the file name while nothing has been extracted. */
+  public String displayLabel() {
+    return invoiceNumber != null ? documentType.label() + " " + invoiceNumber : originalFilename;
+  }
 
   public void replaceLineItems(List<LineItemEntity> items) {
     lineItems.clear();

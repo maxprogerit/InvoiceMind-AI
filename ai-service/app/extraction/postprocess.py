@@ -51,9 +51,11 @@ def finalize(raw: InvoiceExtraction, text: str, injection_suspected: bool) -> In
             reasons.append("invalid_currency_code")
             data.currency, conf["currency"] = None, 0.0
 
+    # Credit notes legitimately print negative amounts; for invoices a negative value is a misread.
+    allow_negative = data.document_type == "credit_note"
     for name in ("subtotal", "tax", "total"):
         value = getattr(data, name)
-        if value is not None and (value < 0 or value != value or value > 1e12):
+        if value is not None and ((value < 0 and not allow_negative) or value != value or abs(value) > 1e12):
             reasons.append(f"implausible_{name}")
             setattr(data, name, None)
             conf[name] = 0.0

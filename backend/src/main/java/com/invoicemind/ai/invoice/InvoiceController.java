@@ -51,10 +51,11 @@ public class InvoiceController {
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
       @RequestParam(required = false) BigDecimal minTotal,
       @RequestParam(required = false) BigDecimal maxTotal,
+      @RequestParam(required = false) DocumentType documentType,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size,
       @RequestParam(required = false) String sort) {
-    var filter = new InvoiceFilter(status, q, vendor, currency, from, to, minTotal, maxTotal);
+    var filter = new InvoiceFilter(status, q, vendor, currency, from, to, minTotal, maxTotal, documentType);
     return service.list(filter, CurrentUser.get(), page, size, sort);
   }
 

@@ -69,10 +69,17 @@ public final class FakeAiServiceForTests {
   public static Reply okExtraction(String vendor, String number, String date, String due, String currency,
                                    String subtotal, String tax, String total, List<Map<String, Object>> lines,
                                    boolean needsReview, boolean injection) {
+    return okExtraction("invoice", vendor, number, date, due, currency, subtotal, tax, total, lines, needsReview, injection);
+  }
+
+  public static Reply okExtraction(String documentType, String vendor, String number, String date, String due, String currency,
+                                   String subtotal, String tax, String total, List<Map<String, Object>> lines,
+                                   boolean needsReview, boolean injection) {
     Map<String, Object> confidence = new LinkedHashMap<>();
     for (String f : List.of("vendor", "invoice_number", "invoice_date", "due_date", "currency", "line_items",
         "subtotal", "tax", "total")) confidence.put(f, 0.95);
     Map<String, Object> extraction = new LinkedHashMap<>();
+    extraction.put("document_type", documentType);
     extraction.put("vendor", vendor);
     extraction.put("invoice_number", number);
     extraction.put("invoice_date", date);

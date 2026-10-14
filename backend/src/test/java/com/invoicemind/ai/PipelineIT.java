@@ -267,6 +267,81 @@ class PipelineIT extends AbstractIntegrationTest {
     assertThat(codes(api.get("/api/v1/invoices/" + first, s.token()).json())).doesNotContain("DUPLICATE_INVOICE");
   }
 
+  /** Scenario whose document is a credit note; {@code sign} is what the document prints ("" or "-"). */
+  static String creditScenario(String number, String sign) {
+    String id = id("credit");
+    FakeAiServiceForTests.scenario(id, FakeAiServiceForTests.okOcr(id), FakeAiServiceForTests.okExtraction(
+        "credit_note", "ACME GmbH", number, "2026-03-20", null, "EUR", sign + "200.00", sign + "38.00", sign + "238.00",
+        List.of(line("Returned hours", "2", sign + "100.00", sign + "200.00")), false, false));
+    return id;
+  }
+
+  @Test
+  void creditNotesAreStoredNegativeWhicheverSignWasPrinted() {
+    Session admin = api.registerOrg("Credit Inc");
+    Session user = api.createUser(admin, "USER");
+    for (String printed : List.of("", "-")) {
+      UUID invoice = upload(user, creditScenario("CN-" + id("n"), printed));
+      JsonNode inv = awaitStatus(user, invoice, "VALIDATED", "NEEDS_REVIEW", "FAILED");
+
+      assertThat(inv.get("status").asText()).as("printed sign '%s': %s", printed, codes(inv)).isEqualTo("VALIDATED");
+      assertThat(inv.get("documentType").asText()).isEqualTo("CREDIT_NOTE");
+      assertThat(inv.get("subtotal").decimalValue()).isEqualByComparingTo("-200.00");
+      assertThat(inv.get("tax").decimalValue()).isEqualByComparingTo("-38.00");
+      assertThat(inv.get("total").decimalValue()).isEqualByComparingTo("-238.00");
+      JsonNode line = inv.get("lineItems").get(0);
+      assertThat(line.get("quantity").decimalValue()).isEqualByComparingTo("2");
+      assertThat(line.get("unitPrice").decimalValue()).isEqualByComparingTo("-100.00");
+      assertThat(line.get("total").decimalValue()).isEqualByComparingTo("-200.00");
+    }
+    assertThat(api.get("/api/v1/notifications", user.token()).json().toString()).contains("Credit note CN-");
+  }
+
+  @Test
+  void creditNoteDoesNotCollideWithAnInvoiceOfTheSameNumberAndCanBeFilteredAndExported() {
+    Session s = api.registerOrg("Credit Filter Inc");
+    String number = "X-" + id("n");
+    UUID inv = upload(s, scenario("ACME GmbH", number, "1000.00", "190.00", "1190.00"));
+    awaitStatus(s, inv, "VALIDATED", "NEEDS_REVIEW");
+    UUID credit = upload(s, creditScenario(number, "-"));
+    JsonNode cn = awaitStatus(s, credit, "VALIDATED", "NEEDS_REVIEW");
+    assertThat(codes(cn)).doesNotContain("DUPLICATE_INVOICE");
+
+    assertThat(api.get("/api/v1/invoices?documentType=CREDIT_NOTE", s.token()).json().get("totalItems").asInt()).isEqualTo(1);
+    assertThat(api.get("/api/v1/invoices?documentType=INVOICE", s.token()).json().get("totalItems").asInt()).isEqualTo(1);
+    assertThat(api.get("/api/v1/invoices", s.token()).json().get("items").toString()).contains("CREDIT_NOTE");
+
+    Resp csv = api.get("/api/v1/export/invoices?format=csv", s.token());
+    String text = new String(csv.bytes(), StandardCharsets.UTF_8);
+    assertThat(text).contains("Type").contains("CREDIT_NOTE").contains("-238.00");
+  }
+
+  @Test
+  void aReviewerCanReclassifyAndTheAmountsFollowTheType() {
+    Session s = api.registerOrg("Reclassify Inc");
+    UUID id = upload(s, scenario("ACME GmbH", "INV-" + id("n"), "1000.00", "190.00", "1190.00"));
+    JsonNode inv = awaitStatus(s, id, "VALIDATED", "NEEDS_REVIEW");
+    assertThat(inv.get("documentType").asText()).isEqualTo("INVOICE");
+
+    // "this is actually a credit note": the amounts are stored negative and it still validates
+    Map<String, Object> asCredit = new LinkedHashMap<>(correction(inv, Map.of()));
+    asCredit.put("documentType", "CREDIT_NOTE");
+    JsonNode credit = api.put("/api/v1/invoices/" + id, s.token(), asCredit).json();
+    assertThat(credit.get("documentType").asText()).isEqualTo("CREDIT_NOTE");
+    assertThat(credit.get("total").decimalValue()).isEqualByComparingTo("-1190.00");
+    assertThat(credit.get("status").asText()).isEqualTo("VALIDATED");
+
+    // switching back leaves the negative amounts in place, so validation refuses until a person retypes them
+    Map<String, Object> back = new LinkedHashMap<>(correction(credit, Map.of()));
+    back.put("documentType", "INVOICE");
+    JsonNode asInvoice = api.put("/api/v1/invoices/" + id, s.token(), back).json();
+    assertThat(asInvoice.get("status").asText()).isEqualTo("NEEDS_REVIEW");
+    assertThat(codes(asInvoice)).contains("NON_POSITIVE_TOTAL");
+
+    assertThat(api.get("/api/v1/invoices/" + id + "/audit", s.token()).json().toString())
+        .contains("INVOICE -> CREDIT_NOTE");
+  }
+
   @Test
   void uploadGatekeeping() {
     Session s = api.registerOrg("Gate Inc");

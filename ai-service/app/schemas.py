@@ -4,7 +4,11 @@
 Outputs, so it follows the strict-mode rules: every field is required, optional
 values are `X | None`, and there are no defaults or free-form dicts.
 """
+from typing import Literal
+
 from pydantic import BaseModel, Field
+
+DocumentType = Literal["invoice", "credit_note"]
 
 
 class LineItem(BaseModel):
@@ -27,6 +31,7 @@ class FieldConfidence(BaseModel):
 
 
 class InvoiceExtraction(BaseModel):
+    document_type: DocumentType
     vendor: str | None
     invoice_number: str | None
     invoice_date: str | None

@@ -169,18 +169,18 @@ class AnalyticsExportIT extends AbstractIntegrationTest {
       assertThat(wb.getSheetName(1)).isEqualTo("Line items");
       Sheet sheet = wb.getSheetAt(0);
       assertThat(sheet.getLastRowNum()).isEqualTo(1); // header + 1 approved row
-      assertThat(sheet.getRow(0).getCell(2).getStringCellValue()).isEqualTo("Vendor");
-      assertThat(sheet.getRow(1).getCell(2).getStringCellValue()).isEqualTo("Müller & Söhne GmbH");
-      assertThat(sheet.getRow(1).getCell(9).getCellType()).isEqualTo(CellType.NUMERIC); // Total is a real number
-      assertThat(sheet.getRow(1).getCell(9).getNumericCellValue()).isEqualTo(1190.00);
-      assertThat(sheet.getRow(1).getCell(4).getLocalDateTimeCellValue().toLocalDate()).isEqualTo(LocalDate.of(2026, 3, 1));
+      assertThat(sheet.getRow(0).getCell(3).getStringCellValue()).isEqualTo("Vendor");
+      assertThat(sheet.getRow(1).getCell(3).getStringCellValue()).isEqualTo("Müller & Söhne GmbH");
+      assertThat(sheet.getRow(1).getCell(10).getCellType()).isEqualTo(CellType.NUMERIC); // Total is a real number
+      assertThat(sheet.getRow(1).getCell(10).getNumericCellValue()).isEqualTo(1190.00);
+      assertThat(sheet.getRow(1).getCell(5).getLocalDateTimeCellValue().toLocalDate()).isEqualTo(LocalDate.of(2026, 3, 1));
       assertThat(wb.getSheetAt(1).getLastRowNum()).isEqualTo(1);
       assertThat(wb.getSheetAt(1).getRow(1).getCell(4).getStringCellValue()).isEqualTo("Services");
     }
     // the hostile vendor is excluded by the status filter; unfiltered XLSX keeps it as text, never a formula
     try (XSSFWorkbook all = new XSSFWorkbook(new ByteArrayInputStream(api.get("/api/v1/export/invoices?format=xlsx", admin.token()).bytes()))) {
       for (int r = 1; r <= all.getSheetAt(0).getLastRowNum(); r++) {
-        assertThat(all.getSheetAt(0).getRow(r).getCell(2).getCellType()).isEqualTo(CellType.STRING);
+        assertThat(all.getSheetAt(0).getRow(r).getCell(3).getCellType()).isEqualTo(CellType.STRING);
       }
     }
 

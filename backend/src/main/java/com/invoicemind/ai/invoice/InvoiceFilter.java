@@ -18,10 +18,11 @@ public record InvoiceFilter(
     LocalDate from,
     LocalDate to,
     BigDecimal minTotal,
-    BigDecimal maxTotal) {
+    BigDecimal maxTotal,
+    DocumentType documentType) {
 
   public static InvoiceFilter none() {
-    return new InvoiceFilter(null, null, null, null, null, null, null, null);
+    return new InvoiceFilter(null, null, null, null, null, null, null, null, null);
   }
 
   /**
@@ -48,6 +49,7 @@ public record InvoiceFilter(
       if (to != null) p.add(cb.lessThanOrEqualTo(root.get("invoiceDate"), to));
       if (minTotal != null) p.add(cb.greaterThanOrEqualTo(root.get("total"), minTotal));
       if (maxTotal != null) p.add(cb.lessThanOrEqualTo(root.get("total"), maxTotal));
+      if (documentType != null) p.add(cb.equal(root.get("documentType"), documentType));
       return cb.and(p.toArray(Predicate[]::new));
     };
   }

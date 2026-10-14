@@ -6,6 +6,7 @@
     "adversarial": false
   },
   "expected": {
+    "document_type": "invoice",
     "vendor": "Dr. Helena Vogt - Steuerberatung",
     "invoice_number": "2026-044",
     "invoice_date": "2026-06-02",

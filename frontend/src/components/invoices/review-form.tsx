@@ -24,6 +24,7 @@ const quantity = z.string().refine((v) => v.trim() === "" || /^-?\d{1,10}(\.\d{1
 const isoDate = z.string().refine((v) => v === "" || /^\d{4}-\d{2}-\d{2}$/.test(v), "Use YYYY-MM-DD");
 
 const schema = z.object({
+  documentType: z.enum(["INVOICE", "CREDIT_NOTE"]),
   vendorName: z.string().max(300),
   invoiceNumber: z.string().max(100),
   invoiceDate: isoDate,
@@ -43,6 +44,7 @@ const plain = (n?: number | null) => (n == null ? "" : String(Number(n.toFixed(4
 
 function toForm(inv: InvoiceDetail): FormValues {
   return {
+    documentType: inv.documentType,
     vendorName: inv.vendorName ?? "",
     invoiceNumber: inv.invoiceNumber ?? "",
     invoiceDate: inv.invoiceDate ?? "",
@@ -64,6 +66,7 @@ const num = (v: string | undefined) => (v === undefined || v.trim() === "" ? und
 
 function toRequest(v: FormValues, version: number): UpdateInvoiceRequest {
   return {
+    documentType: v.documentType,
     vendorName: v.vendorName.trim() || undefined,
     invoiceNumber: v.invoiceNumber.trim() || undefined,
     invoiceDate: v.invoiceDate || undefined,
@@ -99,6 +102,7 @@ export function ReviewForm({ invoice }: { invoice: InvoiceDetail }) {
   const form = useForm<FormValues>({ resolver: zodResolver(schema), defaultValues: toForm(invoice) });
   const { fields, append, remove } = useFieldArray({ control: form.control, name: "lineItems" });
   const values = useWatch({ control: form.control });
+  const documentType = values.documentType ?? invoice.documentType;
   const { errors, isDirty } = form.formState;
 
   // Re-sync with the server when the invoice changes underneath us (live event, other user),
@@ -148,7 +152,7 @@ export function ReviewForm({ invoice }: { invoice: InvoiceDetail }) {
   // A labelled field with confidence chip and validation highlight. A plain render function (not a nested
   // component) so inputs keep their identity - and focus - across re-renders.
   const renderField = ({ name, label, type = "text", mono, inputMode, placeholder, listId }: {
-    name: Exclude<keyof FormValues, "lineItems">;
+    name: Exclude<keyof FormValues, "lineItems" | "documentType">;
     label: string;
     type?: string;
     mono?: boolean;
@@ -228,9 +232,32 @@ export function ReviewForm({ invoice }: { invoice: InvoiceDetail }) {
         )}
 
         <fieldset disabled={!editable} className="mt-5 space-y-4">
+          <div>
+            <Label className="mb-1.5">Document type</Label>
+            <div role="radiogroup" aria-label="Document type" className="inline-flex rounded-control border border-line bg-bg/60 p-0.5">
+              {(["INVOICE", "CREDIT_NOTE"] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  role="radio"
+                  aria-checked={documentType === t}
+                  onClick={() => form.setValue("documentType", t, { shouldDirty: true })}
+                  className={cn(
+                    "rounded-[8px] px-3 py-1.5 text-sm transition-colors disabled:cursor-not-allowed",
+                    documentType === t ? "bg-surface-3 text-fg" : "text-dim hover:text-muted",
+                  )}
+                >
+                  {t === "INVOICE" ? "Invoice" : "Credit note"}
+                </button>
+              ))}
+            </div>
+            {documentType === "CREDIT_NOTE" && (
+              <p className="mt-1.5 text-xs text-dim">A credit note reduces what is owed, so its amounts are stored as negative values.</p>
+            )}
+          </div>
           {renderField({ name: "vendorName", label: "Vendor" })}
           <div className="grid gap-4 sm:grid-cols-2">
-            {renderField({ name: "invoiceNumber", label: "Invoice number", mono: true })}
+            {renderField({ name: "invoiceNumber", label: documentType === "CREDIT_NOTE" ? "Credit note number" : "Invoice number", mono: true })}
             {renderField({ name: "currency", label: "Currency", mono: true, placeholder: "EUR", listId: "currencies" })}
             {renderField({ name: "invoiceDate", label: "Invoice date", type: "date", mono: true })}
             {renderField({ name: "dueDate", label: "Due date", type: "date", mono: true })}

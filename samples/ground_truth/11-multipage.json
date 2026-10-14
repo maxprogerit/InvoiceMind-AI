@@ -6,6 +6,7 @@
     "adversarial": false
   },
   "expected": {
+    "document_type": "invoice",
     "vendor": "Polaris Office Supplies Ltd",
     "invoice_number": "POS-77602",
     "invoice_date": "2026-05-06",

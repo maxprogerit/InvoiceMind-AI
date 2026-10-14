@@ -1,5 +1,6 @@
 package com.invoicemind.ai.validation;
 
+import com.invoicemind.ai.invoice.DocumentType;
 import com.invoicemind.ai.invoice.InvoiceEntity;
 import com.invoicemind.ai.invoice.InvoiceRepository;
 import com.invoicemind.ai.invoice.InvoiceStatus;
@@ -35,7 +36,8 @@ public class ValidationService {
 
   private InvoiceValidator.Input toInput(InvoiceEntity i) {
     List<InvoiceValidator.Line> lines = i.getLineItems().stream().map(this::toLine).toList();
-    return new InvoiceValidator.Input(i.getId(), i.getOrganizationId(), i.getVendorId(), i.getVendorName(),
+    return new InvoiceValidator.Input(i.getId(), i.getOrganizationId(), i.getDocumentType(), i.getVendorId(),
+        i.getVendorName(),
         i.getInvoiceNumber(), i.getInvoiceDate(), i.getDueDate(), i.getCurrency(), i.getSubtotal(), i.getTax(),
         i.getTotal(), lines, i.getFileSha256(), i.getFieldConfidence(), i.isModelNeedsReview(),
         i.getModelReviewReasons(), i.isInjectionSuspected(), i.isHumanReviewed(), i.getCreatedAt());
@@ -48,8 +50,9 @@ public class ValidationService {
   private InvoiceValidator.Lookups lookups() {
     return new InvoiceValidator.Lookups() {
       @Override
-      public Optional<UUID> duplicateOf(UUID org, UUID id, UUID vendorId, String number, Instant createdAt) {
-        return invoices.findDuplicateIds(org, id, vendorId, number, InvoiceStatus.COUNTS_FOR_DUPLICATES, createdAt)
+      public Optional<UUID> duplicateOf(UUID org, UUID id, DocumentType type, UUID vendorId, String number,
+                                        Instant createdAt) {
+        return invoices.findDuplicateIds(org, id, type, vendorId, number, InvoiceStatus.COUNTS_FOR_DUPLICATES, createdAt)
             .stream().findFirst();
       }
 

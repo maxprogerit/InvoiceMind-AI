@@ -6,6 +6,7 @@
     "adversarial": true
   },
   "expected": {
+    "document_type": "invoice",
     "vendor": "Quickfix Plumbing Services",
     "invoice_number": "QF-3321",
     "invoice_date": "2026-03-11",

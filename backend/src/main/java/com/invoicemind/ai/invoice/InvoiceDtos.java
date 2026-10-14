@@ -32,7 +32,8 @@ public final class InvoiceDtos {
                             @NotNull boolean canRetry, @NotNull boolean canDelete) {}
 
   public record InvoiceSummary(
-      @NotNull UUID id, @NotNull InvoiceStatus status, @NotNull String originalFilename, String vendorName,
+      @NotNull UUID id, @NotNull InvoiceStatus status, @NotNull DocumentType documentType,
+      @NotNull String originalFilename, String vendorName,
       String invoiceNumber, LocalDate invoiceDate, LocalDate dueDate, String currency, BigDecimal total,
       @NotNull UUID uploadedBy, @NotNull String uploadedByName, @NotNull int errorCount, @NotNull int warningCount,
       @NotNull Instant createdAt) {}
@@ -42,8 +43,8 @@ public final class InvoiceDtos {
   public record UsageInfo(String model, Integer inputTokens, Integer outputTokens, BigDecimal costUsd) {}
 
   public record InvoiceDetail(
-      @NotNull UUID id, @NotNull InvoiceStatus status, @NotNull String originalFilename, @NotNull String contentType,
-      @NotNull long fileSize,
+      @NotNull UUID id, @NotNull InvoiceStatus status, @NotNull DocumentType documentType,
+      @NotNull String originalFilename, @NotNull String contentType, @NotNull long fileSize,
       String vendorName, String invoiceNumber, LocalDate invoiceDate, LocalDate dueDate, String currency,
       BigDecimal subtotal, BigDecimal tax, BigDecimal total,
       Map<String, Double> fieldConfidence, List<String> modelReviewReasons, @NotNull boolean injectionSuspected,
@@ -56,6 +57,8 @@ public final class InvoiceDtos {
 
   /** Full-replacement correction of the extracted fields. {@code version} guards against concurrent edits. */
   public record UpdateInvoiceRequest(
+      /** Omitted keeps the current type. Switching to CREDIT_NOTE stores every amount as a negative value. */
+      DocumentType documentType,
       @Size(max = 300) String vendorName,
       @Size(max = 100) String invoiceNumber,
       LocalDate invoiceDate,

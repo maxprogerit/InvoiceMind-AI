@@ -6,6 +6,7 @@
     "adversarial": false
   },
   "expected": {
+    "document_type": "invoice",
     "vendor": "ООО «Северный Ветер»",
     "invoice_number": "СВ-2026/117",
     "invoice_date": "2026-03-05",

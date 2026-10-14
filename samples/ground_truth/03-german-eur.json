@@ -6,6 +6,7 @@
     "adversarial": false
   },
   "expected": {
+    "document_type": "invoice",
     "vendor": "Bäckerei & Konditorei Schneider KG",
     "invoice_number": "RE-2026-00917",
     "invoice_date": "2026-02-03",

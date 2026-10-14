@@ -65,7 +65,7 @@ export function InvoicePreviewCard({ invoiceId }: { invoiceId: string | undefine
 
           <div className="mt-3 divide-y divide-line/60">
             <Row label="Vendor" value={data.vendorName ?? "—"} />
-            <Row label="Invoice number" value={data.invoiceNumber ?? "—"} />
+            <Row label={data.documentType === "CREDIT_NOTE" ? "Credit note number" : "Invoice number"} value={data.invoiceNumber ?? "—"} />
             <Row label="Date" value={formatDate(data.invoiceDate)} />
             {data.dueDate && <Row label="Due" value={formatDate(data.dueDate)} />}
           </div>

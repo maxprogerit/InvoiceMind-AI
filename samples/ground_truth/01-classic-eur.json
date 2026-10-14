@@ -6,6 +6,7 @@
     "adversarial": false
   },
   "expected": {
+    "document_type": "invoice",
     "vendor": "Nordlicht Software GmbH",
     "invoice_number": "NL-2026-0412",
     "invoice_date": "2026-03-14",

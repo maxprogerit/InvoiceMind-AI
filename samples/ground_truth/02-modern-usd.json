@@ -6,6 +6,7 @@
     "adversarial": false
   },
   "expected": {
+    "document_type": "invoice",
     "vendor": "Brightwave Analytics Inc.",
     "invoice_number": "BW-88213",
     "invoice_date": "2026-01-28",

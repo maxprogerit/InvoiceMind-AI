@@ -497,6 +497,8 @@ export interface components {
             total?: number;
         };
         UpdateInvoiceRequest: {
+            /** @enum {string} */
+            documentType?: "INVOICE" | "CREDIT_NOTE";
             vendorName?: string;
             invoiceNumber?: string;
             /** Format: date */
@@ -516,6 +518,8 @@ export interface components {
             id: string;
             /** @enum {string} */
             status: "UPLOADED" | "PROCESSING" | "EXTRACTED" | "NEEDS_REVIEW" | "VALIDATED" | "APPROVED" | "REJECTED" | "FAILED";
+            /** @enum {string} */
+            documentType: "INVOICE" | "CREDIT_NOTE";
             originalFilename: string;
             contentType: string;
             /** Format: int64 */
@@ -646,6 +650,8 @@ export interface components {
             id: string;
             /** @enum {string} */
             status: "UPLOADED" | "PROCESSING" | "EXTRACTED" | "NEEDS_REVIEW" | "VALIDATED" | "APPROVED" | "REJECTED" | "FAILED";
+            /** @enum {string} */
+            documentType: "INVOICE" | "CREDIT_NOTE";
             originalFilename: string;
             vendorName?: string;
             invoiceNumber?: string;
@@ -1109,6 +1115,7 @@ export interface operations {
                 to?: string;
                 minTotal?: number;
                 maxTotal?: number;
+                documentType?: "INVOICE" | "CREDIT_NOTE";
                 page?: number;
                 size?: number;
                 sort?: string;
@@ -1475,6 +1482,7 @@ export interface operations {
                 to?: string;
                 minTotal?: number;
                 maxTotal?: number;
+                documentType?: "INVOICE" | "CREDIT_NOTE";
             };
             header?: never;
             path?: never;

@@ -6,6 +6,7 @@
     "adversarial": false
   },
   "expected": {
+    "document_type": "invoice",
     "vendor": "Lakeside Marketing Group",
     "invoice_number": "LMG-5120",
     "invoice_date": "2026-02-26",

@@ -23,7 +23,14 @@ const FORMATS = [
 
 function initialFilters(params: URLSearchParams): InvoiceFilters {
   const status = params.getAll("status").filter((s): s is InvoiceStatus => (ALL_STATUSES as string[]).includes(s));
-  return { status, q: params.get("q") ?? undefined, from: params.get("from") ?? undefined, to: params.get("to") ?? undefined };
+  const type = params.get("documentType");
+  return {
+    status,
+    q: params.get("q") ?? undefined,
+    from: params.get("from") ?? undefined,
+    to: params.get("to") ?? undefined,
+    documentType: type === "INVOICE" || type === "CREDIT_NOTE" ? type : undefined,
+  };
 }
 
 function ExportBody() {
@@ -45,7 +52,7 @@ function ExportBody() {
     try {
       const qs = new URLSearchParams({ format });
       active.status?.forEach((s) => qs.append("status", s));
-      for (const k of ["q", "from", "to", "minTotal", "maxTotal"] as const) if (active[k] !== undefined && active[k] !== "") qs.set(k, String(active[k]));
+      for (const k of ["q", "from", "to", "minTotal", "maxTotal", "documentType"] as const) if (active[k] !== undefined && active[k] !== "") qs.set(k, String(active[k]));
       const { blob, filename, rows } = await fetchBlob(`/api/v1/export/invoices?${qs}`);
       downloadBlob(blob, filename ?? `invoices${ext}`);
       toast.success(`Exported ${rows ?? count.data?.totalItems ?? ""} invoices`);

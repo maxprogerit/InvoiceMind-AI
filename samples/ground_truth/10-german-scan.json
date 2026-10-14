@@ -6,6 +6,7 @@
     "adversarial": false
   },
   "expected": {
+    "document_type": "invoice",
     "vendor": "Gärtnerei Lehmann",
     "invoice_number": "R-1180",
     "invoice_date": "2026-04-22",

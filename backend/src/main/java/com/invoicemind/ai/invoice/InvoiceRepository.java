@@ -25,11 +25,12 @@ public interface InvoiceRepository extends JpaRepository<InvoiceEntity, UUID>, J
 
   @Query("""
       select i.id from InvoiceEntity i
-      where i.organizationId = :org and i.id <> :self and i.vendorId = :vendorId
+      where i.organizationId = :org and i.id <> :self and i.documentType = :type and i.vendorId = :vendorId
         and lower(i.invoiceNumber) = lower(:number)
         and i.status in :statuses and i.createdAt < :createdBefore
       order by i.createdAt asc""")
-  List<UUID> findDuplicateIds(@Param("org") UUID org, @Param("self") UUID self, @Param("vendorId") UUID vendorId,
+  List<UUID> findDuplicateIds(@Param("org") UUID org, @Param("self") UUID self, @Param("type") DocumentType type,
+                              @Param("vendorId") UUID vendorId,
                               @Param("number") String number,
                               @Param("statuses") Collection<InvoiceStatus> statuses,
                               @Param("createdBefore") Instant createdBefore);

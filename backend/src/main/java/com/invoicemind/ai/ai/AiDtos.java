@@ -30,7 +30,7 @@ public final class AiDtos {
 
   @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
   @JsonIgnoreProperties(ignoreUnknown = true)
-  public record Extraction(String vendor, String invoiceNumber, String invoiceDate, String dueDate, String currency,
+  public record Extraction(String documentType, String vendor, String invoiceNumber, String invoiceDate, String dueDate, String currency,
                            List<LineItem> lineItems, BigDecimal subtotal, BigDecimal tax, BigDecimal total,
                            FieldConfidence confidence, boolean needsReview, List<String> reviewReasons) {}
 

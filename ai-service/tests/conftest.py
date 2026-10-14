@@ -35,6 +35,7 @@ class FakeOpenAIClientForTests:
 
 def make_extraction(**overrides) -> InvoiceExtraction:
     base = dict(
+        document_type="invoice",
         vendor="ACME GmbH",
         invoice_number="INV-0042",
         invoice_date="2026-03-14",

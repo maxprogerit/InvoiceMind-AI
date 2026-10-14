@@ -142,6 +142,9 @@ public class InvoiceService {
     }
 
     Map<String, Object> changes = new LinkedHashMap<>();
+    DocumentType type = req.documentType() == null ? inv.getDocumentType() : req.documentType();
+    track(changes, "documentType", inv.getDocumentType(), type);
+    inv.setDocumentType(type);
     String vendor = blankToNull(req.vendorName());
     track(changes, "vendorName", inv.getVendorName(), vendor);
     inv.setVendorName(vendor);
@@ -156,14 +159,15 @@ public class InvoiceService {
     String currency = blankToNull(req.currency()) == null ? null : req.currency().trim().toUpperCase(Locale.ROOT);
     track(changes, "currency", inv.getCurrency(), currency);
     inv.setCurrency(currency);
-    track(changes, "subtotal", inv.getSubtotal(), req.subtotal());
-    inv.setSubtotal(req.subtotal());
-    track(changes, "tax", inv.getTax(), req.tax());
-    inv.setTax(req.tax());
-    track(changes, "total", inv.getTotal(), req.total());
-    inv.setTotal(req.total());
+    // a credit note is stored negative whichever sign the reviewer typed (type.signed is the identity for invoices)
+    track(changes, "subtotal", inv.getSubtotal(), type.signed(req.subtotal()));
+    inv.setSubtotal(type.signed(req.subtotal()));
+    track(changes, "tax", inv.getTax(), type.signed(req.tax()));
+    inv.setTax(type.signed(req.tax()));
+    track(changes, "total", inv.getTotal(), type.signed(req.total()));
+    inv.setTotal(type.signed(req.total()));
 
-    List<LineItemEntity> items = toLineItems(req.lineItems());
+    List<LineItemEntity> items = toLineItems(req.lineItems(), type);
     if (!sameLines(inv.getLineItems(), items)) changes.put("lineItems", items.size() + " line(s) edited");
     inv.replaceLineItems(items);
 
@@ -223,7 +227,7 @@ public class InvoiceService {
     if (comment != null) details.put("comment", comment);
     audit.log(me.organizationId(), me.userId(), action, AuditService.INVOICE, inv.getId(), details);
 
-    String label = inv.getInvoiceNumber() != null ? "Invoice " + inv.getInvoiceNumber() : inv.getOriginalFilename();
+    String label = inv.displayLabel();
     if (!inv.getUploadedBy().equals(me.userId())) {
       boolean approved = target == InvoiceStatus.APPROVED;
       notifications.notify(inv.getOrganizationId(), inv.getUploadedBy(), approved ? "APPROVED" : "REJECTED",
@@ -299,15 +303,15 @@ public class InvoiceService {
     return prop.equals("createdAt") ? s : s.and(Sort.by(Sort.Direction.DESC, "createdAt"));
   }
 
-  private static List<LineItemEntity> toLineItems(List<LineItemDto> dtos) {
+  private static List<LineItemEntity> toLineItems(List<LineItemDto> dtos, DocumentType type) {
     List<LineItemEntity> items = new ArrayList<>();
     if (dtos == null) return items;
     for (LineItemDto d : dtos) {
       LineItemEntity e = new LineItemEntity();
       e.setDescription(d.description().trim());
-      e.setQuantity(d.quantity());
-      e.setUnitPrice(d.unitPrice());
-      e.setTotal(d.total());
+      e.setQuantity(type.signedQuantity(d.quantity()));
+      e.setUnitPrice(type.signed(d.unitPrice()));
+      e.setTotal(type.signed(d.total()));
       items.add(e);
     }
     return items;
