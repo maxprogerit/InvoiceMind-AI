@@ -82,14 +82,14 @@ export function InvoiceTable({ page, loading, error, onRetry, selectedId, onSele
                 >
                   <TD className={cn("rounded-l-[10px] border-y border-l border-transparent font-medium", selected && "border-accent bg-surface-2/60")}>
                     <span className="flex items-center gap-2">
-                      <span className="max-w-[220px] truncate">{inv.vendorName ?? <span className="text-dim">Unknown vendor</span>}</span>
+                      <span className="max-w-[170px] truncate">{inv.vendorName ?? <span className="text-dim">Unknown vendor</span>}</span>
                       {inv.errorCount > 0 && <AlertTriangle className="size-3.5 shrink-0 text-warn" aria-label={`${inv.errorCount} validation errors`} />}
                     </span>
                   </TD>
-                  <TD className={cn("border-y border-transparent font-mono text-[13px] text-muted", selected && "border-accent bg-surface-2/60 text-accent")}>
+                  <TD className={cn("whitespace-nowrap border-y border-transparent font-mono text-[13px] text-muted", selected && "border-accent bg-surface-2/60 text-accent")}>
                     {inv.invoiceNumber ?? "—"}
                   </TD>
-                  <TD className={cn("border-y border-transparent font-mono text-[13px] text-muted", selected && "border-accent bg-surface-2/60 text-accent")}>
+                  <TD className={cn("whitespace-nowrap border-y border-transparent font-mono text-[13px] text-muted", selected && "border-accent bg-surface-2/60 text-accent")}>
                     {formatDate(inv.invoiceDate)}
                   </TD>
                   <TD className={cn("num border-y border-transparent text-right font-medium", selected && "border-accent bg-surface-2/60 text-accent")}>
