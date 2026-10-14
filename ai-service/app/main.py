@@ -16,6 +16,7 @@ from .logging_setup import log, request_id_var, setup_logging
 from .ocr.registry import build_engine
 from .ocr.service import OcrService
 from .knowledge.service import KnowledgeService
+from .tracing import setup_tracing
 from .schemas import EmbedRequest, EmbedResponse, ExplainRequest, ExplainResponse, ExtractRequest, ExtractResponse, OcrResponse
 
 logger = logging.getLogger("ai-service")
@@ -39,6 +40,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="InvoiceMind AI service", version="1.0.0", lifespan=lifespan)
+setup_tracing(app, get_settings())
 
 
 # ------------------------------------------------------------ plumbing ----

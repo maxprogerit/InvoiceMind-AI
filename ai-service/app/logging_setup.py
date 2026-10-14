@@ -17,6 +17,11 @@ class JsonFormatter(logging.Formatter):
             "msg": record.getMessage(),
             "request_id": request_id_var.get(),
         }
+        from .tracing import current_trace_id
+
+        trace_id = current_trace_id()
+        if trace_id:
+            payload["trace_id"] = trace_id  # lets log lines be found from a trace and vice versa
         extra = getattr(record, "fields", None)
         if extra:
             payload.update(extra)

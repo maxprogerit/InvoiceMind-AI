@@ -57,7 +57,7 @@ class HttpAiClientTest {
 
   static HttpAiClient clientFor(String baseUrl, int attempts) {
     var ai = new AppProperties.Ai(baseUrl, "secret-token", 500, 5000, 5000, attempts, 10, 100, 30);
-    return new HttpAiClient(new AppProperties(null, null, null, null, ai, null, null, null, null), new ObjectMapper());
+    return new HttpAiClient(new AppProperties(null, null, null, null, ai, null, null, null, null), new ObjectMapper(), org.springframework.web.client.RestClient.builder());
   }
 
   @AfterEach

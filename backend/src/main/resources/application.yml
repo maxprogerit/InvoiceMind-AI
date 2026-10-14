@@ -37,6 +37,10 @@ spring:
     consumer:
       auto-offset-reset: earliest
       enable-auto-commit: false
+    template:
+      observation-enabled: true   # the trace context travels in the Kafka record headers
+    listener:
+      observation-enabled: true
   servlet:
     multipart:
       max-file-size: 15MB
@@ -47,6 +51,13 @@ spring:
       write-dates-as-timestamps: false
 
 management:
+  tracing:
+    enabled: ${TRACING_ENABLED:false}                  # OpenTelemetry; see docs/ARCHITECTURE.md (Observability)
+    sampling:
+      probability: ${TRACING_SAMPLE_RATE:1.0}
+  otlp:
+    tracing:
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4318}/v1/traces
   endpoints:
     web:
       exposure:

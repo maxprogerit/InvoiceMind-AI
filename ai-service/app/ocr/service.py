@@ -7,6 +7,7 @@ from PIL import Image, ImageSequence, UnidentifiedImageError
 
 from ..config import Settings
 from ..errors import ApiError
+from ..tracing import tracer
 from ..schemas import OcrPage, OcrResponse
 from .base import OcrEngine
 from .sniff import ALLOWED, PDF, sniff_mime
@@ -23,6 +24,16 @@ class OcrService:
         Image.MAX_IMAGE_PIXELS = settings.max_image_pixels  # decompression-bomb guard
 
     def process(self, data: bytes) -> OcrResponse:
+        with tracer.start_as_current_span("ocr.process") as span:
+            span.set_attribute("document.bytes", len(data))
+            result = self._process(data)
+            span.set_attribute("document.mime", result.mime_type)
+            span.set_attribute("ocr.engine", result.engine)
+            span.set_attribute("ocr.pages", result.page_count)
+            span.set_attribute("ocr.confidence", result.confidence)
+            return result
+
+    def _process(self, data: bytes) -> OcrResponse:
         if len(data) > self.settings.max_upload_bytes:
             raise ApiError(413, "file_too_large", "File exceeds the size limit")
         mime = sniff_mime(data)

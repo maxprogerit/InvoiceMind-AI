@@ -30,6 +30,16 @@ app:
   seed:
     demo-password: ""
 
+management:
+  tracing:
+    enabled: true               # on in tests so propagation is verified, but nothing is exported
+    sampling:
+      probability: 1.0
+  otlp:
+    tracing:
+      export:
+        enabled: false
+
 logging:
   level:
     org.apache.kafka: ERROR

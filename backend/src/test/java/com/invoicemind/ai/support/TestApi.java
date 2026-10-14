@@ -73,7 +73,9 @@ public final class TestApi {
         res.getHeaders(), mapper), true);
   }
 
-  public Resp upload(String token, byte[] content, String filename) {
+  public Resp upload(String token, byte[] content, String filename) { return upload(token, content, filename, Map.of()); }
+
+  public Resp upload(String token, byte[] content, String filename, Map<String, String> headers) {
     MultipartBodyBuilder b = new MultipartBodyBuilder();
     b.part("file", new ByteArrayResource(content) {
       @Override
@@ -81,6 +83,7 @@ public final class TestApi {
     }).contentType(MediaType.APPLICATION_OCTET_STREAM);
     var spec = client.post().uri("/api/v1/invoices").contentType(MediaType.MULTIPART_FORM_DATA).body(b.build());
     if (token != null) spec = spec.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);
+    for (var e : headers.entrySet()) spec = spec.header(e.getKey(), e.getValue());
     return spec.exchange((req, res) -> new Resp(res.getStatusCode().value(), res.getBody().readAllBytes(),
         res.getHeaders(), mapper), true);
   }

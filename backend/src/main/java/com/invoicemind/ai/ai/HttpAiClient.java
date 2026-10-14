@@ -45,7 +45,8 @@ public class HttpAiClient implements AiClient {
   private final Retry retry;
   private final CircuitBreaker breaker;
 
-  public HttpAiClient(AppProperties props, ObjectMapper mapper) {
+  /** The builder must be the injected one: it carries the observation (tracing) customizer, so calls propagate the trace. */
+  public HttpAiClient(AppProperties props, ObjectMapper mapper, RestClient.Builder restClientBuilder) {
     var ai = props.ai();
     this.mapper = mapper;
     this.token = ai.token();
@@ -55,7 +56,7 @@ public class HttpAiClient implements AiClient {
         .build();
     var factory = new JdkClientHttpRequestFactory(client);
     factory.setReadTimeout(Duration.ofMillis(Math.max(ai.ocrTimeoutMs(), ai.extractTimeoutMs())));
-    this.http = RestClient.builder().baseUrl(ai.baseUrl()).requestFactory(factory).build();
+    this.http = restClientBuilder.baseUrl(ai.baseUrl()).requestFactory(factory).build();
 
     this.breaker = CircuitBreaker.of("ai-service", CircuitBreakerConfig.custom()
         .failureRateThreshold(ai.circuitFailureRate())

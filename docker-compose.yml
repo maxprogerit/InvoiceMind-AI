@@ -77,6 +77,8 @@ services:
       OPENAI_PRICE_OUTPUT_PER_1M: ${OPENAI_PRICE_OUTPUT_PER_1M:-0}
       OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
       OPENAI_EMBEDDING_PRICE_PER_1M: ${OPENAI_EMBEDDING_PRICE_PER_1M:-0}
+      TRACING_ENABLED: ${TRACING_ENABLED:-false}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT-http://jaeger:4318}
 
   backend:
     <<: *restart
@@ -107,6 +109,8 @@ services:
       S3_SECRET_KEY: ${S3_SECRET_KEY:-dev-only-s3-secret-change-me}
       S3_PATH_STYLE: ${S3_PATH_STYLE:-true}
       S3_CREATE_BUCKET: ${S3_CREATE_BUCKET:-true}
+      TRACING_ENABLED: ${TRACING_ENABLED:-false}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT-http://jaeger:4318}
       LOG_FORMAT: ecs
     volumes:
       - storage_data:/data/storage
@@ -116,6 +120,15 @@ services:
       kafka: { condition: service_healthy }
       ai-service: { condition: service_healthy }
       seaweedfs: { condition: service_healthy, required: false } # only when the s3 profile is active
+
+  # Optional trace viewer (OpenTelemetry). Start with  TRACING_ENABLED=true docker compose --profile tracing up --build
+  # and open http://localhost:16686 : one upload is one trace across backend, Kafka and ai-service.
+  jaeger:
+    profiles: ["tracing"]
+    <<: *restart
+    image: jaegertracing/jaeger:2.4.0
+    ports:
+      - "127.0.0.1:${JAEGER_UI_PORT:-16686}:16686"
 
   # Optional S3-compatible object store for invoice files (SeaweedFS: master, volume, filer and S3 gateway in one
   # container). Start it with  STORAGE_TYPE=s3 docker compose --profile s3 up --build

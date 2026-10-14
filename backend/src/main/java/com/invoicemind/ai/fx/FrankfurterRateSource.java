@@ -25,14 +25,14 @@ public class FrankfurterRateSource implements RateSource {
   private final RestClient http;
   private final ObjectMapper mapper;
 
-  public FrankfurterRateSource(AppProperties props, ObjectMapper mapper) {
+  public FrankfurterRateSource(AppProperties props, ObjectMapper mapper, RestClient.Builder restClientBuilder) {
     var fx = props.fx();
     this.mapper = mapper;
     var client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1)
         .connectTimeout(Duration.ofMillis(fx.timeoutMs())).build();
     var factory = new JdkClientHttpRequestFactory(client);
     factory.setReadTimeout(Duration.ofMillis(fx.timeoutMs()));
-    this.http = RestClient.builder().baseUrl(fx.baseUrl()).requestFactory(factory).build();
+    this.http = restClientBuilder.baseUrl(fx.baseUrl()).requestFactory(factory).build();
   }
 
   @Override

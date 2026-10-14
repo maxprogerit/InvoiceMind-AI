@@ -37,6 +37,7 @@ public final class FakeAiServiceForTests {
   private static final Map<String, AtomicInteger> OCR_CALLS = new ConcurrentHashMap<>();
   private static final Map<String, AtomicInteger> EXTRACT_CALLS = new ConcurrentHashMap<>();
   private static final Map<String, String> EXTRACT_REQUEST_TEXT = new ConcurrentHashMap<>();
+  private static final Map<String, String> TRACEPARENTS = new ConcurrentHashMap<>();
   private static final java.util.concurrent.atomic.AtomicReference<String> LAST_EXPLAIN = new java.util.concurrent.atomic.AtomicReference<>();
   private static final HttpServer SERVER = start();
 
@@ -54,6 +55,9 @@ public final class FakeAiServiceForTests {
   public static int extractCalls(String id) { return EXTRACT_CALLS.computeIfAbsent(id, k -> new AtomicInteger()).get(); }
 
   public static String textSentToExtract(String id) { return EXTRACT_REQUEST_TEXT.get(id); }
+
+  /** The W3C {@code traceparent} header the backend sent with the "ocr" or "extract" call of a scenario (or null). */
+  public static String traceparent(String id, String call) { return TRACEPARENTS.get(call + ":" + id); }
 
   /** Raw JSON body of the most recent /explain request (to assert what the backend sends the model). */
   public static String lastExplainRequest() { return LAST_EXPLAIN.get(); }
@@ -132,6 +136,8 @@ public final class FakeAiServiceForTests {
       } else {
         Matcher m = MARKER.matcher(ocr ? body : jsonText(raw));
         String id = m.find() ? m.group(1) : "none";
+        String traceparent = ex.getRequestHeaders().getFirst("traceparent");
+        if (traceparent != null) TRACEPARENTS.put((ocr ? "ocr:" : "extract:") + id, traceparent);
         if (ocr) {
           OCR_CALLS.computeIfAbsent(id, k -> new AtomicInteger()).incrementAndGet();
           reply = OCR.getOrDefault(id, Reply.json(404, Map.of("error", Map.of("code", "no_scenario", "message", id))));

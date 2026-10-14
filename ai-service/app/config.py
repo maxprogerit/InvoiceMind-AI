@@ -37,6 +37,10 @@ class Settings(BaseSettings):
 
     log_level: str = "INFO"
 
+    # Tracing: set TRACING_ENABLED=true and OTEL_EXPORTER_OTLP_ENDPOINT (e.g. http://jaeger:4318) to export spans
+    tracing_enabled: bool = False
+    otel_exporter_otlp_endpoint: str = ""
+
 
 @lru_cache
 def get_settings() -> Settings:

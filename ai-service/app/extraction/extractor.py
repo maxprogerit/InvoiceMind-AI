@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from ..config import Settings
 from ..errors import ApiError
 from ..logging_setup import log
+from ..tracing import tracer
 from ..schemas import ExtractResponse, InvoiceExtraction, Usage
 from .injection import detect_injection
 from .postprocess import finalize
@@ -36,6 +37,18 @@ class OpenAIExtractor:
         return cls(client, settings)
 
     def extract(self, text: str) -> ExtractResponse:
+        with tracer.start_as_current_span("llm.extract") as span:
+            span.set_attribute("llm.model", self.settings.openai_model)
+            span.set_attribute("document.chars", len(text))
+            result = self._extract(text)
+            span.set_attribute("llm.input_tokens", result.usage.input_tokens)
+            span.set_attribute("llm.output_tokens", result.usage.output_tokens)
+            span.set_attribute("llm.cost_usd", result.usage.cost_usd)
+            span.set_attribute("extraction.needs_review", result.extraction.needs_review)
+            span.set_attribute("extraction.injection_suspected", result.injection_suspected)
+            return result
+
+    def _extract(self, text: str) -> ExtractResponse:
         s = self.settings
         text = text[: s.max_text_chars]
         injection = detect_injection(text)
