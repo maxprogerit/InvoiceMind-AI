@@ -1,24 +1,27 @@
-# Node
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# Node / Next.js
 node_modules/
 frontend/.next/
 frontend/out/
+frontend/dist/
+*.tsbuildinfo
+next-env.d.ts
 
 # Java
 backend/target/
 
-# Env
-.env
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
 
-# Logs
+# Runtime data
+storage/
 *.log
-
-# Environment & secrets
-.env
-.env.*
-!.env.example
-*.pem
-*.key
-*.p12
-*.jks
-application-local.properties
-application-local.yml
+.DS_Store
