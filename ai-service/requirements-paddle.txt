@@ -1,0 +1,3 @@
+# Optional second OCR engine (docker build --build-arg WITH_PADDLE=1). Large: the CPU framework alone is ~200 MB.
+paddlepaddle>=3.0,<4
+paddleocr>=3.0,<4

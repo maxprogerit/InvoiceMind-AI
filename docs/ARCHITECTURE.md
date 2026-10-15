@@ -32,7 +32,12 @@ flowchart LR
   PIPE --> WS
   BE --> PG[(PostgreSQL 16<br/>+ pgvector)]
   BE --> REDIS[(Redis<br/>rate limits · analytics cache)]
-  BE --> FS[(File storage<br/>volume)]
+  BE --> FS[(File storage<br/>volume or S3)]
+  BE -- "signed webhooks" --> ERP((ERP / accounting<br/>systems))
+  BE -- "ECB rates" --> ECB((Frankfurter API))
+  MAIL((IMAP mailbox)) -- "poll" --> BE
+  IDP((OIDC provider)) <-- "SSO" --> BE
+  BE -. "OTLP spans" .-> JAEGER[(Jaeger<br/>optional)]
 
   subgraph AI[ai-service · FastAPI · Python 3.11]
     OCR[OCR<br/>text layer → Tesseract]
@@ -47,8 +52,8 @@ flowchart LR
 |---|---|---|
 | `nginx` | Only published entry point (port 80). Proxies `/api`, `/ws`, everything else to Next.js; 16 MB body limit; security headers | no |
 | `frontend` | Next.js 15 standalone server | no |
-| `backend` | Auth, tenancy, invoices, approvals, analytics, export, audit, notifications, knowledge base, Kafka producer/consumer, STOMP | files on a volume |
-| `ai-service` | OCR and every call to OpenAI. The backend never talks to OpenAI directly | no |
+| `backend` | Auth (password + OIDC), tenancy, invoices, approvals, analytics, currency conversion, export, audit, notifications, knowledge base, webhooks, e-mail ingestion, Kafka producer/consumer, STOMP | files on a volume, or none when S3 is used |
+| `ai-service` | OCR (Tesseract, optionally PaddleOCR) and every call to OpenAI. The backend never talks to OpenAI directly | no |
 | `postgres` | System of record, plus vector search (pgvector) | yes |
 | `kafka` | Durable queue between "uploaded" and "processed" | yes |
 | `redis` | Rate limiting and analytics cache; losing it loses nothing | no persistence |
@@ -150,7 +155,7 @@ Two uses, both optional in the sense that Redis being down degrades rather than 
 OCR (Tesseract, Poppler) and the OpenAI client are Python-native, need system binaries, and change at a
 different pace than the business backend. Keeping them behind two small HTTP contracts (`/ocr`, `/extract`,
 plus `/embed`, `/explain`) means the backend can be tested with a stub, the OCR engine can be swapped
-(`app/ocr/base.py` is the interface for PaddleOCR) and all LLM spending is metered in one place. The backend
+(`app/ocr/base.py` is the interface; Tesseract and, optionally, PaddleOCR implement it) and all LLM spending is metered in one place. The backend
 authenticates to it with a shared internal token; the service is not published to the network.
 
 ### Why pgvector instead of a vector database
@@ -158,6 +163,49 @@ authenticates to it with a shared internal token; the service is not published t
 The knowledge base is small (an organisation's policy documents), tenant-scoped, and queried together with
 relational data. pgvector in the existing PostgreSQL keeps one datastore, one backup and transactional
 inserts. HNSW with cosine distance serves the queries; every search is filtered by `organization_id`.
+
+### Credit notes are negative invoices
+
+The model reports `document_type` (`invoice` or `credit_note`) and copies the sign as printed. The backend stores every
+credit-note amount as a **negative** number whichever sign was printed (`DocumentType.signed`), so all sums (analytics,
+exports, the currency conversion) net out without special cases. Validation mirrors the invoice rules (total must be below
+zero, no positive subtotal or tax), duplicates are detected per document type (a credit note may legitimately repeat an
+invoice's number), and a reviewer can reclassify a document; the amounts follow the type.
+
+### Currency conversion and why it never guesses
+
+Every rate is stored per 1 EUR (`exchange_rates.per_eur`, the ECB convention), so one table serves any reporting currency and
+a cross rate is `amount / per_eur(from) * per_eur(to)`. Shared ECB rates are downloaded lazily from Frankfurter for exactly
+the date range the invoices need and kept current by a scheduled job; an admin adds manual per-organisation rates for
+currencies the ECB does not publish (RUB). An invoice is converted at the latest rate **on or before its own date** (ECB
+rates older than 14 days are not trusted, manual rates stay valid until replaced; a manual rate wins over an ECB rate of the
+same date). If no usable rate exists the invoice is reported under "not converted" with its own currency. A failed download is
+recorded and shown on the Settings page, analytics keep working, and the download is retried. Only dates leave the system.
+
+### Integrations
+
+- **Webhooks (the ERP hook).** Events are written in the same transaction as the invoice change (transactional outbox,
+  `webhook_deliveries`), then sent by a dispatcher that claims rows with `FOR UPDATE SKIP LOCKED` and a lease, so several
+  backend instances can run it. Delivery is at-least-once with HMAC-SHA256 signatures over `timestamp.body`, exponential
+  backoff for about an hour, a delivery log and a manual retry. URLs are fetched by the server, hence an SSRF guard: only
+  http(s), no credentials, and every resolved address must be public (checked again at delivery time); redirects are never
+  followed. `WEBHOOKS_ALLOW_PRIVATE_TARGETS` opens it for a receiver in the operator's own network.
+- **E-mail ingestion.** One IMAP mailbox is polled; the plus-tag of the recipient address identifies the organisation, the
+  sender must be one of its enabled users, attachments take the normal upload path (so every upload defence applies) and
+  everything lands in review. Every message is logged; a Message-ID is never processed twice.
+- **Single sign-on.** OpenID Connect authorization-code flow with PKCE implemented in the backend: signed flow cookie, ID
+  token verified against the provider's JWKS (signature, issuer, expiry, audience, nonce), then the same refresh-cookie
+  session as a password login. Accounts are linked by verified e-mail on the first login and then pinned to the provider's
+  subject; provisioning into an organisation is opt-in and limited to configured e-mail domains.
+- **Object storage.** `FileStorage` has a local-volume and an S3 implementation (same key layout); the bucket is verified at
+  start-up.
+
+### Tracing
+
+With `TRACING_ENABLED=true` both services export OpenTelemetry spans (W3C `traceparent`). The backend's Kafka producer and
+listener are observed, so the trace continues across the queue: HTTP upload → `invoice.uploaded` send/receive → the backend's
+OCR and extraction calls → the ai-service's request, `ocr.process` and `llm.extract` spans (model, token counts, cost; never
+document content). Log lines carry the trace id.
 
 ## Trust boundaries
 
@@ -168,6 +216,9 @@ inserts. HNSW with cosine distance serves the queries; every search is filtered 
 | LLM output | untrusted input | strict Pydantic schema; dates and currency re-parsed; every key value must appear in the OCR text (grounding); injection detector forces review; **the backend then re-validates everything deterministically** |
 | Knowledge passages | untrusted data | same tag neutralisation, the model has no tools, citations outside the supplied passages are dropped |
 | JWT / `organizationId` | the only source of identity | the organisation always comes from the verified token, never from request input |
+| Webhook URL | server-side request forgery risk | scheme/credential check, every resolved address must be public (re-checked at delivery), no redirects, response bodies never read or stored |
+| Inbound e-mail | hostile | recipient token + sender-is-a-user check, optional dkim/spf proof, attachments through the normal upload gatekeeping, count and size caps, subject stripped of control characters |
+| OIDC ID token | hostile until verified | JWKS signature, issuer, expiry, audience and nonce checked; state in a signed cookie; `next` limited to same-site paths |
 | Spreadsheet cells | formula risk | exported text cells that start with `= + - @` are prefixed so Excel cannot execute them (vendor names come from OCR) |
 
 ### What the validator checks (Java, no LLM)
@@ -197,6 +248,7 @@ rules always do.
   reviewers) their organisation's topic, and may not publish.
 - **Audit**: uploads, processing steps, corrections (with before and after), decisions, exports, team and
   knowledge changes, each with actor and time. System actions are attributed to "System".
+- **Single sign-on** creates the same refresh-cookie session as a password login; the provider subject is pinned to the account on first use, so a reassigned e-mail address cannot take it over.
 - **Secrets** come from environment variables only; compose refuses to start without the required ones.
 
 Known limits are listed in the README.
@@ -217,10 +269,14 @@ erDiagram
   invoices ||--o{ notifications : triggers
   knowledge_documents ||--o{ knowledge_chunks : "split into"
   organizations ||--o{ audit_logs : records
+  organizations ||--o{ webhook_endpoints : configures
+  webhook_endpoints ||--o{ webhook_deliveries : "outbox rows"
+  organizations ||--o{ exchange_rates : "manual rates"
+  organizations ||--o{ email_ingest_log : "mail seen"
 ```
 
 `invoices` also stores the OCR text, the raw model output (JSON), model name, input/output tokens, cost in USD,
-processing time and the decision (who, when, comment); `knowledge_chunks.embedding` is `vector(1536)`.
+processing time and the decision (who, when, comment); `knowledge_chunks.embedding` is `vector(1536)`. `invoices.document_type` is `INVOICE` or `CREDIT_NOTE` (the latter stored negative); `organizations` carries the reporting currency and the e-mail ingestion token; shared ECB rates are rows of `exchange_rates` without an organisation.
 
 ## Observability
 
@@ -228,14 +284,14 @@ Every request carries an `X-Request-ID` (accepted if well-formed, otherwise gene
 context and forwarded to the ai-service, so one upload can be followed across services. Backend logs are
 structured JSON (ECS format) in Docker; the ai-service logs one JSON object per line and **never logs document
 content**, only sizes and a hash. Processing time, token usage and estimated cost are persisted per invoice and
-aggregated on the analytics page. Health checks: `/actuator/health/readiness` (backend), `/health` (ai-service).
+aggregated on the analytics page. With `TRACING_ENABLED=true` a trace spans backend, Kafka and ai-service (see Tracing above). Health checks: `/actuator/health/readiness` (backend), `/health` (ai-service).
 
 ## Testing strategy
 
 | Layer | What | Where |
 |---|---|---|
 | Unit | validator rules, file gatekeeping, JWT, export safety, chunker, AI client retries and circuit breaker | `backend/src/test` |
-| Integration | full application on real PostgreSQL (pgvector), Kafka and Redis via Testcontainers: auth, tenancy, pipeline, approvals, analytics, exports, WebSocket, knowledge | `backend/src/test` (`*IT`) |
+| Integration | full application on real PostgreSQL (pgvector), Kafka and Redis via Testcontainers: auth, tenancy, pipeline, approvals, analytics, exports, WebSocket, knowledge, credit notes, currency conversion, webhooks, tracing propagation; plus real protocol servers: IMAP (GreenMail), OIDC (mock-oauth2-server), S3 (SeaweedFS) | `backend/src/test` (`*IT`) |
 | Service | OCR on real Tesseract/Poppler, extraction with a fake OpenAI client, injection and hallucination cases, error mapping | `ai-service/tests` (run in Docker) |
 | Frontend unit | formatting, live arithmetic, token refresh single-flight, API errors, components | `frontend/src/**/*.test.ts(x)` |
 | End to end | a real browser against the whole stack | `frontend/e2e` |

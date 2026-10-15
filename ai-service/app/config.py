@@ -24,7 +24,8 @@ class Settings(BaseSettings):
     openai_embedding_price_per_1m: float = 0.0
 
     # OCR
-    ocr_engine: str = "tesseract"
+    ocr_engine: str = "tesseract"  # tesseract | paddle (the latter needs the image built with WITH_PADDLE=1)
+    paddle_lang: str = "latin"  # PaddleOCR recognition model: latin (English, German, ...), cyrillic (Russian), en, ch ...
     ocr_langs: str = "eng+deu+rus"
     ocr_dpi: int = 250
     min_text_chars_per_page: int = 40  # below this a PDF page is treated as scanned
