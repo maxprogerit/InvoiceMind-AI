@@ -81,10 +81,10 @@ What "verified" means for each one is in [docs/STATUS.md](docs/STATUS.md).
 | **Credit notes** | always on: the model reports `document_type`, a reviewer can change it | *Credit* badge and type filter in the list; amounts stored negative |
 | **Currency conversion** | automatic with several currencies; `FX_RATES_ENABLED=false` for offline use | *Analysis* ("All in EUR"), *Settings* (reporting currency, manual rates) |
 | **Webhooks** | admin: *Integrations* → Add webhook | `invoice.approved`, `.rejected`, `.validated`, `.needs_review`, `.failed`, HMAC-signed, retried, delivery log |
-| **E-mail ingestion** | `MAIL_INGEST_ENABLED=true` + `MAIL_INGEST_ADDRESS`, `MAIL_IMAP_*` | *Settings* shows your address `invoices+<token>@your-domain`; `--profile mail` starts a local test mailbox |
+| **E-mail ingestion** | `MAIL_INGEST_ENABLED=true` + `MAIL_INGEST_ADDRESS`, `MAIL_IMAP_*` | *Settings* shows your address `invoices+<token>@your-domain` |
 | **Single sign-on** | `OIDC_ENABLED=true` + issuer, client id/secret; register `<app url>/api/v1/auth/oidc/callback` at the provider | "Continue with …" button on the login page |
-| **S3 storage** | `STORAGE_TYPE=s3`; `docker compose --profile s3 up` starts SeaweedFS as the bundled store | invoice files in a bucket instead of a volume |
-| **Tracing** | `TRACING_ENABLED=true`; `docker compose --profile tracing up` adds Jaeger on `127.0.0.1:16686` | one trace per upload across backend, Kafka and ai-service |
+| **S3 storage** | `STORAGE_TYPE=s3` and the `S3_*` variables (AWS S3, MinIO, SeaweedFS ...) | invoice files in a bucket instead of a volume |
+| **Tracing** | `TRACING_ENABLED=true` and `OTEL_EXPORTER_OTLP_ENDPOINT` of any OTLP/HTTP collector (Jaeger, Tempo ...) | one trace per upload across backend, Kafka and ai-service |
 | **PaddleOCR** | build with `WITH_PADDLE=1`, run with `OCR_ENGINE=paddle` (`PADDLE_LANG=de`, `en`, `ru` ...) | second OCR engine; measured against Tesseract in [docs/OCR-COMPARISON.md](docs/OCR-COMPARISON.md) (same accuracy on the sample scans, much slower on CPU) |
 
 ### Webhooks: verifying a request
@@ -163,7 +163,7 @@ Everything is an environment variable; see [`.env.example`](.env.example) (secre
 | `MAIL_INGEST_ENABLED`, `MAIL_INGEST_ADDRESS`, `MAIL_IMAP_*`, `MAIL_REQUIRE_AUTH_RESULTS` | e-mail ingestion |
 | `OIDC_ENABLED`, `OIDC_ISSUER_URI`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_PROVISION_ORG_ID`, ... | single sign-on |
 | `WEBHOOKS_ALLOW_PRIVATE_TARGETS` | allow webhooks to private addresses (SSRF guard, default false) |
-| `TRACING_ENABLED`, `JAEGER_UI_PORT` | OpenTelemetry tracing |
+| `TRACING_ENABLED`, `OTEL_EXPORTER_OTLP_ENDPOINT` | OpenTelemetry tracing |
 | `OCR_ENGINE`, `PADDLE_LANG`, build arg `WITH_PADDLE` | OCR engine (`tesseract` or `paddle`) |
 
 Behind TLS, also set `APP_COOKIES_SECURE=true` for the backend so the refresh cookie gets the `Secure` flag.
@@ -177,10 +177,12 @@ and paging, detail, correct, approve, reject, retry, file, OCR text, audit), `an
 ## Development
 
 ```bash
-# stack with ports exposed on 127.0.0.1 (backend :18080, ai-service :18000)
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+docker compose up --build                       # the whole stack on http://localhost (real OpenAI-backed ai-service)
 
-cd frontend && npm ci && npm run dev          # http://localhost:3000, proxies /api to the backend
+# frontend development with hot reload; needs the backend reachable on the host, which the browser-test overlay publishes
+# on 127.0.0.1:18080 (it swaps the AI service for the offline test double: no key, no cost)
+docker compose -f docker-compose.yml -f docker-compose.e2e.yml up --build -d
+cd frontend && npm ci && BACKEND_INTERNAL_URL=http://127.0.0.1:18080 npm run dev     # http://localhost:3000
 ```
 
 ### Tests

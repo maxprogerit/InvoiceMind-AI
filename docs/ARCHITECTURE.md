@@ -37,7 +37,7 @@ flowchart LR
   BE -- "ECB rates" --> ECB((Frankfurter API))
   MAIL((IMAP mailbox)) -- "poll" --> BE
   IDP((OIDC provider)) <-- "SSO" --> BE
-  BE -. "OTLP spans" .-> JAEGER[(Jaeger<br/>optional)]
+  BE -. "OTLP spans" .-> OTEL[(OTLP collector<br/>optional)]
 
   subgraph AI[ai-service · FastAPI · Python 3.11]
     OCR[OCR<br/>text layer → Tesseract]
