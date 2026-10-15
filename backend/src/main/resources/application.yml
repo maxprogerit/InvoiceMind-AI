@@ -24,23 +24,6 @@ spring:
       hibernate.jdbc.time_zone: UTC
   flyway:
     enabled: true
-  data:
-    redis:
-      host: ${SPRING_DATA_REDIS_HOST:localhost}
-      port: ${SPRING_DATA_REDIS_PORT:6379}
-  kafka:
-    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
-    producer:
-      acks: all
-      properties:
-        enable.idempotence: true
-    consumer:
-      auto-offset-reset: earliest
-      enable-auto-commit: false
-    template:
-      observation-enabled: true   # the trace context travels in the Kafka record headers
-    listener:
-      observation-enabled: true
   servlet:
     multipart:
       max-file-size: 15MB
@@ -66,16 +49,11 @@ management:
     health:
       probes:
         enabled: true
-  health:
-    redis:
-      enabled: true
 
 logging:
   structured:
     format:
       console: ${LOG_FORMAT:}
-  level:
-    org.apache.kafka: WARN
 
 springdoc:
   swagger-ui:
@@ -113,7 +91,6 @@ app:
     circuit-failure-rate: 50
     circuit-open-seconds: 30
   processing:
-    topic: invoice.uploaded
     stuck-after-minutes: 10
     requeue-uploaded-after-minutes: 2
   rate-limit:

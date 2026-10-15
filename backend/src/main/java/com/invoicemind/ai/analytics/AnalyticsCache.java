@@ -1,60 +1,51 @@
 package com.invoicemind.ai.analytics;
 
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataAccessException;
-import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
 /**
- * Redis cache for analytics aggregations. Keys embed a per-organisation version counter; bumping the
- * counter on any invoice change invalidates every cached result of that organisation at once.
- * Redis failures degrade to direct computation.
+ * In-memory cache for analytics aggregations. Keys embed a per-organisation version counter; bumping the counter on any
+ * invoice change invalidates every cached result of that organisation at once. Entries also expire after five minutes
+ * and the map is kept small.
  */
-@Slf4j
 @Component
-@RequiredArgsConstructor
 public class AnalyticsCache {
   private static final Duration TTL = Duration.ofMinutes(5);
+  private static final int MAX_ENTRIES = 2_000;
 
-  private final StringRedisTemplate redis;
-  private final ObjectMapper mapper;
+  private record Entry(Object value, Instant expiresAt) {}
 
+  private final ConcurrentHashMap<String, Entry> entries = new ConcurrentHashMap<>();
+  private final ConcurrentHashMap<UUID, AtomicLong> versions = new ConcurrentHashMap<>();
+
+  @SuppressWarnings("unchecked")
   public <T> T get(UUID org, UUID scopeUser, String name, TypeReference<T> type, Supplier<T> compute) {
-    String key = null;
-    try {
-      key = "analytics:" + org + ":" + version(org) + ":" + (scopeUser == null ? "all" : scopeUser) + ":" + name;
-      String hit = redis.opsForValue().get(key);
-      if (hit != null) return mapper.readValue(hit, type);
-    } catch (DataAccessException | java.io.IOException e) {
-      log.debug("Analytics cache read skipped: {}", e.getMessage());
-    }
+    String key = org + ":" + version(org) + ":" + (scopeUser == null ? "all" : scopeUser) + ":" + name;
+    Entry hit = entries.get(key);
+    if (hit != null && hit.expiresAt().isAfter(Instant.now())) return (T) hit.value();
+
     T value = compute.get();
-    if (key != null) {
-      try {
-        redis.opsForValue().set(key, mapper.writeValueAsString(value), TTL);
-      } catch (DataAccessException | java.io.IOException e) {
-        log.debug("Analytics cache write skipped: {}", e.getMessage());
-      }
+    if (entries.size() >= MAX_ENTRIES) {
+      Instant now = Instant.now();
+      entries.values().removeIf(e -> !e.expiresAt().isAfter(now));
+      if (entries.size() >= MAX_ENTRIES) entries.clear();
     }
+    entries.put(key, new Entry(value, Instant.now().plus(TTL)));
     return value;
   }
 
   public void invalidate(UUID org) {
-    try {
-      redis.opsForValue().increment("analytics:ver:" + org);
-    } catch (DataAccessException e) {
-      log.debug("Analytics cache invalidation skipped: {}", e.getMessage());
-    }
+    versions.computeIfAbsent(org, k -> new AtomicLong()).incrementAndGet();
   }
 
-  private String version(UUID org) {
-    String v = redis.opsForValue().get("analytics:ver:" + org);
-    return v == null ? "0" : v;
+  private long version(UUID org) {
+    AtomicLong v = versions.get(org);
+    return v == null ? 0 : v.get();
   }
 }

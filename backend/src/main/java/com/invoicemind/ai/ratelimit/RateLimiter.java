@@ -1,34 +1,30 @@
 package com.invoicemind.ai.ratelimit;
 
-import java.time.Duration;
 import java.time.Instant;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.dao.DataAccessException;
-import org.springframework.data.redis.core.StringRedisTemplate;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.springframework.stereotype.Service;
 
-/** Fixed-window counter in Redis (INCR + EXPIRE). Fails open if Redis is down so an outage cannot lock users out. */
-@Slf4j
+/**
+ * Fixed-window counter per bucket and key, kept in memory (one backend process). Counters of past minutes are dropped
+ * as time moves on, so memory stays bounded by the traffic of one minute.
+ */
 @Service
-@RequiredArgsConstructor
 public class RateLimiter {
-  private final StringRedisTemplate redis;
+  private final ConcurrentHashMap<String, AtomicInteger> counters = new ConcurrentHashMap<>();
+  private volatile long currentMinute;
 
   public void check(String bucket, String key, int limitPerMinute) {
-    long minute = Instant.now().getEpochSecond() / 60;
-    String redisKey = "rl:" + bucket + ":" + key + ":" + minute;
-    try {
-      Long count = redis.opsForValue().increment(redisKey);
-      if (count != null && count == 1L) {
-        redis.expire(redisKey, Duration.ofSeconds(90));
-      }
-      if (count != null && count > limitPerMinute) {
-        int retryAfter = (int) (60 - (Instant.now().getEpochSecond() % 60));
-        throw new RateLimitedException(Math.max(retryAfter, 1));
-      }
-    } catch (DataAccessException e) {
-      log.warn("Rate limiter unavailable, allowing request: {}", e.getClass().getSimpleName());
+    long now = Instant.now().getEpochSecond();
+    long minute = now / 60;
+    if (minute != currentMinute) {
+      currentMinute = minute;
+      String suffix = ":" + minute;
+      counters.keySet().removeIf(k -> !k.endsWith(suffix));
+    }
+    int count = counters.computeIfAbsent(bucket + ":" + key + ":" + minute, k -> new AtomicInteger()).incrementAndGet();
+    if (count > limitPerMinute) {
+      throw new RateLimitedException((int) Math.max(60 - (now % 60), 1));
     }
   }
 }

@@ -87,7 +87,7 @@ public class ProcessingService {
     this.tx = new TransactionTemplate(txManager);
   }
 
-  /** Idempotent: a duplicate Kafka delivery finds the invoice already claimed and returns. */
+  /** Idempotent: a second attempt on the same invoice finds it already claimed and returns. */
   public void process(UUID invoiceId) {
     Integer claimed = tx.execute(s -> invoices.claimForProcessing(invoiceId, Instant.now(clock)));
     if (claimed == null || claimed == 0) {
@@ -230,10 +230,6 @@ public class ProcessingService {
       webhooks.invoiceEvent("invoice.failed", inv);
       status.publish(inv);
     }));
-  }
-
-  public void markFailedFromDeadLetter(UUID id) {
-    fail(id, "Processing was aborted after repeated infrastructure errors; please retry", "dead_letter");
   }
 
   // ------------------------------------------------------------- helpers

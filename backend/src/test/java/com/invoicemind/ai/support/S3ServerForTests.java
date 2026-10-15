@@ -27,8 +27,10 @@ public final class S3ServerForTests {
           .withEnv("S3_SECRET_KEY", SECRET_KEY)
           .withCreateContainerCmdModifier(cmd -> cmd.withEntrypoint("sh", "-c", START))
           .withExposedPorts(8333, 9333)
-          // ready once the master can hand out a writable volume, i.e. the first PUT will succeed
-          .waitingFor(Wait.forHttp("/dir/assign").forPort(9333).forResponsePredicate(body -> body.contains("\"fid\"")));
+          // ready once the master can hand out a writable volume (the first PUT will succeed) AND the S3 gateway answers
+          .waitingFor(new org.testcontainers.containers.wait.strategy.WaitAllStrategy()
+              .withStrategy(Wait.forHttp("/dir/assign").forPort(9333).forResponsePredicate(body -> body.contains("\"fid\"")))
+              .withStrategy(Wait.forHttp("/status").forPort(8333)));
       c.start(); // only published once started, so a failed start is reported again instead of half-initialised
       container = c;
     }

@@ -33,7 +33,7 @@ public record AppProperties(
                    int extractTimeoutMs, int retryAttempts, long retryInitialBackoffMs,
                    int circuitFailureRate, int circuitOpenSeconds) {}
 
-  public record Processing(String topic, int stuckAfterMinutes, int requeueUploadedAfterMinutes) {}
+  public record Processing(int stuckAfterMinutes, int requeueUploadedAfterMinutes) {}
 
   public record RateLimit(int authPerMinute, int refreshPerMinute, int uploadPerMinute) {}
 
