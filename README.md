@@ -78,7 +78,7 @@ What "verified" means for each one is in [docs/STATUS.md](docs/STATUS.md).
 | **Single sign-on** | `OIDC_ENABLED=true` + issuer, client id/secret; register `<app url>/api/v1/auth/oidc/callback` at the provider | "Continue with …" button on the login page |
 | **S3 storage** | `STORAGE_TYPE=s3`; `docker compose --profile s3 up` starts SeaweedFS as the bundled store | invoice files in a bucket instead of a volume |
 | **Tracing** | `TRACING_ENABLED=true`; `docker compose --profile tracing up` adds Jaeger on `127.0.0.1:16686` | one trace per upload across backend, Kafka and ai-service |
-| **PaddleOCR** | build with `WITH_PADDLE=1`, run with `OCR_ENGINE=paddle` (`PADDLE_LANG=latin` or `cyrillic`) | second OCR engine; **not yet verified end to end** (see docs/STATUS.md) |
+| **PaddleOCR** | build with `WITH_PADDLE=1`, run with `OCR_ENGINE=paddle` (`PADDLE_LANG=de`, `en`, `ru` ...) | second OCR engine; measured against Tesseract in [docs/OCR-COMPARISON.md](docs/OCR-COMPARISON.md) (same accuracy on the sample scans, much slower on CPU) |
 
 ### Webhooks: verifying a request
 
@@ -217,7 +217,7 @@ neutralisation, audit trail. The full model is in [docs/ARCHITECTURE.md](docs/AR
 - Webhook delivery is at-least-once, so receivers must deduplicate on the event id. The signing secret is stored in the database in clear (it must be, to sign); protect database access accordingly.
 - E-mail ingestion polls one mailbox every minute (no IMAP IDLE) and trusts the `From` address unless `MAIL_REQUIRE_AUTH_RESULTS=true`.
 - Single sign-on maps no roles from provider groups, and sign-out does not end the session at the provider.
-- PaddleOCR handles one script family per model (`latin` or `cyrillic`), unlike Tesseract's combined `eng+deu+rus`; the image is much larger with it.
+- PaddleOCR uses one model per language (`PADDLE_LANG=de`, `ru` ...), unlike Tesseract's combined `eng+deu+rus`; the image is much larger with it.
 - Kafka and Redis run as single nodes.
 - Tesseract languages are English, German and Russian; other scripts need more language packs in the `ai-service` image.
 - The PDF active-content scan is a keyword check and cannot look inside compressed streams; PDFs are only ever rendered by the user's own browser.
@@ -237,6 +237,6 @@ samples/      synthetic invoices, ground truth, generator
 eval/         accuracy evaluation harness
 e2e/          offline AI test double for browser tests
 docker/       Nginx configuration
-docs/         ARCHITECTURE, STATUS, EVALUATION (generated), AUDIT-PHASE0 (history)
+docs/         ARCHITECTURE, STATUS, EVALUATION and OCR-COMPARISON (generated), AUDIT-PHASE0 (history)
 scripts/      screenshot capture
 ```

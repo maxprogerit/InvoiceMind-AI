@@ -64,7 +64,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--samples", default="/samples")
     ap.add_argument("--out", default="/out")
-    ap.add_argument("--paddle-lang", default="latin")
+    ap.add_argument("--paddle-lang", default="de")
     args = ap.parse_args()
 
     settings = get_settings()
@@ -76,7 +76,6 @@ def main() -> int:
         gt = json.loads(tf.read_text(encoding="utf-8"))
         if gt["meta"]["kind"] == "scan":
             scans.append((tf.stem, Path(args.samples) / "invoices" / gt["meta"]["file"], gt["expected"], gt["meta"]))
-
     fields = ["invoice_number", "vendor", "subtotal", "tax", "total", "items"]
     rows = []
     totals = {n: {f: 0.0 for f in fields} | {"confidence": 0.0, "seconds": 0.0, "perfect": 0} for n in engines}
@@ -136,7 +135,7 @@ def main() -> int:
         "",
         "- Small, synthetic and clean-ish: the 16 samples were generated for this repository, so treat the numbers as "
         "indicative, not as a benchmark of either engine on real-world scans.",
-        "- PaddleOCR here uses the `latin` recognition model (English and German); Russian needs `PADDLE_LANG=cyrillic`, "
+        "- PaddleOCR here uses the `de` model (German, which also reads English); Russian needs `PADDLE_LANG=ru`, "
         "and the two models cannot be mixed in one pass, whereas Tesseract handles `eng+deu+rus` together.",
         "- Which engine to run is a deployment choice (`OCR_ENGINE`), the image has to be built with `WITH_PADDLE=1`.",
     ]

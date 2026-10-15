@@ -68,7 +68,7 @@ def test_unknown_engines_are_refused():
 def engine():
     from app.ocr.paddle_engine import PaddleEngine
 
-    return PaddleEngine("latin")
+    return PaddleEngine("de")
 
 
 def invoice_image() -> Image.Image:
@@ -104,7 +104,7 @@ def test_paddle_is_usable_through_the_normal_ocr_service(monkeypatch):
     from app.config import Settings
     from app.ocr.service import OcrService
 
-    settings = Settings(ai_service_token="test-token", ocr_engine="paddle", paddle_lang="latin")
+    settings = Settings(ai_service_token="test-token", ocr_engine="paddle", paddle_lang="de")
     service = OcrService(build_engine(settings), settings)
     buf = io.BytesIO()
     invoice_image().save(buf, "PNG")
@@ -135,4 +135,4 @@ def test_the_http_endpoint_works_with_paddle(client, monkeypatch):
 
 
 def Settings_with(settings):
-    return settings.model_copy(update={"ocr_engine": "paddle", "paddle_lang": "latin"})
+    return settings.model_copy(update={"ocr_engine": "paddle", "paddle_lang": "de"})

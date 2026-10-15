@@ -25,7 +25,7 @@ class Settings(BaseSettings):
 
     # OCR
     ocr_engine: str = "tesseract"  # tesseract | paddle (the latter needs the image built with WITH_PADDLE=1)
-    paddle_lang: str = "latin"  # PaddleOCR recognition model: latin (English, German, ...), cyrillic (Russian), en, ch ...
+    paddle_lang: str = "de"  # PaddleOCR language code: de (German, also reads English), en, ru (Russian), ... one model per language
     ocr_langs: str = "eng+deu+rus"
     ocr_dpi: int = 250
     min_text_chars_per_page: int = 40  # below this a PDF page is treated as scanned

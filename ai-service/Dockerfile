@@ -32,7 +32,7 @@ COPY app ./app
 USER app
 # Fetch the PaddleOCR models while building, so the container needs no internet at run time.
 ARG WITH_PADDLE=0
-ARG PADDLE_LANG=latin
+ARG PADDLE_LANG=de
 ENV PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=True
 RUN if [ "$WITH_PADDLE" = "1" ]; then python -m app.ocr.paddle_engine "$PADDLE_LANG"; fi
 EXPOSE 8000

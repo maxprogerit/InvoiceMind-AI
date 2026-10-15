@@ -35,6 +35,16 @@ jobs:
       - name: Run pytest
         run: docker run --rm invoicemind-ai-test pytest -q -rs
 
+  ai-service-paddle:
+    name: ai-service with PaddleOCR (pytest, optional engine)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the test image with PaddleOCR
+        run: docker build --build-arg WITH_PADDLE=1 --target test -t invoicemind-ai-paddle-test ai-service
+      - name: Run the PaddleOCR tests
+        run: docker run --rm invoicemind-ai-paddle-test pytest -q -rs tests/test_paddle.py
+
   frontend:
     name: Frontend (lint, typecheck, unit tests, build)
     runs-on: ubuntu-latest

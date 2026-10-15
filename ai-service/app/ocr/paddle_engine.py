@@ -39,7 +39,7 @@ def group_lines(boxes: list[tuple[float, float, float, float, str]]) -> list[str
 class PaddleEngine:
     name = "paddleocr"
 
-    def __init__(self, lang: str = "latin"):
+    def __init__(self, lang: str = "de"):
         # imported here so the service runs without the (large) package when Tesseract is the engine
         from paddleocr import PaddleOCR
 
@@ -78,8 +78,8 @@ class PaddleEngine:
         return EnginePage(text="\n".join(group_lines(boxes)), confidence=round(confidence, 4))
 
 
-if __name__ == "__main__":  # `python -m app.ocr.paddle_engine latin`: downloads the models at image build time
+if __name__ == "__main__":  # `python -m app.ocr.paddle_engine de`: downloads the models at image build time
     import sys
 
-    PaddleEngine(sys.argv[1] if len(sys.argv) > 1 else "latin")
+    PaddleEngine(sys.argv[1] if len(sys.argv) > 1 else "de")
     print("PaddleOCR models are ready")
