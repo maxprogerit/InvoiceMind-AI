@@ -1,8 +1,8 @@
 name: invoicemind
 
 # Fill in .env (cp .env.example .env), then:  docker compose up --build
-# Only Nginx is published to the network (HTTP_PORT). Everything else is internal,
-# except the Postgres port which binds to 127.0.0.1 for local debugging.
+# Four containers: postgres, ai-service, backend, frontend. Only the frontend is published (HTTP_PORT);
+# it proxies /api and the WebSocket to the backend. Postgres binds to 127.0.0.1 for local debugging.
 
 x-restart: &restart
   restart: unless-stopped
@@ -24,44 +24,6 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
-
-  redis:
-    <<: *restart
-    image: redis:7-alpine
-    # Cache and rate-limit counters only; losing them is harmless, so no persistence.
-    command: ["redis-server", "--save", "", "--appendonly", "no", "--loglevel", "warning"]
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-
-  kafka:
-    <<: *restart
-    image: apache/kafka:3.8.0
-    environment:
-      KAFKA_NODE_ID: 1
-      KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
-      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
-      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
-      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false" # topics are declared by the backend
-      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
-      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
-      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
-      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qg"
-    volumes:
-      - kafka_data:/var/lib/kafka/data
-    healthcheck:
-      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1"]
-      interval: 10s
-      timeout: 10s
-      retries: 20
-      start_period: 15s
 
   ai-service:
     <<: *restart
@@ -93,8 +55,6 @@ services:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-invoicemind}
       SPRING_DATASOURCE_USERNAME: ${POSTGRES_USER:-invoicemind}
       SPRING_DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
-      SPRING_DATA_REDIS_HOST: redis
-      SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
       APP_JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env (min 32 characters)}
       APP_AI_BASE_URL: http://ai-service:8000
       APP_AI_TOKEN: ${AI_SERVICE_TOKEN}
@@ -144,61 +104,19 @@ services:
       - storage_data:/data/storage
     depends_on:
       postgres: { condition: service_healthy }
-      redis: { condition: service_healthy }
-      kafka: { condition: service_healthy }
       ai-service: { condition: service_healthy }
-
-  # Accuracy evaluation on samples/ with the real model:  docker compose --profile eval run --rm eval
-  eval:
-    profiles: ["eval"]
-    build:
-      context: ./ai-service
-      target: runtime
-    working_dir: /srv
-    environment:
-      AI_SERVICE_TOKEN: ${AI_SERVICE_TOKEN:?Set AI_SERVICE_TOKEN in .env}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.5}
-      OPENAI_REASONING_EFFORT: ${OPENAI_REASONING_EFFORT:-}
-      OPENAI_PRICE_INPUT_PER_1M: ${OPENAI_PRICE_INPUT_PER_1M:-0}
-      OPENAI_PRICE_OUTPUT_PER_1M: ${OPENAI_PRICE_OUTPUT_PER_1M:-0}
-      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
-      OPENAI_EMBEDDING_PRICE_PER_1M: ${OPENAI_EMBEDDING_PRICE_PER_1M:-0}
-      EVAL_EXTRACTOR: ${EVAL_EXTRACTOR:-}
-      PYTHONPATH: /srv
-    volumes:
-      - ./eval:/eval
-      - ./samples:/samples:ro
-      - ./docs:/out
-      - ./e2e/fake-ai:/e2e:ro
-    command: ["python", "/eval/run_eval.py", "--samples", "/samples", "--out", "/out", "--results", "/eval/results"]
 
   frontend:
     <<: *restart
     build:
       context: ./frontend
+    ports:
+      - "${HTTP_PORT:-80}:3000"   # the only published port; the frontend server also proxies /api and /ws to the backend
     environment:
       BACKEND_INTERNAL_URL: http://backend:8080
     depends_on:
       backend: { condition: service_healthy }
 
-  nginx:
-    <<: *restart
-    image: nginx:1.27-alpine
-    ports:
-      - "${HTTP_PORT:-80}:80"
-    volumes:
-      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-    depends_on:
-      frontend: { condition: service_healthy }
-      backend: { condition: service_healthy }
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/nginx-health >/dev/null 2>&1 || exit 1"]
-      interval: 10s
-      timeout: 3s
-      retries: 10
-
 volumes:
   postgres_data:
-  kafka_data:
   storage_data:
