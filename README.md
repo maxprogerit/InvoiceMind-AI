@@ -179,13 +179,13 @@ cd frontend && npm ci && npm run dev          # http://localhost:3000, proxies /
 ### Tests
 
 ```bash
-cd backend && mvn verify                                         # 85 tests; needs Docker (Testcontainers)
-docker build --target test -t im-ai-test ai-service && docker run --rm im-ai-test   # 32 tests, real Tesseract/Poppler
-cd frontend && npm run lint && npm run typecheck && npm test     # 23 unit tests
+cd backend && mvn verify                                         # 150 tests; needs Docker (Testcontainers)
+docker build --target test -t im-ai-test ai-service && docker run --rm im-ai-test   # 45 tests, real Tesseract/Poppler (add --build-arg WITH_PADDLE=1 for the PaddleOCR tests)
+cd frontend && npm run lint && npm run typecheck && npm test     # 28 unit tests
 
 # browser end-to-end on the full stack, with an offline AI test double (no API key, no cost)
 docker compose -f docker-compose.yml -f docker-compose.e2e.yml up --build -d --wait
-cd frontend && npx playwright install chromium && E2E_BASE_URL=http://localhost npx playwright test   # 8 scenarios
+cd frontend && npx playwright install chromium && E2E_BASE_URL=http://localhost npx playwright test   # 11 scenarios
 ```
 
 CI (`.github/workflows/ci.yml`) runs all of the above plus a check that the generated TypeScript API types match the backend.

@@ -13,9 +13,9 @@ and tested against fakes, but never run against the real external service in thi
 
 | Check | Result |
 |---|---|
-| Fresh `git clone` → `cp .env.example .env` → `docker compose up --build --wait` | 7 services healthy, nothing edited by hand (done before the optional-feature round; the stack was rebuilt and started from the current sources many times since, but the clean-clone check itself was not repeated) |
-| Backend `mvn verify` | **141 tests, 0 failures** (unit + Testcontainers integration on real PostgreSQL/pgvector, Kafka, Redis; plus a real IMAP server, OIDC server and S3-compatible store) |
-| ai-service `pytest` in Docker with real Tesseract + Poppler | **39 tests, 0 failures** (`tests/test_paddle.py` adds PaddleOCR cases, see below) |
+| Fresh `git clone` → `cp .env.example .env` → `docker compose up --build --wait` | 7 services healthy, nothing edited by hand (done before the optional-feature round). After it, the stack was rebuilt from scratch (`down -v`, `up --build --wait`) from the current working tree: 7 healthy, 11 browser scenarios pass; a fresh `git clone` was not repeated |
+| Backend `mvn verify` | **150 tests, 0 failures** (unit + Testcontainers integration on real PostgreSQL/pgvector, Kafka, Redis; plus a real IMAP server, OIDC server and S3-compatible store) |
+| ai-service `pytest` in Docker with real Tesseract + Poppler | **45 tests, 0 failures** (47 in the image built with PaddleOCR, where the real-engine tests of `tests/test_paddle.py` run instead of being skipped) |
 | Frontend `eslint`, `tsc`, `vitest` | clean, **28 tests** |
 | Playwright against the full stack through Nginx | **11 scenarios pass** (register → upload → live status → correct → approve → analytics → XLSX → knowledge → credit note → settings and exchange rates → webhook → roles → session expiry) |
 | Real OCR through the whole pipeline | text PDF read from its text layer (confidence 1.0); PNG scan read by Tesseract (0.93) |
