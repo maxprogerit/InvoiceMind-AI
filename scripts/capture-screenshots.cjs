@@ -54,7 +54,8 @@ async function api(token, method, url, body) {
     await api(token, "POST", "/api/v1/knowledge/documents", { title: "Accounts payable policy", content: RULES });
   }
 
-  const browser = await chromium.launch();
+  // the new headless mode ships the PDF viewer (the headless shell shows PDFs as blank); --lang keeps the browser UI in English
+  const browser = await chromium.launch({ channel: "chromium", args: ["--lang=en-US"] });
   const page = await (await browser.newContext({ viewport: { width: 1440, height: 900 }, locale: "en-US" })).newPage();
   const shot = (name, opts = {}) => page.screenshot({ path: path.join(OUT, `${name}.png`), ...opts });
 

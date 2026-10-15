@@ -6,12 +6,19 @@ arithmetic with deterministic rules, lets a human correct and approve it, and gi
 It is built so that **the model is never trusted**: every value it returns must appear in the document, is
 re-validated by plain Java code, and anything doubtful goes to a person.
 
-> **Honest status.** Everything below runs and is tested, with two kinds of exception. (1) The extraction and the
-> knowledge-base answers call the OpenAI API, and in the environment this was built in there was no API key, so those calls
-> are verified against fakes only; the accuracy numbers in `docs/EVALUATION.md` appear after the first real run
-> (`docker compose --profile eval run --rm eval`). (2) The integrations (single sign-on, e-mail ingestion, S3 storage) were
-> verified against real *protocol implementations* (an OIDC server, an IMAP server, an S3-compatible store), not against
-> Entra ID, Gmail or AWS themselves. The full, itemised picture is in [docs/STATUS.md](docs/STATUS.md).
+> **Honest status.** Everything below runs and is tested. The extraction and the knowledge base were run against the real
+> OpenAI API (`gpt-5.5`): 18 of 18 synthetic documents were extracted completely correctly (see
+> [docs/EVALUATION.md](docs/EVALUATION.md)), but the set is small and synthetic, so read that as a smoke test of the whole
+> pipeline, not as a production accuracy figure. The integrations (single sign-on, e-mail ingestion, S3 storage) were verified
+> against real *protocol implementations* (an OIDC server, an IMAP server, an S3-compatible store), not against Entra ID, Gmail
+> or AWS themselves. The full, itemised picture is in [docs/STATUS.md](docs/STATUS.md).
+
+![The invoice list: extracted invoices, a credit note with a negative total, and the document next to its data](docs/screenshots/invoices.png)
+
+*A real run on the sample set with `gpt-5.5`. More screens: [review](docs/screenshots/review.png) (validation findings, document
+beside editable fields), [analysis](docs/screenshots/analytics.png), [approvals](docs/screenshots/approvals.png),
+[knowledge](docs/screenshots/knowledge.png), [upload](docs/screenshots/upload.png). The "AI cost" tile uses the placeholder
+prices from `.env.example`; set `OPENAI_PRICE_*` to the real ones.*
 
 ## What it does
 
@@ -211,7 +218,7 @@ neutralisation, audit trail. The full model is in [docs/ARCHITECTURE.md](docs/AR
 
 ## Known limitations
 
-- **Real-LLM behaviour is not yet measured** (see the status note at the top); the evaluation set is synthetic and small, so its numbers will be indicative, not an SLA.
+- The evaluation set is synthetic and small (18 documents, one model run): 18/18 on it is a smoke test, not an SLA. Real invoices are messier.
 - Access tokens live 15 minutes: disabling a user or changing a role takes effect for already-issued tokens at their expiry (refresh is blocked immediately). An open WebSocket stays authorised until it reconnects.
 - Zero-value invoices are rejected by validation. Currency conversion uses one rate per invoice date (no hedging, no month-end revaluation); the ECB does not publish every currency, those need manual rates.
 - Webhook delivery is at-least-once, so receivers must deduplicate on the event id. The signing secret is stored in the database in clear (it must be, to sign); protect database access accordingly.
