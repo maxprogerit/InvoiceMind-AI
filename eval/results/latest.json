@@ -1,0 +1,1074 @@
+{
+  "generated_at": "2026-10-15T16:29:39+00:00",
+  "model": "gpt-5.5",
+  "documents": 18,
+  "exact_match": 18,
+  "per_field": {
+    "document_type": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "tp": 18,
+      "fp": 0,
+      "fn": 0
+    },
+    "vendor": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "tp": 18,
+      "fp": 0,
+      "fn": 0
+    },
+    "invoice_number": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "tp": 18,
+      "fp": 0,
+      "fn": 0
+    },
+    "invoice_date": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "tp": 18,
+      "fp": 0,
+      "fn": 0
+    },
+    "due_date": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "tp": 15,
+      "tn": 3,
+      "fp": 0,
+      "fn": 0
+    },
+    "currency": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "tp": 18,
+      "fp": 0,
+      "fn": 0
+    },
+    "subtotal": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "tp": 18,
+      "fp": 0,
+      "fn": 0
+    },
+    "tax": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "tp": 18,
+      "fp": 0,
+      "fn": 0
+    },
+    "total": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "tp": 18,
+      "fp": 0,
+      "fn": 0
+    }
+  },
+  "line_items": {
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "tp": 70,
+    "fp": 0,
+    "fn": 0
+  },
+  "macro_f1_scalars": 1.0,
+  "wrong_documents": 0,
+  "wrong_documents_flagged_for_review": 0,
+  "correct_documents_flagged_unnecessarily": 2,
+  "total_cost_usd": 0.004339000000000001,
+  "documents_detail": [
+    {
+      "id": "01-classic-eur",
+      "file": "01-classic-eur.pdf",
+      "kind": "text-pdf",
+      "adversarial": false,
+      "layout": "classic",
+      "exact": true,
+      "wrong_fields": [],
+      "items": {
+        "tp": 3,
+        "fp": 0,
+        "fn": 0
+      },
+      "needs_review": false,
+      "review_reasons": [],
+      "injection_suspected": false,
+      "ocr": {
+        "methods": [
+          "text-layer"
+        ],
+        "confidence": 1.0,
+        "pages": 1
+      },
+      "usage": {
+        "model": "gpt-5.5",
+        "input_tokens": 1231,
+        "output_tokens": 194,
+        "cost_usd": 0.00022,
+        "latency_ms": 4615
+      },
+      "seconds": 4.66,
+      "predicted": {
+        "document_type": "invoice",
+        "vendor": "Nordlicht Software GmbH",
+        "invoice_number": "NL-2026-0412",
+        "invoice_date": "2026-03-14",
+        "due_date": "2026-04-13",
+        "currency": "EUR",
+        "subtotal": 1530.0,
+        "tax": 290.7,
+        "total": 1820.7
+      },
+      "expected": {
+        "document_type": "invoice",
+        "vendor": "Nordlicht Software GmbH",
+        "invoice_number": "NL-2026-0412",
+        "invoice_date": "2026-03-14",
+        "due_date": "2026-04-13",
+        "currency": "EUR",
+        "subtotal": 1530.0,
+        "tax": 290.7,
+        "total": 1820.7
+      }
+    },
+    {
+      "id": "02-modern-usd",
+      "file": "02-modern-usd.pdf",
+      "kind": "text-pdf",
+      "adversarial": false,
+      "layout": "modern",
+      "exact": true,
+      "wrong_fields": [],
+      "items": {
+        "tp": 3,
+        "fp": 0,
+        "fn": 0
+      },
+      "needs_review": false,
+      "review_reasons": [],
+      "injection_suspected": false,
+      "ocr": {
+        "methods": [
+          "text-layer"
+        ],
+        "confidence": 1.0,
+        "pages": 1
+      },
+      "usage": {
+        "model": "gpt-5.5",
+        "input_tokens": 1226,
+        "output_tokens": 223,
+        "cost_usd": 0.000234,
+        "latency_ms": 3388
+      },
+      "seconds": 3.42,
+      "predicted": {
+        "document_type": "invoice",
+        "vendor": "Brightwave Analytics Inc.",
+        "invoice_number": "BW-88213",
+        "invoice_date": "2026-01-28",
+        "due_date": "2026-02-12",
+        "currency": "USD",
+        "subtotal": 7470.0,
+        "tax": 653.63,
+        "total": 8123.63
+      },
+      "expected": {
+        "document_type": "invoice",
+        "vendor": "Brightwave Analytics Inc.",
+        "invoice_number": "BW-88213",
+        "invoice_date": "2026-01-28",
+        "due_date": "2026-02-12",
+        "currency": "USD",
+        "subtotal": 7470.0,
+        "tax": 653.63,
+        "total": 8123.63
+      }
+    },
+    {
+      "id": "03-german-eur",
+      "file": "03-german-eur.pdf",
+      "kind": "text-pdf",
+      "adversarial": false,
+      "layout": "german",
+      "exact": true,
+      "wrong_fields": [],
+      "items": {
+        "tp": 3,
+        "fp": 0,
+        "fn": 0
+      },
+      "needs_review": false,
+      "review_reasons": [],
+      "injection_suspected": false,
+      "ocr": {
+        "methods": [
+          "text-layer"
+        ],
+        "confidence": 1.0,
+        "pages": 1
+      },
+      "usage": {
+        "model": "gpt-5.5",
+        "input_tokens": 1242,
+        "output_tokens": 208,
+        "cost_usd": 0.000228,
+        "latency_ms": 4040
+      },
+      "seconds": 4.06,
+      "predicted": {
+        "document_type": "invoice",
+        "vendor": "Bäckerei & Konditorei Schneider KG",
+        "invoice_number": "RE-2026-00917",
+        "invoice_date": "2026-02-03",
+        "due_date": "2026-02-17",
+        "currency": "EUR",
+        "subtotal": 398.0,
+        "tax": 27.86,
+        "total": 425.86
+      },
+      "expected": {
+        "document_type": "invoice",
+        "vendor": "Bäckerei & Konditorei Schneider KG",
+        "invoice_number": "RE-2026-00917",
+        "invoice_date": "2026-02-03",
+        "due_date": "2026-02-17",
+        "currency": "EUR",
+        "subtotal": 398.0,
+        "tax": 27.86,
+        "total": 425.86
+      }
+    },
+    {
+      "id": "04-classic-gbp",
+      "file": "04-classic-gbp.pdf",
+      "kind": "text-pdf",
+      "adversarial": false,
+      "layout": "classic",
+      "exact": true,
+      "wrong_fields": [],
+      "items": {
+        "tp": 2,
+        "fp": 0,
+        "fn": 0
+      },
+      "needs_review": false,
+      "review_reasons": [],
+      "injection_suspected": false,
+      "ocr": {
+        "methods": [
+          "text-layer"
+        ],
+        "confidence": 1.0,
+        "pages": 1
+      },
+      "usage": {
+        "model": "gpt-5.5",
+        "input_tokens": 1214,
+        "output_tokens": 172,
+        "cost_usd": 0.000207,
+        "latency_ms": 5812
+      },
+      "seconds": 5.84,
+      "predicted": {
+        "document_type": "invoice",
+        "vendor": "Harrow & Finch Ltd",
+        "invoice_number": "HF/26/1093",
+        "invoice_date": "2026-04-09",
+        "due_date": "2026-05-07",
+        "currency": "GBP",
+        "subtotal": 1172.0,
+        "tax": 234.4,
+        "total": 1406.4
+      },
+      "expected": {
+        "document_type": "invoice",
+        "vendor": "Harrow & Finch Ltd",
+        "invoice_number": "HF/26/1093",
+        "invoice_date": "2026-04-09",
+        "due_date": "2026-05-07",
+        "currency": "GBP",
+        "subtotal": 1172.0,
+        "tax": 234.4,
+        "total": 1406.4
+      }
+    },
+    {
+      "id": "05-modern-chf",
+      "file": "05-modern-chf.pdf",
+      "kind": "text-pdf",
+      "adversarial": false,
+      "layout": "modern",
+      "exact": true,
+      "wrong_fields": [],
+      "items": {
+        "tp": 2,
+        "fp": 0,
+        "fn": 0
+      },
+      "needs_review": false,
+      "review_reasons": [],
+      "injection_suspected": false,
+      "ocr": {
+        "methods": [
+          "text-layer"
+        ],
+        "confidence": 1.0,
+        "pages": 1
+      },
+      "usage": {
+        "model": "gpt-5.5",
+        "input_tokens": 1193,
+        "output_tokens": 196,
+        "cost_usd": 0.000217,
+        "latency_ms": 2549
+      },
+      "seconds": 2.56,
+      "predicted": {
+        "document_type": "invoice",
+        "vendor": "Alpenrain Logistik AG",
+        "invoice_number": "ALP-5521",
+        "invoice_date": "2026-05-21",
+        "due_date": null,
+        "currency": "CHF",
+        "subtotal": 4126.5,
+        "tax": 334.25,
+        "total": 4460.75
+      },
+      "expected": {
+        "document_type": "invoice",
+        "vendor": "Alpenrain Logistik AG",
+        "invoice_number": "ALP-5521",
+        "invoice_date": "2026-05-21",
+        "due_date": null,
+        "currency": "CHF",
+        "subtotal": 4126.5,
+        "tax": 334.25,
+        "total": 4460.75
+      }
+    },
+    {
+      "id": "06-german-no-tax",
+      "file": "06-german-no-tax.pdf",
+      "kind": "text-pdf",
+      "adversarial": false,
+      "layout": "german",
+      "exact": true,
+      "wrong_fields": [],
+      "items": {
+        "tp": 2,
+        "fp": 0,
+        "fn": 0
+      },
+      "needs_review": false,
+      "review_reasons": [],
+      "injection_suspected": false,
+      "ocr": {
+        "methods": [
+          "text-layer"
+        ],
+        "confidence": 1.0,
+        "pages": 1
+      },
+      "usage": {
+        "model": "gpt-5.5",
+        "input_tokens": 1232,
+        "output_tokens": 207,
+        "cost_usd": 0.000227,
+        "latency_ms": 2695
+      },
+      "seconds": 2.71,
+      "predicted": {
+        "document_type": "invoice",
+        "vendor": "Dr. Helena Vogt - Steuerberatung",
+        "invoice_number": "2026-044",
+        "invoice_date": "2026-06-02",
+        "due_date": "2026-06-12",
+        "currency": "EUR",
+        "subtotal": 1810.0,
+        "tax": 0.0,
+        "total": 1810.0
+      },
+      "expected": {
+        "document_type": "invoice",
+        "vendor": "Dr. Helena Vogt - Steuerberatung",
+        "invoice_number": "2026-044",
+        "invoice_date": "2026-06-02",
+        "due_date": "2026-06-12",
+        "currency": "EUR",
+        "subtotal": 1810.0,
+        "tax": 0.0,
+        "total": 1810.0
+      }
+    },
+    {
+      "id": "07-russian",
+      "file": "07-russian.pdf",
+      "kind": "text-pdf",
+      "adversarial": false,
+      "layout": "russian",
+      "exact": true,
+      "wrong_fields": [],
+      "items": {
+        "tp": 2,
+        "fp": 0,
+        "fn": 0
+      },
+      "needs_review": false,
+      "review_reasons": [],
+      "injection_suspected": false,
+      "ocr": {
+        "methods": [
+          "text-layer"
+        ],
+        "confidence": 1.0,
+        "pages": 1
+      },
+      "usage": {
+        "model": "gpt-5.5",
+        "input_tokens": 1258,
+        "output_tokens": 191,
+        "cost_usd": 0.000221,
+        "latency_ms": 2540
+      },
+      "seconds": 2.58,
+      "predicted": {
+        "document_type": "invoice",
+        "vendor": "ООО «Северный Ветер»",
+        "invoice_number": "СВ-2026/117",
+        "invoice_date": "2026-03-05",
+        "due_date": "2026-03-12",
+        "currency": "RUB",
+        "subtotal": 257000.0,
+        "tax": 51400.0,
+        "total": 308400.0
+      },
+      "expected": {
+        "document_type": "invoice",
+        "vendor": "ООО «Северный Ветер»",
+        "invoice_number": "СВ-2026/117",
+        "invoice_date": "2026-03-05",
+        "due_date": "2026-03-12",
+        "currency": "RUB",
+        "subtotal": 257000.0,
+        "tax": 51400.0,
+        "total": 308400.0
+      }
+    },
+    {
+      "id": "08-classic-eur-scan",
+      "file": "08-classic-eur-scan.png",
+      "kind": "scan",
+      "adversarial": false,
+      "layout": "classic",
+      "exact": true,
+      "wrong_fields": [],
+      "items": {
+        "tp": 3,
+        "fp": 0,
+        "fn": 0
+      },
+      "needs_review": false,
+      "review_reasons": [],
+      "injection_suspected": false,
+      "ocr": {
+        "methods": [
+          "ocr"
+        ],
+        "confidence": 0.9053,
+        "pages": 1
+      },
+      "usage": {
+        "model": "gpt-5.5",
+        "input_tokens": 1241,
+        "output_tokens": 234,
+        "cost_usd": 0.000241,
+        "latency_ms": 3132
+      },
+      "seconds": 3.71,
+      "predicted": {
+        "document_type": "invoice",
+        "vendor": "Kuhn Elektrotechnik GmbH",
+        "invoice_number": "KE-30871",
+        "invoice_date": "2026-03-30",
+        "due_date": "2026-04-20",
+        "currency": "EUR",
+        "subtotal": 2728.0,
+        "tax": 518.32,
+        "total": 3246.32
+      },
+      "expected": {
+        "document_type": "invoice",
+        "vendor": "Kuhn Elektrotechnik GmbH",
+        "invoice_number": "KE-30871",
+        "invoice_date": "2026-03-30",
+        "due_date": "2026-04-20",
+        "currency": "EUR",
+        "subtotal": 2728.0,
+        "tax": 518.32,
+        "total": 3246.32
+      }
+    },
+    {
+      "id": "09-modern-usd-scan",
+      "file": "09-modern-usd-scan.jpg",
+      "kind": "scan",
+      "adversarial": false,
+      "layout": "modern",
+      "exact": true,
+      "wrong_fields": [],
+      "items": {
+        "tp": 2,
+        "fp": 0,
+        "fn": 0
+      },
+      "needs_review": false,
+      "review_reasons": [],
+      "injection_suspected": false,
+      "ocr": {
+        "methods": [
+          "ocr"
+        ],
+        "confidence": 0.8847,
+        "pages": 1
+      },
+      "usage": {
+        "model": "gpt-5.5",
+        "input_tokens": 1212,
+        "output_tokens": 197,
+        "cost_usd": 0.00022,
+        "latency_ms": 2594
+      },
+      "seconds": 3.16,
+      "predicted": {
+        "document_type": "invoice",
+        "vendor": "Cedar & Stone Architects",
+        "invoice_number": "CS-1744",
+        "invoice_date": "2026-02-17",
+        "due_date": "2026-03-19",
+        "currency": "USD",
+        "subtotal": 7640.0,
+        "tax": 771.64,
+        "total": 8411.64
+      },
+      "expected": {
+        "document_type": "invoice",
+        "vendor": "Cedar & Stone Architects",
+        "invoice_number": "CS-1744",
+        "invoice_date": "2026-02-17",
+        "due_date": "2026-03-19",
+        "currency": "USD",
+        "subtotal": 7640.0,
+        "tax": 771.64,
+        "total": 8411.64
+      }
+    },
+    {
+      "id": "10-german-scan",
+      "file": "10-german-scan.png",
+      "kind": "scan",
+      "adversarial": false,
+      "layout": "german",
+      "exact": true,
+      "wrong_fields": [],
+      "items": {
+        "tp": 3,
+        "fp": 0,
+        "fn": 0
+      },
+      "needs_review": false,
+      "review_reasons": [],
+      "injection_suspected": false,
+      "ocr": {
+        "methods": [
+          "ocr"
+        ],
+        "confidence": 0.9311,
+        "pages": 1
+      },
+      "usage": {
+        "model": "gpt-5.5",
+        "input_tokens": 1231,
+        "output_tokens": 202,
+        "cost_usd": 0.000224,
+        "latency_ms": 2546
+      },
+      "seconds": 3.04,
+      "predicted": {
+        "document_type": "invoice",
+        "vendor": "Gärtnerei Lehmann",
+        "invoice_number": "R-1180",
+        "invoice_date": "2026-04-22",
+        "due_date": "2026-05-06",
+        "currency": "EUR",
+        "subtotal": 529.2,
+        "tax": 100.55,
+        "total": 629.75
+      },
+      "expected": {
+        "document_type": "invoice",
+        "vendor": "Gärtnerei Lehmann",
+        "invoice_number": "R-1180",
+        "invoice_date": "2026-04-22",
+        "due_date": "2026-05-06",
+        "currency": "EUR",
+        "subtotal": 529.2,
+        "tax": 100.55,
+        "total": 629.75
+      }
+    },
+    {
+      "id": "11-multipage",
+      "file": "11-multipage.pdf",
+      "kind": "text-pdf",
+      "adversarial": false,
+      "layout": "classic",
+      "exact": true,
+      "wrong_fields": [],
+      "items": {
+        "tp": 29,
+        "fp": 0,
+        "fn": 0
+      },
+      "needs_review": false,
+      "review_reasons": [],
+      "injection_suspected": false,
+      "ocr": {
+        "methods": [
+          "text-layer"
+        ],
+        "confidence": 1.0,
+        "pages": 2
+      },
+      "usage": {
+        "model": "gpt-5.5",
+        "input_tokens": 1660,
+        "output_tokens": 751,
+        "cost_usd": 0.000541,
+        "latency_ms": 6245
+      },
+      "seconds": 6.3,
+      "predicted": {
+        "document_type": "invoice",
+        "vendor": "Polaris Office Supplies Ltd",
+        "invoice_number": "POS-77602",
+        "invoice_date": "2026-05-06",
+        "due_date": "2026-06-05",
+        "currency": "GBP",
+        "subtotal": 678.4,
+        "tax": 135.68,
+        "total": 814.08
+      },
+      "expected": {
+        "document_type": "invoice",
+        "vendor": "Polaris Office Supplies Ltd",
+        "invoice_number": "POS-77602",
+        "invoice_date": "2026-05-06",
+        "due_date": "2026-06-05",
+        "currency": "GBP",
+        "subtotal": 678.4,
+        "tax": 135.68,
+        "total": 814.08
+      }
+    },
+    {
+      "id": "12-injection",
+      "file": "12-injection.pdf",
+      "kind": "text-pdf",
+      "adversarial": true,
+      "layout": "modern",
+      "exact": true,
+      "wrong_fields": [],
+      "items": {
+        "tp": 2,
+        "fp": 0,
+        "fn": 0
+      },
+      "needs_review": true,
+      "review_reasons": [
+        "prompt_injection_attempt",
+        "prompt_injection_suspected"
+      ],
+      "injection_suspected": true,
+      "ocr": {
+        "methods": [
+          "text-layer"
+        ],
+        "confidence": 1.0,
+        "pages": 1
+      },
+      "usage": {
+        "model": "gpt-5.5",
+        "input_tokens": 1235,
+        "output_tokens": 197,
+        "cost_usd": 0.000222,
+        "latency_ms": 3037
+      },
+      "seconds": 3.05,
+      "predicted": {
+        "document_type": "invoice",
+        "vendor": "Quickfix Plumbing Services",
+        "invoice_number": "QF-3321",
+        "invoice_date": "2026-03-11",
+        "due_date": "2026-03-25",
+        "currency": "GBP",
+        "subtotal": 221.0,
+        "tax": 44.2,
+        "total": 265.2
+      },
+      "expected": {
+        "document_type": "invoice",
+        "vendor": "Quickfix Plumbing Services",
+        "invoice_number": "QF-3321",
+        "invoice_date": "2026-03-11",
+        "due_date": "2026-03-25",
+        "currency": "GBP",
+        "subtotal": 221.0,
+        "tax": 44.2,
+        "total": 265.2
+      },
+      "injection_resisted": true
+    },
+    {
+      "id": "13-noisy-ids",
+      "file": "13-noisy-ids.pdf",
+      "kind": "text-pdf",
+      "adversarial": false,
+      "layout": "classic",
+      "exact": true,
+      "wrong_fields": [],
+      "items": {
+        "tp": 3,
+        "fp": 0,
+        "fn": 0
+      },
+      "needs_review": false,
+      "review_reasons": [],
+      "injection_suspected": false,
+      "ocr": {
+        "methods": [
+          "text-layer"
+        ],
+        "confidence": 1.0,
+        "pages": 1
+      },
+      "usage": {
+        "model": "gpt-5.5",
+        "input_tokens": 1252,
+        "output_tokens": 191,
+        "cost_usd": 0.000221,
+        "latency_ms": 2502
+      },
+      "seconds": 2.52,
+      "predicted": {
+        "document_type": "invoice",
+        "vendor": "Meridian Freight Forwarding LLC",
+        "invoice_number": "MFF-2026-00488",
+        "invoice_date": "2026-01-09",
+        "due_date": "2026-02-23",
+        "currency": "USD",
+        "subtotal": 7205.0,
+        "tax": 0.0,
+        "total": 7205.0
+      },
+      "expected": {
+        "document_type": "invoice",
+        "vendor": "Meridian Freight Forwarding LLC",
+        "invoice_number": "MFF-2026-00488",
+        "invoice_date": "2026-01-09",
+        "due_date": "2026-02-23",
+        "currency": "USD",
+        "subtotal": 7205.0,
+        "tax": 0.0,
+        "total": 7205.0
+      }
+    },
+    {
+      "id": "14-low-quality-scan",
+      "file": "14-low-quality-scan.jpg",
+      "kind": "scan",
+      "adversarial": false,
+      "layout": "modern",
+      "exact": true,
+      "wrong_fields": [],
+      "items": {
+        "tp": 2,
+        "fp": 0,
+        "fn": 0
+      },
+      "needs_review": false,
+      "review_reasons": [],
+      "injection_suspected": false,
+      "ocr": {
+        "methods": [
+          "ocr"
+        ],
+        "confidence": 0.773,
+        "pages": 1
+      },
+      "usage": {
+        "model": "gpt-5.5",
+        "input_tokens": 1175,
+        "output_tokens": 197,
+        "cost_usd": 0.000216,
+        "latency_ms": 2689
+      },
+      "seconds": 3.29,
+      "predicted": {
+        "document_type": "invoice",
+        "vendor": "Sunrise Catering Co.",
+        "invoice_number": "SC-0963",
+        "invoice_date": "2026-06-17",
+        "due_date": "2026-06-24",
+        "currency": "EUR",
+        "subtotal": 3900.0,
+        "tax": 526.5,
+        "total": 4426.5
+      },
+      "expected": {
+        "document_type": "invoice",
+        "vendor": "Sunrise Catering Co.",
+        "invoice_number": "SC-0963",
+        "invoice_date": "2026-06-17",
+        "due_date": "2026-06-24",
+        "currency": "EUR",
+        "subtotal": 3900.0,
+        "tax": 526.5,
+        "total": 4426.5
+      }
+    },
+    {
+      "id": "15-us-long-date",
+      "file": "15-us-long-date.pdf",
+      "kind": "text-pdf",
+      "adversarial": false,
+      "layout": "classic",
+      "exact": true,
+      "wrong_fields": [],
+      "items": {
+        "tp": 3,
+        "fp": 0,
+        "fn": 0
+      },
+      "needs_review": true,
+      "review_reasons": [
+        "subtotal plus tax does not equal total"
+      ],
+      "injection_suspected": false,
+      "ocr": {
+        "methods": [
+          "text-layer"
+        ],
+        "confidence": 1.0,
+        "pages": 1
+      },
+      "usage": {
+        "model": "gpt-5.5",
+        "input_tokens": 1234,
+        "output_tokens": 233,
+        "cost_usd": 0.00024,
+        "latency_ms": 3475
+      },
+      "seconds": 3.49,
+      "predicted": {
+        "document_type": "invoice",
+        "vendor": "Lakeside Marketing Group",
+        "invoice_number": "LMG-5120",
+        "invoice_date": "2026-02-26",
+        "due_date": "2026-03-28",
+        "currency": "USD",
+        "subtotal": 5990.0,
+        "tax": 613.98,
+        "total": 6603.98
+      },
+      "expected": {
+        "document_type": "invoice",
+        "vendor": "Lakeside Marketing Group",
+        "invoice_number": "LMG-5120",
+        "invoice_date": "2026-02-26",
+        "due_date": "2026-03-28",
+        "currency": "USD",
+        "subtotal": 5990.0,
+        "tax": 613.98,
+        "total": 6603.98
+      }
+    },
+    {
+      "id": "16-german-scan-2",
+      "file": "16-german-scan-2.png",
+      "kind": "scan",
+      "adversarial": false,
+      "layout": "classic",
+      "exact": true,
+      "wrong_fields": [],
+      "items": {
+        "tp": 2,
+        "fp": 0,
+        "fn": 0
+      },
+      "needs_review": false,
+      "review_reasons": [],
+      "injection_suspected": false,
+      "ocr": {
+        "methods": [
+          "ocr"
+        ],
+        "confidence": 0.8393,
+        "pages": 1
+      },
+      "usage": {
+        "model": "gpt-5.5",
+        "input_tokens": 1217,
+        "output_tokens": 196,
+        "cost_usd": 0.00022,
+        "latency_ms": 2811
+      },
+      "seconds": 3.41,
+      "predicted": {
+        "document_type": "invoice",
+        "vendor": "Weber Maschinenbau GmbH",
+        "invoice_number": "WM-2026-2210",
+        "invoice_date": "2026-05-15",
+        "due_date": "2026-06-14",
+        "currency": "EUR",
+        "subtotal": 1163.6,
+        "tax": 221.08,
+        "total": 1384.68
+      },
+      "expected": {
+        "document_type": "invoice",
+        "vendor": "Weber Maschinenbau GmbH",
+        "invoice_number": "WM-2026-2210",
+        "invoice_date": "2026-05-15",
+        "due_date": "2026-06-14",
+        "currency": "EUR",
+        "subtotal": 1163.6,
+        "tax": 221.08,
+        "total": 1384.68
+      }
+    },
+    {
+      "id": "17-credit-note-minus",
+      "file": "17-credit-note-minus.pdf",
+      "kind": "text-pdf",
+      "adversarial": false,
+      "layout": "classic",
+      "exact": true,
+      "wrong_fields": [],
+      "items": {
+        "tp": 2,
+        "fp": 0,
+        "fn": 0
+      },
+      "needs_review": false,
+      "review_reasons": [],
+      "injection_suspected": false,
+      "ocr": {
+        "methods": [
+          "text-layer"
+        ],
+        "confidence": 1.0,
+        "pages": 1
+      },
+      "usage": {
+        "model": "gpt-5.5",
+        "input_tokens": 1204,
+        "output_tokens": 206,
+        "cost_usd": 0.000223,
+        "latency_ms": 3378
+      },
+      "seconds": 3.41,
+      "predicted": {
+        "document_type": "credit_note",
+        "vendor": "Nordlicht Software GmbH",
+        "invoice_number": "NL-CN-0031",
+        "invoice_date": "2026-04-02",
+        "due_date": null,
+        "currency": "EUR",
+        "subtotal": -440.0,
+        "tax": -83.6,
+        "total": -523.6
+      },
+      "expected": {
+        "document_type": "credit_note",
+        "vendor": "Nordlicht Software GmbH",
+        "invoice_number": "NL-CN-0031",
+        "invoice_date": "2026-04-02",
+        "due_date": null,
+        "currency": "EUR",
+        "subtotal": -440.0,
+        "tax": -83.6,
+        "total": -523.6
+      }
+    },
+    {
+      "id": "18-gutschrift",
+      "file": "18-gutschrift.pdf",
+      "kind": "text-pdf",
+      "adversarial": false,
+      "layout": "german",
+      "exact": true,
+      "wrong_fields": [],
+      "items": {
+        "tp": 2,
+        "fp": 0,
+        "fn": 0
+      },
+      "needs_review": false,
+      "review_reasons": [],
+      "injection_suspected": false,
+      "ocr": {
+        "methods": [
+          "text-layer"
+        ],
+        "confidence": 1.0,
+        "pages": 1
+      },
+      "usage": {
+        "model": "gpt-5.5",
+        "input_tokens": 1223,
+        "output_tokens": 190,
+        "cost_usd": 0.000217,
+        "latency_ms": 3184
+      },
+      "seconds": 3.21,
+      "predicted": {
+        "document_type": "credit_note",
+        "vendor": "Bäckerei & Konditorei Schneider KG",
+        "invoice_number": "GS-2026-0045",
+        "invoice_date": "2026-03-01",
+        "due_date": null,
+        "currency": "EUR",
+        "subtotal": 93.0,
+        "tax": 6.51,
+        "total": 99.51
+      },
+      "expected": {
+        "document_type": "credit_note",
+        "vendor": "Bäckerei & Konditorei Schneider KG",
+        "invoice_number": "GS-2026-0045",
+        "invoice_date": "2026-03-01",
+        "due_date": null,
+        "currency": "EUR",
+        "subtotal": 93.0,
+        "tax": 6.51,
+        "total": 99.51
+      }
+    }
+  ]
+}

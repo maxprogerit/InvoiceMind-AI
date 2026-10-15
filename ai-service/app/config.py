@@ -12,7 +12,7 @@ class Settings(BaseSettings):
 
     # OpenAI
     openai_api_key: str = ""
-    openai_model: str = "gpt-6-luna"
+    openai_model: str = "gpt-5.5"
     openai_reasoning_effort: str = ""  # empty -> parameter is not sent
     openai_timeout_seconds: float = 60.0
     openai_max_retries: int = 3

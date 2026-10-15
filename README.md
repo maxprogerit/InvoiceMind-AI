@@ -145,7 +145,7 @@ Everything is an environment variable; see [`.env.example`](.env.example) (secre
 | Variable | Meaning |
 |---|---|
 | `OPENAI_API_KEY` | required for extraction and the knowledge base |
-| `OPENAI_MODEL` / `OPENAI_REASONING_EFFORT` | extraction model (default `gpt-6-luna`) and reasoning effort |
+| `OPENAI_MODEL` / `OPENAI_REASONING_EFFORT` | extraction model (default `gpt-5.5`) and reasoning effort |
 | `OPENAI_PRICE_INPUT_PER_1M` / `OPENAI_PRICE_OUTPUT_PER_1M` | only used to store an estimated cost per invoice |
 | `OPENAI_EMBEDDING_MODEL` | knowledge-base embeddings (default `text-embedding-3-small`) |
 | `JWT_SECRET`, `AI_SERVICE_TOKEN`, `POSTGRES_PASSWORD` | change the development values for anything real |
