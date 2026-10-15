@@ -1,251 +1,131 @@
 # InvoiceMind
 
-Upload an invoice (PDF or photo), and InvoiceMind reads it with OCR, extracts the data with an LLM, checks the
-arithmetic with deterministic rules, lets a human correct and approve it, and gives you analytics and exports.
+Upload an invoice (PDF or photo): InvoiceMind reads it with OCR, extracts the data with an LLM, checks the arithmetic with
+deterministic rules, lets a person correct and approve it, and gives you analytics and exports.
 
-It is built so that **the model is never trusted**: every value it returns must appear in the document, is
-re-validated by plain Java code, and anything doubtful goes to a person.
+The model is never trusted: every value it returns must appear in the document, is re-validated by plain Java code, and
+anything doubtful goes to a person.
 
-> **Honest status.** Everything below runs and is tested. The extraction and the knowledge base were run against the real
-> OpenAI API (`gpt-5.5`): 18 of 18 synthetic documents were extracted completely correctly (see
-> [docs/EVALUATION.md](docs/EVALUATION.md)), but the set is small and synthetic, so read that as a smoke test of the whole
-> pipeline, not as a production accuracy figure. The integrations (single sign-on, e-mail ingestion, S3 storage) were verified
-> against real *protocol implementations* (an OIDC server, an IMAP server, an S3-compatible store), not against Entra ID, Gmail
-> or AWS themselves. The full, itemised picture is in [docs/STATUS.md](docs/STATUS.md).
+> This is the **lite** branch: four containers, no tests, no extra documents. The complete version (Kafka, Redis, Nginx,
+> 150 backend + 45 ai-service + 28 frontend + 11 browser tests, architecture notes, status and evaluation reports,
+> screenshots) is on the `main` branch of the same repository. The numbers quoted below come from there.
 
-![The invoice list: extracted invoices, a credit note with a negative total, and the document next to its data](docs/screenshots/invoices.png)
+## Quick start
 
-*A real run on the sample set with `gpt-5.5`. More screens: [review](docs/screenshots/review.png) (validation findings, document
-beside editable fields), [analysis](docs/screenshots/analytics.png), [approvals](docs/screenshots/approvals.png),
-[knowledge](docs/screenshots/knowledge.png), [upload](docs/screenshots/upload.png). The "AI cost" tile uses the placeholder
-prices from `.env.example`; set `OPENAI_PRICE_*` to the real ones.*
+Requirements: Docker with Compose v2 and an OpenAI API key.
+
+```bash
+git clone <this repository> invoicemind && cd invoicemind
+cp .env.example .env          # then put your key in OPENAI_API_KEY=
+docker compose up --build     # the first build takes a few minutes
+# open http://localhost
+```
+
+Four containers: `postgres` (with pgvector), `ai-service` (OCR and every OpenAI call), `backend` (Spring Boot) and
+`frontend` (Next.js, the only published port; it also proxies `/api` and the WebSocket to the backend).
+
+Sign in with a seeded demo account (password is `DEMO_PASSWORD` in `.env`, default `Demo12345!`):
+
+| Account | Role |
+|---|---|
+| `admin@demo.invoicemind.local` | ADMIN: everything, plus team, settings, integrations, knowledge |
+| `approver@demo.invoicemind.local` | APPROVER: sees the organisation, approves and rejects |
+| `user@demo.invoicemind.local` | USER: uploads, sees only their own invoices |
+
+Or register your own organisation (you become its admin). Try [`samples/invoices`](samples/invoices): text PDFs, scans, a
+multi-page invoice, German, Russian, two credit notes and one invoice with a hidden prompt injection.
+Without an `OPENAI_API_KEY` the app starts, but uploads end as *Failed* with a clear message instead of made-up data.
 
 ## What it does
 
 | | |
 |---|---|
-| **Read** | PDFs with a text layer are read directly; scans and photos go through Tesseract (English, German, Russian). Per-page confidence is kept. |
-| **Extract** | OpenAI structured output turns the text into vendor, number, dates, currency, line items, subtotal, tax, total, with per-field confidence. |
-| **Verify** | Values are grounded against the OCR text; Java rules check sums, tax, dates, currency, duplicates; suspected prompt injection forces review. |
-| **Review** | Document on the left, editable fields on the right; errors and low-confidence fields are highlighted; sums are re-checked as you type. |
-| **Approve** | Roles, comments, four-eyes rule, full audit trail, notifications, live status over WebSocket. |
-| **Understand** | Analytics from real data (spend by vendor and month, review rate, processing time, AI cost). Export to CSV, XLSX, JSON. |
-| **Explain** | Upload your policies; "Why was this flagged?" answers from them with cited sources (RAG on pgvector). |
-| **Credit notes** | Recognised as their own document type, stored with negative amounts, validated with the mirrored rules, filterable and exportable. |
-| **Convert** | Report in one currency: every invoice at the ECB rate of its own date; manual rates for currencies the ECB lacks; anything without a rate is listed as "not converted", never guessed. |
-| **Integrate** | Signed webhooks for ERP / accounting systems, e-mail ingestion (IMAP), single sign-on (OpenID Connect), S3 storage, OpenTelemetry tracing, a second OCR engine (PaddleOCR). All optional, see [Optional features](#optional-features). |
+| **Read** | PDFs with a text layer are read directly; scans and photos go through Tesseract (English, German, Russian), or PaddleOCR if built with it |
+| **Extract** | OpenAI structured output: vendor, number, dates, currency, line items, subtotal, tax, total, document type, per-field confidence |
+| **Verify** | Values are grounded against the OCR text; Java rules check sums, tax, dates, currency, duplicates; suspected prompt injection forces review |
+| **Review** | Document next to editable fields; errors and low-confidence fields highlighted; sums re-checked as you type |
+| **Approve** | Roles, comments, four-eyes rule, audit trail, notifications, live status over WebSocket |
+| **Credit notes** | Their own document type, stored with negative amounts, mirrored validation, filter and export |
+| **Convert** | Report in one currency at the ECB rate of each invoice's date; manual rates for currencies the ECB lacks; no rate means "not converted", never a guess |
+| **Understand** | Analytics from real data, export to CSV / XLSX / JSON |
+| **Explain** | Upload your policies; "Why was this flagged?" answers from them with cited sources (RAG on pgvector) |
 
-## Quick start (5 commands)
+On the `main` branch the evaluation with the real model (`gpt-5.5`, 18 synthetic documents) extracted **18 of 18** completely
+correctly, flagged the injection sample, and answered the policy question with the right citation. That set is small and
+synthetic: read it as a smoke test of the pipeline, not as a production accuracy figure.
 
-Requirements: Docker with Compose v2.
+### Optional features (off by default, environment variables, see `.env.example`)
 
-```bash
-git clone <this repository> invoicemind && cd invoicemind
-cp .env.example .env            # then put your key in OPENAI_API_KEY=
-docker compose up --build       # first build takes a few minutes
-# open http://localhost
+- **Webhooks** for ERP / accounting systems (admin: *Integrations*): `invoice.approved`, `.rejected`, `.validated`,
+  `.needs_review`, `.failed`; HMAC-SHA256 signed (`X-InvoiceMind-Signature: t=<unix>,v1=<hex of HMAC(secret, "t.body")>`),
+  at-least-once with backoff, delivery log. URLs pointing to private or internal addresses are refused (SSRF guard) unless
+  `WEBHOOKS_ALLOW_PRIVATE_TARGETS=true`.
+- **E-mail ingestion** (`MAIL_INGEST_*`, `MAIL_IMAP_*`): mail to `<mailbox>+<token>@<domain>` (address shown under *Settings*) is
+  imported when the sender is a user of that organisation; everything lands in review.
+- **Single sign-on** (`OIDC_*`): any OpenID Connect provider, authorization code + PKCE. Accounts are linked by verified
+  e-mail and then pinned to the provider's subject. Register `<app url>/api/v1/auth/oidc/callback` at the provider.
+- **S3 storage** (`STORAGE_TYPE=s3`, `S3_*`): invoice files in a bucket instead of a volume.
+- **Tracing** (`TRACING_ENABLED=true`, `OTEL_EXPORTER_OTLP_ENDPOINT`): OpenTelemetry spans from backend and ai-service.
+- **PaddleOCR** (`docker compose build --build-arg WITH_PADDLE=1`, then `OCR_ENGINE=paddle`, `PADDLE_LANG=de|en|ru`): found
+  every value on the five sample scans like Tesseract, but about 40 times slower on CPU; Tesseract stays the default.
+
+Single sign-on, e-mail and S3 were verified against real protocol implementations (an OIDC server, an IMAP server, an
+S3-compatible store), not against Entra ID, Gmail or AWS themselves.
+
+## How it fits together
+
+```
+browser ──> frontend (Next.js) ──/api, /ws──> backend (Spring Boot) ──> postgres (+ pgvector)
+                                                   │
+                                                   └── HTTP ──> ai-service (FastAPI) ──> OpenAI
 ```
 
-Sign in with a seeded demo account (password is `DEMO_PASSWORD` from `.env`, default `Demo12345!`):
+Upload → file stored → invoice handed to an in-process worker pool (3 threads) after the transaction commits → OCR → LLM →
+deterministic validation → `VALIDATED` or `NEEDS_REVIEW` → a person approves or rejects. Lifecycle:
+`UPLOADED → PROCESSING → EXTRACTED → NEEDS_REVIEW | VALIDATED → APPROVED | REJECTED`, or `FAILED` (one click to retry).
 
-| Account | Role |
-|---|---|
-| `admin@demo.invoicemind.local` | ADMIN: everything, plus team and knowledge management |
-| `approver@demo.invoicemind.local` | APPROVER: sees the whole organisation, approves and rejects |
-| `user@demo.invoicemind.local` | USER: uploads, sees only their own invoices |
-
-Or register your own organisation: you become its admin and can add your team. Set `DEMO_PASSWORD=` (empty) to disable seeding.
-
-Without an `OPENAI_API_KEY` the application still starts; uploads then end as **Failed** with the message
-"OPENAI_API_KEY is not configured" instead of producing made-up data.
-
-### Demo walkthrough
-
-1. **Upload** the PDFs and scans from [`samples/invoices`](samples/invoices) (drag several at once). Watch each one move
-   through *Uploaded → OCR + AI → Validated*, live.
-2. Open an invoice marked **Needs review**: the validation panel says exactly why (for example "Subtotal 1000 + tax 190 =
-   1190, but the total is 1500"), the offending field is highlighted, and the sums check updates as you type. Fix it and press
-   *Save & revalidate*.
-3. As **approver**, open *Approvals*, approve with a comment, or reject with a reason. Everything lands in the *Audit log*.
-4. *Analysis* shows spend and quality metrics computed from your data. *Export* downloads the filtered set as XLSX/CSV/JSON.
-5. As admin, add a policy under *Knowledge* (for example "invoices above 10,000 EUR need two approvals") and press
-   *Why was this flagged?* on an invoice: the answer cites the passage it came from.
-
-## Optional features
-
-Off by default; each is switched on with environment variables (all listed, with comments, in [`.env.example`](.env.example)).
-What "verified" means for each one is in [docs/STATUS.md](docs/STATUS.md).
-
-| Feature | Switch on | Where it shows up |
-|---|---|---|
-| **Credit notes** | always on: the model reports `document_type`, a reviewer can change it | *Credit* badge and type filter in the list; amounts stored negative |
-| **Currency conversion** | automatic with several currencies; `FX_RATES_ENABLED=false` for offline use | *Analysis* ("All in EUR"), *Settings* (reporting currency, manual rates) |
-| **Webhooks** | admin: *Integrations* → Add webhook | `invoice.approved`, `.rejected`, `.validated`, `.needs_review`, `.failed`, HMAC-signed, retried, delivery log |
-| **E-mail ingestion** | `MAIL_INGEST_ENABLED=true` + `MAIL_INGEST_ADDRESS`, `MAIL_IMAP_*` | *Settings* shows your address `invoices+<token>@your-domain` |
-| **Single sign-on** | `OIDC_ENABLED=true` + issuer, client id/secret; register `<app url>/api/v1/auth/oidc/callback` at the provider | "Continue with …" button on the login page |
-| **S3 storage** | `STORAGE_TYPE=s3` and the `S3_*` variables (AWS S3, MinIO, SeaweedFS ...) | invoice files in a bucket instead of a volume |
-| **Tracing** | `TRACING_ENABLED=true` and `OTEL_EXPORTER_OTLP_ENDPOINT` of any OTLP/HTTP collector (Jaeger, Tempo ...) | one trace per upload across backend, Kafka and ai-service |
-| **PaddleOCR** | build with `WITH_PADDLE=1`, run with `OCR_ENGINE=paddle` (`PADDLE_LANG=de`, `en`, `ru` ...) | second OCR engine; measured against Tesseract in [docs/OCR-COMPARISON.md](docs/OCR-COMPARISON.md) (same accuracy on the sample scans, much slower on CPU) |
-
-### Webhooks: verifying a request
-
-Every delivery carries `X-InvoiceMind-Signature: t=<unix seconds>,v1=<hex>` where `v1` is the HMAC-SHA256, keyed with the
-secret shown once when you create the webhook, of `"<t>.<raw body>"`. Reject old timestamps (replay) and deduplicate on the
-event's `id` (delivery is at-least-once; failed deliveries are retried with exponential backoff for about an hour). Webhook
-URLs are requested by the server, so private, loopback and link-local addresses are refused and redirects are never followed
-(`WEBHOOKS_ALLOW_PRIVATE_TARGETS=true` for a receiver inside your own network). A Node.js example is on the *Integrations* page.
-
-### E-mail ingestion: how mail is accepted
-
-Send or forward invoices to the address shown under *Settings*. A message is imported only if it was addressed to that exact
-address (the plus-tag identifies your organisation; rotate it if it leaks) **and** the sender is an enabled user of your
-organisation; the document is attributed to that user and goes to review like any upload, nothing is approved automatically.
-`MAIL_REQUIRE_AUTH_RESULTS=true` additionally demands `dkim=pass` or `spf=pass` from your mail server, because the `From`
-header alone can be forged. Works with any IMAP mailbox that supports plus-addressing (use an app password).
-
-### Single sign-on: how accounts are linked
-
-People must already have an account (the first SSO login is matched by *verified* e-mail and then pinned to the provider's
-stable subject, so a reassigned address cannot take the account over), or set `OIDC_PROVISION_ORG_ID` and
-`OIDC_ALLOWED_EMAIL_DOMAINS` to create accounts on first sign-in with `OIDC_DEFAULT_ROLE`. Roles are not mapped from provider
-groups; an admin changes them under *Team*.
-
-## Architecture
-
-```mermaid
-flowchart LR
-  U[Browser<br/>Next.js 15] -->|HTTP, WebSocket| N[Nginx]
-  N --> B[Spring Boot backend]
-  B -->|invoice.uploaded| K[(Kafka)]
-  K --> B
-  B --> P[(PostgreSQL + pgvector)]
-  B --> R[(Redis)]
-  B -->|OCR, extract, embed, explain| A[ai-service<br/>FastAPI + Tesseract]
-  A --> O((OpenAI API))
-```
-
-Details, the lifecycle diagram, the Kafka-vs-`@Async` decision and the trust boundaries are in
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
-
-| Part | Stack |
-|---|---|
-| `frontend/` | Next.js 15 (App Router), React 19, TypeScript, Tailwind v4, Radix UI, TanStack Query, Framer Motion, Recharts, STOMP.js, generated OpenAPI client |
-| `backend/` | Spring Boot 3.4, Java 21, JPA + Flyway, Spring Security + JWT, Kafka, Redis, STOMP, Resilience4j, Apache POI, springdoc |
-| `ai-service/` | Python 3.11, FastAPI, Pydantic v2, Tesseract + pdfplumber + Poppler, OpenAI Python SDK (Responses API) |
-| infrastructure | PostgreSQL 16 with pgvector, Kafka (KRaft), Redis, Nginx, Docker Compose |
-
-## Roles
-
-| | USER | APPROVER | ADMIN |
-|---|:-:|:-:|:-:|
-| Upload, correct own invoices | ✓ | ✓ | ✓ |
-| See other people's invoices, analytics for the organisation | – | ✓ | ✓ |
-| Approve / reject | – | ✓ (not own uploads) | ✓ |
-| Audit log, ask the knowledge base | – | ✓ | ✓ |
-| Manage team, knowledge documents, delete invoices | – | – | ✓ |
-| Settings (reporting currency, exchange rates, e-mail address), integrations (webhooks) | – | – | ✓ |
+Security in short: JWT access tokens (15 min, in memory) plus a rotating refresh token in an `httpOnly` cookie with theft detection;
+roles USER / APPROVER / ADMIN; tenant isolation by organisation taken from the token (foreign ids give 404); upload hardening (magic
+bytes, 15 MB, PDF active-content scan); untrusted-data prompts with nonce delimiters, schema-validated and grounded model output;
+CSV/XLSX formula neutralisation; audit trail of every change.
 
 ## Configuration
 
-Everything is an environment variable; see [`.env.example`](.env.example) (secrets are never committed).
-
-| Variable | Meaning |
-|---|---|
-| `OPENAI_API_KEY` | required for extraction and the knowledge base |
-| `OPENAI_MODEL` / `OPENAI_REASONING_EFFORT` | extraction model (default `gpt-5.5`) and reasoning effort |
-| `OPENAI_PRICE_INPUT_PER_1M` / `OPENAI_PRICE_OUTPUT_PER_1M` | only used to store an estimated cost per invoice |
-| `OPENAI_EMBEDDING_MODEL` | knowledge-base embeddings (default `text-embedding-3-small`) |
-| `JWT_SECRET`, `AI_SERVICE_TOKEN`, `POSTGRES_PASSWORD` | change the development values for anything real |
-| `DEMO_PASSWORD` | password of the three seeded demo users; empty disables seeding |
-| `HTTP_PORT` | published port (default 80) |
-| `FX_RATES_ENABLED` | download ECB reference rates for currency conversion (default true; only dates are sent) |
-| `STORAGE_TYPE`, `S3_*` | `local` volume (default) or an S3-compatible bucket |
-| `MAIL_INGEST_ENABLED`, `MAIL_INGEST_ADDRESS`, `MAIL_IMAP_*`, `MAIL_REQUIRE_AUTH_RESULTS` | e-mail ingestion |
-| `OIDC_ENABLED`, `OIDC_ISSUER_URI`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_PROVISION_ORG_ID`, ... | single sign-on |
-| `WEBHOOKS_ALLOW_PRIVATE_TARGETS` | allow webhooks to private addresses (SSRF guard, default false) |
-| `TRACING_ENABLED`, `OTEL_EXPORTER_OTLP_ENDPOINT` | OpenTelemetry tracing |
-| `OCR_ENGINE`, `PADDLE_LANG`, build arg `WITH_PADDLE` | OCR engine (`tesseract` or `paddle`) |
-
-Behind TLS, also set `APP_COOKIES_SECURE=true` for the backend so the refresh cookie gets the `Secure` flag.
-
-## API
-
-Interactive docs: **`/swagger-ui.html`** (OpenAPI at `/v3/api-docs`). Main groups: `auth`, `invoices` (upload, list with filters
-and paging, detail, correct, approve, reject, retry, file, OCR text, audit), `analytics`, `export`, `users`, `audit`, `notifications`,
-`knowledge`, `organization`/`fx` (reporting currency, rates), `webhooks`, `ingest/email`, `auth/oidc`. Live updates: STOMP over WebSocket at `/ws/live`.
+Everything is an environment variable; [`.env.example`](.env.example) lists them all with comments (secrets are never committed).
+The ones you will touch first: `OPENAI_API_KEY`, `OPENAI_MODEL` (default `gpt-5.5`), `OPENAI_PRICE_INPUT_PER_1M` /
+`OPENAI_PRICE_OUTPUT_PER_1M` (only used to show a cost per invoice; set the real prices), `JWT_SECRET` and `AI_SERVICE_TOKEN`
+(change the development values for anything real), `DEMO_PASSWORD` (empty disables the demo users), `HTTP_PORT` (default 80).
+Behind TLS also set `APP_COOKIES_SECURE=true` on the backend. The backend API and Swagger UI are published on
+`127.0.0.1:8080` (`BACKEND_PORT`) for local tools and available through the frontend at `/swagger-ui.html`.
 
 ## Development
 
 ```bash
-docker compose up --build                       # the whole stack on http://localhost (real OpenAI-backed ai-service)
-
-# frontend development with hot reload; needs the backend reachable on the host, which the browser-test overlay publishes
-# on 127.0.0.1:18080 (it swaps the AI service for the offline test double: no key, no cost)
-docker compose -f docker-compose.yml -f docker-compose.e2e.yml up --build -d
-cd frontend && npm ci && BACKEND_INTERNAL_URL=http://127.0.0.1:18080 npm run dev     # http://localhost:3000
+docker compose up --build        # whole stack
+cd frontend && npm ci && BACKEND_INTERNAL_URL=http://127.0.0.1:8080 npm run dev     # hot reload on http://localhost:3000
+cd frontend && OPENAPI_URL=http://localhost:8080/v3/api-docs npm run api:types      # regenerate the typed API client
+cd backend && mvn -DskipTests package                                               # build the jar
 ```
 
-### Tests
+## Limitations
 
-```bash
-cd backend && mvn verify                                         # 150 tests; needs Docker (Testcontainers)
-docker build --target test -t im-ai-test ai-service && docker run --rm im-ai-test   # 45 tests, real Tesseract/Poppler (add --build-arg WITH_PADDLE=1 for the PaddleOCR tests)
-cd frontend && npm run lint && npm run typecheck && npm test     # 28 unit tests
-
-# browser end-to-end on the full stack, with an offline AI test double (no API key, no cost)
-docker compose -f docker-compose.yml -f docker-compose.e2e.yml up --build -d --wait
-cd frontend && npx playwright install chromium && E2E_BASE_URL=http://localhost npx playwright test   # 11 scenarios
-```
-
-CI (`.github/workflows/ci.yml`) runs all of the above plus a check that the generated TypeScript API types match the backend.
-
-The e2e overlay swaps the OpenAI-backed service for [`e2e/fake-ai`](e2e/fake-ai): real OCR and a rule-based extractor.
-It exists only for tests and is never part of the normal stack.
-
-### Measuring extraction quality
-
-[`samples/`](samples) holds 16 synthetic invoices with ground truth: text PDFs and scans (rotation, noise, blur), EUR/USD/GBP/CHF/RUB,
-English/German/Russian, decimal point and comma, a multi-page invoice, look-alike identifiers and a hidden prompt injection.
-
-```bash
-docker compose --profile eval run --rm eval       # real OCR + real model; writes docs/EVALUATION.md
-node scripts/capture-screenshots.cjs              # seeds the demo org with the samples and captures screenshots
-```
-
-## Security notes
-
-Upload hardening (magic bytes, size, active PDF content), untrusted-data prompts with nonce delimiters, schema-validated output,
-grounding, organisation-scoped everything, rotating refresh tokens with theft detection, rate limiting, CSV/XLSX formula
-neutralisation, audit trail. The full model is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#security-model).
-
-## Known limitations
-
-- The evaluation set is synthetic and small (18 documents, one model run): 18/18 on it is a smoke test, not an SLA. Real invoices are messier.
-- Access tokens live 15 minutes: disabling a user or changing a role takes effect for already-issued tokens at their expiry (refresh is blocked immediately). An open WebSocket stays authorised until it reconnects.
-- Zero-value invoices are rejected by validation. Currency conversion uses one rate per invoice date (no hedging, no month-end revaluation); the ECB does not publish every currency, those need manual rates.
-- Webhook delivery is at-least-once, so receivers must deduplicate on the event id. The signing secret is stored in the database in clear (it must be, to sign); protect database access accordingly.
-- E-mail ingestion polls one mailbox every minute (no IMAP IDLE) and trusts the `From` address unless `MAIL_REQUIRE_AUTH_RESULTS=true`.
-- Single sign-on maps no roles from provider groups, and sign-out does not end the session at the provider.
-- PaddleOCR uses one model per language (`PADDLE_LANG=de`, `ru` ...), unlike Tesseract's combined `eng+deu+rus`; the image is much larger with it.
-- Kafka and Redis run as single nodes.
-- Tesseract languages are English, German and Russian; other scripts need more language packs in the `ai-service` image.
-- The PDF active-content scan is a keyword check and cannot look inside compressed streams; PDFs are only ever rendered by the user's own browser.
-- The compose file is for a single host. Terminate TLS in front of Nginx for anything public.
-
-## Roadmap
-
-Provider-group to role mapping for SSO, IMAP IDLE, connectors for specific ERP systems (the webhooks are the generic hook), per-organisation mailboxes and identity providers, OpenTelemetry metrics, scanned credit-note samples in the evaluation set.
+- One backend process: the worker queue, rate limits and the analytics cache are in memory. After a restart, invoices that were
+  waiting are queued again and those that were mid-processing are marked failed (retry with one click); nothing else is lost.
+- Access tokens live 15 minutes, so disabling a user takes effect for issued tokens at their expiry (refresh is blocked at once).
+- Uploads are limited to 15 MB; the frontend proxy buffers request bodies up to 16 MB.
+- Currency conversion uses one rate per invoice date; the ECB does not publish every currency (RUB needs a manual rate). The
+  extraction cost shown uses whatever prices you configured.
+- Webhook delivery is at-least-once (receivers deduplicate on the event id) and the signing secret is stored in the database in clear.
+- E-mail ingestion polls one mailbox every minute and trusts `From` unless `MAIL_REQUIRE_AUTH_RESULTS=true`.
+- Single sign-on does not map provider groups to roles and sign-out does not end the session at the provider.
+- Zero-value invoices are rejected by validation. Files are stored on a local volume unless S3 is configured.
+- The compose file is for a single host; terminate TLS in front of the frontend for anything public.
 
 ## Repository layout
 
 ```text
-backend/      Spring Boot API, pipeline, validation, knowledge base      (+ Flyway migrations, tests)
-ai-service/   OCR and every OpenAI call                                   (+ pytest suite)
-frontend/     Next.js application                                         (+ vitest, Playwright)
-samples/      synthetic invoices, ground truth, generator
-eval/         accuracy evaluation harness
-e2e/          offline AI test double for browser tests
-docker/       Nginx configuration
-docs/         ARCHITECTURE, STATUS, EVALUATION and OCR-COMPARISON (generated), AUDIT-PHASE0 (history)
-scripts/      screenshot capture
+backend/      Spring Boot API, pipeline, validation, knowledge base (+ Flyway migrations)
+ai-service/   OCR and every OpenAI call
+frontend/     Next.js application
+samples/      synthetic sample invoices to try
 ```

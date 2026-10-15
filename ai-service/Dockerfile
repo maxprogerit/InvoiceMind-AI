@@ -17,15 +17,6 @@ RUN if [ "$WITH_PADDLE" = "1" ]; then \
       && pip install --no-cache-dir -r requirements-paddle.txt; \
     fi
 
-# `docker build --target test ai-service && docker run --rm <image>` runs the suite
-# with the real Tesseract/Poppler binaries (and PaddleOCR when built with --build-arg WITH_PADDLE=1).
-FROM base AS test
-COPY requirements-dev.txt .
-RUN pip install --no-cache-dir -r requirements-dev.txt
-COPY . .
-ENV AI_SERVICE_TOKEN=test-token PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=True
-CMD ["pytest", "-q"]
-
 FROM base AS runtime
 RUN useradd --create-home --uid 10001 app
 COPY app ./app
