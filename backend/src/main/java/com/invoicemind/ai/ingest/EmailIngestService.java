@@ -6,6 +6,7 @@ import com.invoicemind.ai.config.AppProperties;
 import com.invoicemind.ai.invoice.InvoiceDtos.InvoiceSummary;
 import com.invoicemind.ai.invoice.InvoiceService;
 import com.invoicemind.ai.security.AuthPrincipal;
+import com.invoicemind.ai.firm.OrgAccessService;
 import com.invoicemind.ai.user.OrganizationEntity;
 import com.invoicemind.ai.user.OrganizationRepository;
 import com.invoicemind.ai.user.UserEntity;
@@ -67,6 +68,7 @@ public class EmailIngestService {
   private final AppProperties app;
   private final OrganizationRepository organizations;
   private final UserRepository users;
+  private final OrgAccessService orgAccess;
   private final InvoiceService invoices;
   private final AuditService audit;
   private final NamedParameterJdbcTemplate jdbc;
@@ -131,8 +133,8 @@ public class EmailIngestService {
     UUID orgId = org.get().getId();
 
     if (from == null) return Verdict.rejected(orgId, "The message has no sender");
-    Optional<UserEntity> user = users.findByEmailIgnoreCase(from)
-        .filter(u -> u.getOrganizationId().equals(orgId) && u.isEnabled());
+    // a sender qualifies when they may work in this organisation (own user, accountant with access, firm admin)
+    Optional<UserEntity> user = users.findByEmailIgnoreCase(from).filter(u -> u.isEnabled() && orgAccess.contextFor(u, orgId).isPresent());
     if (user.isEmpty()) return Verdict.rejected(orgId, "The sender is not a user of this organisation");
     if (props.requireAuthResults() && !senderAuthenticated(message)) {
       return Verdict.rejected(orgId, "The sender could not be verified (no dkim=pass or spf=pass from the mail server)");
@@ -143,7 +145,7 @@ public class EmailIngestService {
     if (attachments.isEmpty()) return Verdict.rejected(orgId, "The message has no attachment");
 
     UserEntity u = user.get();
-    AuthPrincipal principal = new AuthPrincipal(u.getId(), orgId, u.getEmail(), u.getRole());
+    AuthPrincipal principal = new AuthPrincipal(u.getId(), orgId, u.getEmail(), orgAccess.contextFor(u, orgId).orElseThrow().role());
     int created = 0;
     List<String> problems = new ArrayList<>();
     List<UUID> ids = new ArrayList<>();

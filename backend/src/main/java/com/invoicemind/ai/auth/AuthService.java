@@ -9,6 +9,7 @@ import com.invoicemind.ai.common.ApiException;
 import com.invoicemind.ai.config.AppProperties;
 import com.invoicemind.ai.firm.FirmRole;
 import com.invoicemind.ai.firm.FirmService;
+import com.invoicemind.ai.firm.OrgAccessService;
 import com.invoicemind.ai.firm.UserOrgAccessEntity;
 import com.invoicemind.ai.firm.UserOrgAccessRepository;
 import com.invoicemind.ai.security.AuthPrincipal;
@@ -49,7 +50,8 @@ public class AuthService {
   private final AuditService audit;
   private final AppProperties props;
   private final FirmService firmService;
-  private final UserOrgAccessRepository access;
+  private final UserOrgAccessRepository accessRows;
+  private final OrgAccessService orgAccess;
 
   /** Hash compared against when the e-mail is unknown, so unknown/known accounts take similar time. */
   private String dummyHash;
@@ -64,7 +66,7 @@ public class AuthService {
     firmService.addMember(org.getFirmId(), user.getId(), FirmRole.FIRM_ADMIN);
     audit.log(org.getId(), user.getId(), "ORGANIZATION_REGISTERED", AuditService.USER, user.getId(),
         Map.of("organization", org.getName()));
-    return startSession(user, org.getName());
+    return startSession(user, null);
   }
 
   @Transactional
@@ -75,7 +77,7 @@ public class AuthService {
       throw ApiException.unauthorized("Invalid e-mail or password");
     }
     audit.log(user.getOrganizationId(), user.getId(), "LOGIN", AuditService.USER, user.getId(), null);
-    return startSession(user, organizationName(user));
+    return startSession(user, null);
   }
 
   /**
@@ -99,7 +101,7 @@ public class AuthService {
     UserEntity user = users.findById(stored.getUserId()).filter(UserEntity::isEnabled)
         .orElseThrow(() -> ApiException.unauthorized("Session expired"));
     stored.setRevokedAt(now);
-    return startSession(user, organizationName(user));
+    return startSession(user, stored.getActiveOrganizationId());
   }
 
   @Transactional
@@ -114,7 +116,11 @@ public class AuthService {
   public UserDto me(AuthPrincipal principal) {
     UserEntity user = users.findById(principal.userId()).filter(UserEntity::isEnabled)
         .orElseThrow(() -> ApiException.unauthorized("Account is disabled"));
-    return toDto(user, organizationName(user));
+    // The company comes from the token, but the role and the right to be there are read afresh: a withdrawn
+    // access answers 401, which makes the client refresh and land in its home company.
+    OrgAccessService.Context ctx = orgAccess.contextFor(user, principal.organizationId())
+        .orElseThrow(() -> ApiException.unauthorized("Access to this organization was withdrawn"));
+    return toDto(user, ctx);
   }
 
   public UserEntity newUser(java.util.UUID orgId, String email, String fullName, String rawPassword, Role role) {
@@ -125,7 +131,7 @@ public class AuthService {
     user.setPasswordHash(passwordEncoder.encode(rawPassword));
     user.setRole(role);
     user = users.save(user);
-    access.save(new UserOrgAccessEntity(user.getId(), orgId, role));
+    accessRows.save(new UserOrgAccessEntity(user.getId(), orgId, role));
     return user;
   }
 
@@ -133,11 +139,19 @@ public class AuthService {
   @Transactional
   public Session startSessionFor(UserEntity user) {
     audit.log(user.getOrganizationId(), user.getId(), "LOGIN_SSO", AuditService.USER, user.getId(), null);
-    return startSession(user, organizationName(user));
+    return startSession(user, null);
   }
 
-  private Session startSession(UserEntity user, String orgName) {
-    AuthPrincipal principal = new AuthPrincipal(user.getId(), user.getOrganizationId(), user.getEmail(), user.getRole());
+  /**
+   * Starts a session in {@code requestedOrg}, or in the home company when that is null or the person no longer has
+   * access to it (access withdrawn, client deactivated): a refresh then quietly lands in the home company.
+   */
+  private Session startSession(UserEntity user, java.util.UUID requestedOrg) {
+    OrgAccessService.Context ctx = orgAccess.contextFor(user, requestedOrg)
+        .or(() -> orgAccess.contextFor(user, user.getOrganizationId()))
+        .orElseGet(() -> new OrgAccessService.Context(user.getOrganizationId(), organizationName(user), user.getRole(), null, null));
+    AuthPrincipal principal = new AuthPrincipal(user.getId(), ctx.organizationId(), user.getEmail(), ctx.role(),
+        ctx.firmId(), ctx.firmRole());
     String access = jwtService.generateAccessToken(principal);
 
     byte[] bytes = new byte[32];
@@ -147,17 +161,56 @@ public class AuthService {
     entity.setUserId(user.getId());
     entity.setTokenHash(hash(raw));
     entity.setExpiresAt(Instant.now().plusSeconds(props.jwt().refreshTtlSeconds()));
+    entity.setActiveOrganizationId(ctx.organizationId());
     refreshTokens.save(entity);
 
-    return new Session(new AuthResponse(access, jwtService.accessTtlSeconds(), toDto(user, orgName)), raw);
+    return new Session(new AuthResponse(access, jwtService.accessTtlSeconds(), toDto(user, ctx)), raw);
   }
 
   private String organizationName(UserEntity user) {
     return organizations.findById(user.getOrganizationId()).map(OrganizationEntity::getName).orElse("");
   }
 
-  public static UserDto toDto(UserEntity u, String orgName) {
-    return new UserDto(u.getId(), u.getEmail(), u.getFullName(), u.getRole(), u.getOrganizationId(), orgName);
+  /** The profile of the person inside the company the session is working in (role and company are the active ones). */
+  public static UserDto toDto(UserEntity u, OrgAccessService.Context ctx) {
+    return new UserDto(u.getId(), u.getEmail(), u.getFullName(), ctx.role(), ctx.organizationId(), ctx.organizationName(),
+        ctx.firmId(), ctx.firmRole());
+  }
+
+  /**
+   * Switches the session to another client company. The target is checked against the database, never against the
+   * token, and "no such company" and "not yours" answer identically so company ids cannot be probed. The new access
+   * token carries the new company; the refresh token is told too, so a later refresh stays in it.
+   */
+  @Transactional
+  public AuthResponse switchOrganization(AuthPrincipal me, java.util.UUID targetOrg, String rawRefreshToken) {
+    UserEntity user = users.findById(me.userId()).filter(UserEntity::isEnabled)
+        .orElseThrow(() -> ApiException.unauthorized("Account is disabled"));
+    OrgAccessService.Context ctx = orgAccess.contextFor(user, targetOrg)
+        .orElseThrow(() -> ApiException.forbidden("You do not have access to this organization"));
+
+    if (!ctx.organizationId().equals(me.organizationId())) {
+      Map<String, Object> details = Map.of("from", me.organizationId().toString(), "to", ctx.organizationId().toString());
+      audit.log(me.organizationId(), user.getId(), "ORG_SWITCH", AuditService.ORGANIZATION, ctx.organizationId(), details);
+      audit.log(ctx.organizationId(), user.getId(), "ORG_SWITCH", AuditService.ORGANIZATION, ctx.organizationId(), details);
+    }
+    if (rawRefreshToken != null && !rawRefreshToken.isBlank()) {
+      refreshTokens.findByTokenHash(hash(rawRefreshToken))
+          .filter(t -> t.getUserId().equals(user.getId()) && t.getRevokedAt() == null)
+          .ifPresent(t -> t.setActiveOrganizationId(ctx.organizationId()));
+    }
+    AuthPrincipal principal = new AuthPrincipal(user.getId(), ctx.organizationId(), user.getEmail(), ctx.role(),
+        ctx.firmId(), ctx.firmRole());
+    return new AuthResponse(jwtService.generateAccessToken(principal), jwtService.accessTtlSeconds(), toDto(user, ctx));
+  }
+
+  /** The client companies this person can switch to. */
+  @Transactional(readOnly = true)
+  public java.util.List<AuthDtos.OrganizationOption> organizations(AuthPrincipal me) {
+    UserEntity user = users.findById(me.userId()).filter(UserEntity::isEnabled)
+        .orElseThrow(() -> ApiException.unauthorized("Account is disabled"));
+    return orgAccess.optionsFor(user).stream()
+        .map(o -> new AuthDtos.OrganizationOption(o.organizationId(), o.name(), o.role(), o.home(), o.active())).toList();
   }
 
   private String dummyHash() {

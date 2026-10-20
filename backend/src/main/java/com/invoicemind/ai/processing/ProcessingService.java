@@ -18,7 +18,7 @@ import com.invoicemind.ai.notification.NotificationService;
 import com.invoicemind.ai.storage.FileStorage;
 import com.invoicemind.ai.user.Role;
 import com.invoicemind.ai.user.UserEntity;
-import com.invoicemind.ai.user.UserRepository;
+import com.invoicemind.ai.firm.UserOrgAccessRepository;
 import com.invoicemind.ai.validation.ValidationService;
 import com.invoicemind.ai.webhook.WebhookOutbox;
 import java.math.BigDecimal;
@@ -56,7 +56,7 @@ public class ProcessingService {
 
   private final InvoiceRepository invoices;
   private final VendorService vendors;
-  private final UserRepository users;
+  private final UserOrgAccessRepository access;
   private final FileStorage storage;
   private final AiClient ai;
   private final ValidationService validation;
@@ -68,13 +68,13 @@ public class ProcessingService {
   private final Clock clock;
   private final TransactionTemplate tx;
 
-  public ProcessingService(InvoiceRepository invoices, VendorService vendors, UserRepository users,
+  public ProcessingService(InvoiceRepository invoices, VendorService vendors, UserOrgAccessRepository access,
                            FileStorage storage, AiClient ai, ValidationService validation, AuditService audit,
                            StatusPublisher status, NotificationService notifications, WebhookOutbox webhooks,
                            ObjectMapper mapper, Clock clock, PlatformTransactionManager txManager) {
     this.invoices = invoices;
     this.vendors = vendors;
-    this.users = users;
+    this.access = access;
     this.storage = storage;
     this.ai = ai;
     this.validation = validation;
@@ -200,7 +200,7 @@ public class ProcessingService {
     } else {
       notifications.notify(inv.getOrganizationId(), inv.getUploadedBy(), "PROCESSED", "Invoice processed",
           label + " passed validation.", inv.getId());
-      for (UserEntity reviewer : users.findByOrganizationIdAndRoleInAndEnabledTrue(inv.getOrganizationId(),
+      for (UserEntity reviewer : access.findEnabledUsersWithRoleIn(inv.getOrganizationId(),
           List.of(Role.APPROVER, Role.ADMIN))) {
         if (!reviewer.getId().equals(inv.getUploadedBy())) {
           notifications.notify(inv.getOrganizationId(), reviewer.getId(), "AWAITING_APPROVAL",

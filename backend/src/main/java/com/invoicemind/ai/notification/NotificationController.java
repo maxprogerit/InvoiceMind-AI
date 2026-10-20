@@ -22,19 +22,19 @@ public class NotificationController {
 
   @GetMapping
   public NotificationList list() {
-    UUID me = CurrentUser.get().userId();
-    return new NotificationList(service.latest(me), service.unread(me));
+    var me = CurrentUser.get();
+    return new NotificationList(service.latest(me.userId(), me.organizationId()), service.unread(me.userId(), me.organizationId()));
   }
 
   @PostMapping("/{id}/read")
   public ResponseEntity<Void> markRead(@PathVariable UUID id) {
-    if (!service.markRead(CurrentUser.get().userId(), id)) throw ApiException.notFound("Notification");
+    if (!service.markRead(CurrentUser.get().userId(), CurrentUser.get().organizationId(), id)) throw ApiException.notFound("Notification");
     return ResponseEntity.noContent().build();
   }
 
   @PostMapping("/read-all")
   public ResponseEntity<Void> markAllRead() {
-    service.markAllRead(CurrentUser.get().userId());
+    service.markAllRead(CurrentUser.get().userId(), CurrentUser.get().organizationId());
     return ResponseEntity.noContent().build();
   }
 }

@@ -42,6 +42,7 @@ class EmailIngestIT extends AbstractIntegrationTest {
   @Autowired AppProperties appProps;
   @Autowired OrganizationRepository organizations;
   @Autowired UserRepository users;
+  @Autowired com.invoicemind.ai.firm.OrgAccessService orgAccess;
   @Autowired InvoiceService invoices;
   @Autowired AuditService audit;
   @Autowired NamedParameterJdbcTemplate jdbc;
@@ -222,7 +223,7 @@ class EmailIngestIT extends AbstractIntegrationTest {
     String token = token(admin);
     MailProperties strictProps = new MailProperties(true, mailProps.address(), mailProps.host(), mailProps.port(),
         mailProps.username(), mailProps.password(), false, "INBOX", 3600, true, 20, 5, 30_000_000);
-    EmailIngestService strict = new EmailIngestService(strictProps, appProps, organizations, users, invoices, audit, jdbc);
+    EmailIngestService strict = new EmailIngestService(strictProps, appProps, organizations, users, orgAccess, invoices, audit, jdbc);
 
     MimeMessage forged = mail(addr(token), user.email(), "forged sender", null, List.of(pdf("a.pdf")));
     forged.setHeader("Authentication-Results", "mx.example.com; dkim=fail; spf=fail");
