@@ -15,6 +15,8 @@ public interface UserOrgAccessRepository extends JpaRepository<UserOrgAccessEnti
 
   List<UserOrgAccessEntity> findByOrganizationId(UUID organizationId);
 
+  List<UserOrgAccessEntity> findByOrganizationIdIn(Collection<UUID> organizationIds);
+
   Optional<UserOrgAccessEntity> findByUserIdAndOrganizationId(UUID userId, UUID organizationId);
 
   /** The people of one organisation: whoever has been given access to it, with the role they hold there. */
