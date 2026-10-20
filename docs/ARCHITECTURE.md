@@ -182,6 +182,45 @@ rates older than 14 days are not trusted, manual rates stay valid until replaced
 same date). If no usable rate exists the invoice is reported under "not converted" with its own currency. A failed download is
 recorded and shown on the Settings page, analytics keep working, and the download is retried. Only dates leave the system.
 
+### Firms and client companies
+
+An accounting firm works for many client companies, so a `firm` sits above the `organization`. **The organisation is still
+the data tenant**: every business row keeps its `organization_id`, the JWT `org` claim keeps its meaning, and none of the ~190
+places that read it were rewritten. What is new is only *who may be in which organisation*:
+
+```mermaid
+erDiagram
+  firms ||--o{ organizations : "owns clients"
+  firms ||--o{ firm_members : "has team"
+  users ||--o{ firm_members : "FIRM_ADMIN / ACCOUNTANT"
+  users ||--o{ user_org_access : "may work in"
+  organizations ||--o{ user_org_access : "with a role there"
+```
+
+- `user_org_access(user, organization, role)` is the per-client grant; the role in *that* client comes from this row (a person
+  can be APPROVER in one client and USER in another). A `FIRM_ADMIN` reaches every client of the firm as ADMIN without a row.
+  `users.organization_id` stays as the home client: sign-in lands there. Rows that predate V8 are backfilled (a firm of one per
+  company, one access row per user, ADMINs become FIRM_ADMIN) and, for a user without any row, the home client still falls back
+  to `users.role`.
+- **One place decides access**: `OrgAccessService`. Sign-in, refresh, switching, the list of clients, `/auth/me`, e-mail senders
+  and audit actor names all ask it.
+- **Switching** is a new access token with another `org` claim, issued by `POST /auth/switch-organization` after the server checked
+  the database. The target id is untrusted input: unknown and foreign ids answer with the same 403. The chosen client is stored on
+  the refresh token (`refresh_tokens.active_organization_id`, copied on rotation), so a refresh stays in it; it is re-checked
+  at every refresh and falls back to the home client when access is gone or the client was deactivated.
+- **Firm endpoints** read the caller's firm membership from the database on every call (the token's `firm`/`firmRole` claims are a
+  hint for the UI, not an authorisation), and every client id from a request goes through `assertOrgBelongsToFirm` (a foreign id
+  is a 404, like a missing one).
+- **WebSocket**: the principal is fixed at `CONNECT`, so after a switch the browser reconnects with the new token (the client does
+  this because its connection follows the organisation id). User queues are routed by user id, so a person working in two clients
+  receives pushes for both; notifications carry their organisation and are listed per organisation, and the UI only pops up the
+  open client's.
+- **Monthly limit**: `firms.monthly_document_limit` is checked in `InvoiceService.upload` (so mail ingestion is covered too) against
+  the `INVOICE_UPLOADED` audit rows of all the firm's clients in the calendar month; over it: `402 firm_limit_reached` and an
+  audit row written in its own transaction. Null means unlimited and is the default.
+- **Why a firm of one for everybody**: one code path. A company that registers alone gets a firm and a FIRM_ADMIN membership, so
+  there is no "firm-less" mode to keep in step; the UI simply shows no switcher until there is a second client.
+
 ### Integrations
 
 - **Webhooks (the ERP hook).** Events are written in the same transaction as the invoice change (transactional outbox,
@@ -216,6 +255,9 @@ document content). Log lines carry the trace id.
 | LLM output | untrusted input | strict Pydantic schema; dates and currency re-parsed; every key value must appear in the OCR text (grounding); injection detector forces review; **the backend then re-validates everything deterministically** |
 | Knowledge passages | untrusted data | same tag neutralisation, the model has no tools, citations outside the supplied passages are dropped |
 | JWT / `organizationId` | the only source of identity | the organisation always comes from the verified token, never from request input |
+| Switch target (`organizationId` in `switch-organization`) | untrusted input | checked against the database by `OrgAccessService`; unknown and foreign ids give the same 403; the active organisation is only ever taken from the signed token afterwards |
+| Client id in `/firm/**` | untrusted input | `assertOrgBelongsToFirm` against the caller's firm (404 otherwise); the caller's firm role is read from the database, not from the token claims |
+| Firm claims in the JWT | hint for the UI | never used to authorise; revoking access shows in a held token only at its expiry (15 min), while `/auth/me` and refresh re-check at once |
 | Webhook URL | server-side request forgery risk | scheme/credential check, every resolved address must be public (re-checked at delivery), no redirects, response bodies never read or stored |
 | Inbound e-mail | hostile | recipient token + sender-is-a-user check, optional dkim/spf proof, attachments through the normal upload gatekeeping, count and size caps, subject stripped of control characters |
 | OIDC ID token | hostile until verified | JWKS signature, issuer, expiry, audience and nonce checked; state in a signed cookie; `next` limited to same-site paths |
@@ -242,8 +284,10 @@ rules always do.
   reviewers see the organisation. Foreign and unknown ids are indistinguishable (404). The permission flags
   (`canEdit`, `canApprove`...) are computed on the server and the UI only renders them.
   Approvers cannot approve their own uploads (four-eyes); admins can (documented break-glass).
-- **Tenancy**: tenant = organisation, resolved from the JWT. A registration creates a new organisation and its
-  first admin.
+- **Tenancy**: tenant = organisation (a client company), resolved from the JWT. A registration creates a firm of one,
+  its single client organisation and the first admin (who is also FIRM_ADMIN). Isolation is in the application layer
+  (every query filters by the token's organisation); there is no row-level security in PostgreSQL. See
+  [Firms and client companies](#firms-and-client-companies).
 - **WebSocket**: authenticates in the STOMP `CONNECT` frame, may only subscribe to the user's own queues and (for
   reviewers) their organisation's topic, and may not publish.
 - **Audit**: uploads, processing steps, corrections (with before and after), decisions, exports, team and
@@ -273,6 +317,11 @@ erDiagram
   webhook_endpoints ||--o{ webhook_deliveries : "outbox rows"
   organizations ||--o{ exchange_rates : "manual rates"
   organizations ||--o{ email_ingest_log : "mail seen"
+  firms ||--o{ organizations : "owns clients"
+  firms ||--o{ firm_members : "has team"
+  users ||--o{ firm_members : "firm role"
+  users ||--o{ user_org_access : "may work in"
+  organizations ||--o{ user_org_access : "role there"
 ```
 
 `invoices` also stores the OCR text, the raw model output (JSON), model name, input/output tokens, cost in USD,
@@ -293,7 +342,8 @@ aggregated on the analytics page. With `TRACING_ENABLED=true` a trace spans back
 | Unit | validator rules, file gatekeeping, JWT, export safety, chunker, AI client retries and circuit breaker | `backend/src/test` |
 | Integration | full application on real PostgreSQL (pgvector), Kafka and Redis via Testcontainers: auth, tenancy, pipeline, approvals, analytics, exports, WebSocket, knowledge, credit notes, currency conversion, webhooks, tracing propagation; plus real protocol servers: IMAP (GreenMail), OIDC (mock-oauth2-server), S3 (SeaweedFS) | `backend/src/test` (`*IT`) |
 | Service | OCR on real Tesseract/Poppler, extraction with a fake OpenAI client, injection and hallucination cases, error mapping | `ai-service/tests` (run in Docker) |
-| Frontend unit | formatting, live arithmetic, token refresh single-flight, API errors, components | `frontend/src/**/*.test.ts(x)` |
+| Firms | V8 migration applied to V1-V7 data (`FirmMigrationIT`, Flyway on a throw-away Postgres); switching, role from the access row, refresh keeping the client, isolation between clients and between firms (`FirmSwitchIT`); firm API, summary, team, limit (`FirmApiIT`) | `backend/src/test` |
+| Frontend unit | formatting, live arithmetic, token refresh single-flight, API errors, components, the client switcher and the switch hook | `frontend/src/**/*.test.ts(x)` |
 | End to end | a real browser against the whole stack | `frontend/e2e` |
 | Quality | field-level accuracy of the real pipeline on 16 documents with ground truth | `eval/` → `docs/EVALUATION.md` |
 

@@ -14,12 +14,13 @@ and tested against fakes, but never run against the real external service in thi
 | Check | Result |
 |---|---|
 | Fresh `git clone` → `cp .env.example .env` → `docker compose up --build --wait` | 7 services healthy, nothing edited by hand (done before the optional-feature round). After it, the stack was rebuilt from scratch (`down -v`, `up --build --wait`) from the current working tree: 7 healthy, 11 browser scenarios pass; a fresh `git clone` was not repeated |
-| Backend `mvn verify` | **150 tests, 0 failures** (unit + Testcontainers integration on real PostgreSQL/pgvector, Kafka, Redis; plus a real IMAP server, OIDC server and S3-compatible store) |
+| Backend `mvn verify` | **170 tests, 0 failures** (150 before firms + 20 for firms; unit + Testcontainers integration on real PostgreSQL/pgvector, Kafka, Redis; plus a real IMAP server, OIDC server and S3-compatible store) |
 | ai-service `pytest` in Docker with real Tesseract + Poppler | **45 tests, 0 failures** (47 in the image built with PaddleOCR, where the real-engine tests of `tests/test_paddle.py` run instead of being skipped) |
-| Frontend `eslint`, `tsc`, `vitest` | clean, **28 tests** |
-| Playwright against the full stack through Nginx | **11 scenarios pass** (register → upload → live status → correct → approve → analytics → XLSX → knowledge → credit note → settings and exchange rates → webhook → roles → session expiry) |
+| Frontend `eslint`, `tsc`, `vitest` | clean, **38 tests** (28 before firms) |
+| Playwright against the full stack through Nginx | **17 scenarios pass** (the 11 below, plus 6 for a firm with two clients; register → upload → live status → correct → approve → analytics → XLSX → knowledge → credit note → settings and exchange rates → webhook → roles → session expiry) |
 | Real OCR through the whole pipeline | text PDF read from its text layer (confidence 1.0); PNG scan read by Tesseract (0.93) |
 | Real extraction, knowledge base and screenshots | done with `gpt-5.5` on 2026-10-15: evaluation 18/18, live stack 5/5, RAG answer with citation |
+| Firms (firm → client companies) | built and run on 2026-10-20: V8 applied on V1-V7 data (`FirmMigrationIT`), switching and isolation (`FirmSwitchIT`, 10 tests), firm API and limit (`FirmApiIT`, 9 tests), switcher unit tests, a Playwright scenario with two clients. The isolation guard `assertOrgBelongsToFirm` was mutation-checked: with the firm filter removed, `FirmApiIT` fails |
 | Behaviour with no OpenAI key | the invoice ends `FAILED` with "OPENAI_API_KEY is not configured"; nothing is invented |
 
 ## Features
@@ -62,6 +63,24 @@ and tested against fakes, but never run against the real external service in thi
 | CI workflow | **UNVERIFIED** | `.github/workflows/ci.yml` is written and every command in it was run locally, but it has not run on GitHub (this repository has no remote here) |
 | Accuracy evaluation | WORKS | `docs/EVALUATION.md` from a real run of `gpt-5.5`: 18/18 exact, macro-F1 100 %, line items 70/70, tokens 22,480 in / 4,185 out. The cost row there assumes placeholder prices. Not yet compared across models |
 | README screenshots | WORKS | `scripts/capture-screenshots.cjs` against the real-model stack (PDF viewer rendered, English UI) |
+
+### Firms: what is and is not verified
+
+| Claim | Status | Evidence / gap |
+|---|---|---|
+| V8 keeps existing data: a firm of one per company, one access row per user, ADMINs become FIRM_ADMIN | WORKS | `FirmMigrationIT` migrates a database to V7, inserts data, migrates to V8 and compares |
+| Demo and pre-firm accounts sign in as before | WORKS | `FirmSwitchIT.rowsFromBeforeFirmsStillWork…` (no firm rows at all), the unchanged existing suites, and the real demo database (22 invoices, created under V1-V7) migrated by the backend on start: the three demo accounts signed in with their old roles and saw 22 / 22 / 4 invoices (admin / approver / user); the admin became FIRM_ADMIN of the "Demo Company" firm |
+| Switching: role from the access row, 403 identical for unknown and foreign ids, `ORG_SWITCH` audited in both clients | WORKS | `FirmSwitchIT` |
+| The chosen client survives a refresh, and falls back home when access is gone or the client deactivated | WORKS | `FirmSwitchIT` |
+| Isolation of invoices, audit, knowledge, export, analytics and webhooks between clients and between firms | WORKS | `FirmSwitchIT` (firm two, with its own tokens and by switching, sees none of firm one); `TenancyIT` unchanged |
+| The monthly limit is summed over all clients, refused with 402 and audited | WORKS | `FirmApiIT.theMonthlyLimit…` |
+| Client summary: counts and month-to-date total per client | WORKS (counts, same-currency total) | `FirmApiIT`; **other currencies are not converted** (shown as a count), by design |
+| One grouped query with indexes | PARTLY | one `GROUP BY` over the existing `(organization_id, status)` / `(organization_id, created_at)` indexes; no `EXPLAIN` or load test was run, so no performance claim |
+| WebSocket after a switch | PARTLY | the client reconnects because its effect depends on the organisation id, and stale pushes of another client are filtered in the UI; verified by reading and by the browser scenario staying consistent, **not** by a WebSocket test that switches mid-connection |
+| Revoking access takes effect | PARTLY | at once for `/auth/me`, refresh, switching and the firm API; a token already issued works until it expires (≤ 15 min) |
+| Backend suite stability | one flake seen | once, while a Docker stack was building next to it, `S3PipelineIT` failed at start ("Unexpected end of file" from the SeaweedFS gateway, not firm code); it passed alone and in the next full run (170/170) |
+| Real multi-user concurrency on the limit | NOT TESTED | the check is not locked; simultaneous uploads can overshoot |
+| Browser flow | WORKS, one flake seen | the Playwright scenario passed 8 of 9 runs; on the first run right after the stack was built a created client did not appear in the table (not reproduced in 8 further runs, cause unknown) |
 
 ## Defects found and fixed while building the optional features
 

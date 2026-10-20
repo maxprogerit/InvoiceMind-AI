@@ -145,6 +145,40 @@ Details, the lifecycle diagram, the Kafka-vs-`@Async` decision and the trust bou
 | Manage team, knowledge documents, delete invoices | – | – | ✓ |
 | Settings (reporting currency, exchange rates, e-mail address), integrations (webhooks) | – | – | ✓ |
 
+## Multi-client firms
+
+An accounting firm works for several client companies. A **firm** sits above its **client companies** (organisations):
+each client stays a separate data tenant with its own invoices, team, audit trail, knowledge base, webhooks and
+reporting currency; the firm only decides who may enter which client. Nothing changes for a company that registers on its
+own: it is a firm of one with a single client (itself), and the extra screens only appear when there is something to switch.
+
+- **Firm roles.** `FIRM_ADMIN` reaches every client of the firm (as ADMIN there) and manages clients and the firm team.
+  `ACCOUNTANT` reaches only the clients they were given, with the role they were given there (a person can be an approver
+  for one client and a plain user for another).
+- **Switching.** The client switcher (sidebar, only for people who can reach more than one client; searchable) asks the
+  server for a token for the chosen client (`POST /api/v1/auth/switch-organization`). The server checks the database, not the
+  old token; "no such client" and "not yours" give the identical 403. The page's cache is reset and the live connection
+  reconnects with the new token. The chosen client is stored with the refresh token, so a reload or a token refresh stays in
+  it; if access has been withdrawn in the meantime, the next refresh lands in the person's home client.
+- **Firm clients** (`/firm/clients`): documents, in review, awaiting approval, failed, and the approved total of the current
+  month per client, from one grouped query. The total counts only invoices already in the client's reporting currency;
+  approved invoices in other currencies are shown as a count, never converted behind your back. A row opens that client.
+- **Firm team** (`/firm/team`): the access matrix (person × client, with the role there). New accountants start with one client
+  (their home, where they land on sign-in) and get more in the table. Removing a person disables the account.
+- **Monthly document limit.** `firms.monthly_document_limit` (null = unlimited, the default) caps the uploads of the whole firm
+  per calendar month (UTC), summed over all of its clients, including mail ingestion. Over the limit an upload answers
+  `402 firm_limit_reached` with a message, and the refusal is audited. There is no billing and no UI to set the limit; it is
+  a column an operator sets: `update firms set monthly_document_limit = 200 where id = '…'`.
+- **Audit.** `ORG_SWITCH` (in both clients), `CLIENT_CREATED`, `CLIENT_UPDATED`, `CLIENT_DEACTIVATED`, `ACCESS_GRANTED`,
+  `ACCESS_CHANGED`, `ACCESS_REVOKED`, `FIRM_LIMIT_REACHED`.
+
+| Endpoint | Who |
+|---|---|
+| `GET /api/v1/auth/organizations`, `POST /api/v1/auth/switch-organization` | anyone signed in (the result is limited to what they may enter) |
+| `GET /api/v1/firm`, `GET /api/v1/firm/clients` | firm members (an accountant sees only their clients) |
+| `POST /api/v1/firm/clients`, `PUT /api/v1/firm/clients/{id}`, `POST …/{id}/deactivate`, `POST …/{id}/activate` | firm admins |
+| `GET/POST /api/v1/firm/members`, `PUT/DELETE /api/v1/firm/members/{userId}/access/{clientId}`, `DELETE /api/v1/firm/members/{userId}` | firm admins |
+
 ## Configuration
 
 Everything is an environment variable; see [`.env.example`](.env.example) (secrets are never committed).
@@ -188,13 +222,13 @@ cd frontend && npm ci && BACKEND_INTERNAL_URL=http://127.0.0.1:18080 npm run dev
 ### Tests
 
 ```bash
-cd backend && mvn verify                                         # 150 tests; needs Docker (Testcontainers)
+cd backend && mvn verify                                         # 170 tests; needs Docker (Testcontainers)
 docker build --target test -t im-ai-test ai-service && docker run --rm im-ai-test   # 45 tests, real Tesseract/Poppler (add --build-arg WITH_PADDLE=1 for the PaddleOCR tests)
-cd frontend && npm run lint && npm run typecheck && npm test     # 28 unit tests
+cd frontend && npm run lint && npm run typecheck && npm test     # 38 unit tests
 
 # browser end-to-end on the full stack, with an offline AI test double (no API key, no cost)
 docker compose -f docker-compose.yml -f docker-compose.e2e.yml up --build -d --wait
-cd frontend && npx playwright install chromium && E2E_BASE_URL=http://localhost npx playwright test   # 11 scenarios
+cd frontend && npx playwright install chromium && E2E_BASE_URL=http://localhost npx playwright test   # 17 scenarios
 ```
 
 CI (`.github/workflows/ci.yml`) runs all of the above plus a check that the generated TypeScript API types match the backend.
@@ -222,6 +256,7 @@ neutralisation, audit trail. The full model is in [docs/ARCHITECTURE.md](docs/AR
 
 - The evaluation set is synthetic and small (18 documents, one model run): 18/18 on it is a smoke test, not an SLA. Real invoices are messier.
 - Access tokens live 15 minutes: disabling a user or changing a role takes effect for already-issued tokens at their expiry (refresh is blocked immediately). An open WebSocket stays authorised until it reconnects.
+- Firms: an e-mail address belongs to one account, so one person cannot work as two separate users for two firms (inside a firm one account reaches many clients). Taking access away, deactivating a client or removing a team member shows in a session that is already open only when its 15-minute token expires (`/auth/me` and refresh check at once). Deactivating a client does not lock out people whose home company it is. The monthly limit is checked per upload without a lock, so simultaneous uploads can overshoot it by a few documents; it counts uploads recorded in the audit trail, so deleting a document does not give the quota back. The firm clients total does not convert currencies. There is no screen to edit a client's name or currency or to set the limit (the API for the first two exists).
 - Zero-value invoices are rejected by validation. Currency conversion uses one rate per invoice date (no hedging, no month-end revaluation); the ECB does not publish every currency, those need manual rates.
 - Webhook delivery is at-least-once, so receivers must deduplicate on the event id. The signing secret is stored in the database in clear (it must be, to sign); protect database access accordingly.
 - E-mail ingestion polls one mailbox every minute (no IMAP IDLE) and trusts the `From` address unless `MAIL_REQUIRE_AUTH_RESULTS=true`.
