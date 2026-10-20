@@ -15,6 +15,7 @@ import { useLive } from "@/lib/ws/live-store";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 
+import { ClientSwitcher } from "./client-switcher";
 import { NAV } from "./nav";
 
 export function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
@@ -25,7 +26,7 @@ export function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
 
   return (
     <nav aria-label="Main" className="space-y-1">
-      {NAV.filter((item) => !item.roles || (user && item.roles.includes(user.role))).map(({ href, label, icon: Icon }) => {
+      {NAV.filter((item) => (!item.roles || (user && item.roles.includes(user.role))) && (!item.firmRoles || (user?.firmRole && item.firmRoles.includes(user.firmRole)))).map(({ href, label, icon: Icon }) => {
         const active = pathname === href || pathname.startsWith(`${href}/`);
         return (
           <Link
@@ -103,7 +104,7 @@ export function Sidebar() {
     <aside className="sticky top-0 hidden h-dvh w-[232px] shrink-0 flex-col border-r border-line px-5 py-7 lg:flex">
       <Link href="/invoices" className="mb-9 block px-1.5" aria-label="InvoiceMind home">
         <Logo />
-        <OrgName />
+        <ClientSwitcher fallback={<OrgName />} />
       </Link>
       <div className="flex-1 overflow-y-auto">
         <NavLinks />

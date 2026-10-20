@@ -8,6 +8,7 @@ import { useState } from "react";
 import { Logo } from "@/components/brand/logo";
 
 import { NotificationBell } from "./notification-bell";
+import { ClientSwitcher } from "./client-switcher";
 import { NavLinks, UserPanel } from "./sidebar";
 
 export function MobileBar() {
@@ -27,7 +28,10 @@ export function MobileBar() {
             <DialogPrimitive.Overlay className="fixed inset-0 z-40 bg-black/70" />
             <DialogPrimitive.Content className="fixed inset-y-0 left-0 z-50 flex w-72 flex-col gap-6 border-r border-line bg-bg px-5 py-6 focus:outline-none">
               <DialogPrimitive.Title className="sr-only">Navigation</DialogPrimitive.Title>
-              <Logo />
+              <div>
+                <Logo />
+                <ClientSwitcher onSwitched={() => setOpen(false)} />
+              </div>
               <div className="flex-1 overflow-y-auto">
                 <NavLinks onNavigate={() => setOpen(false)} />
               </div>

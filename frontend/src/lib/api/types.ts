@@ -71,3 +71,13 @@ export interface StatusEvent {
 export type KnowledgeDocument = S["DocumentDto"];
 export type KnowledgeAnswer = S["AnswerDto"];
 export type KnowledgeSource = S["Source"];
+
+// ------------------------------------------------------------------- firms
+export type FirmRole = NonNullable<AuthUser["firmRole"]>;
+export type OrganizationOption = S["OrganizationOption"];
+export type FirmInfo = S["FirmInfo"];
+export type ClientSummary = S["ClientSummary"];
+export type ClientAccess = S["ClientAccess"];
+export type FirmMember = S["FirmMemberDto"];
+export type FirmTeam = S["FirmTeam"];
+export type ClientRef = S["ClientRef"];

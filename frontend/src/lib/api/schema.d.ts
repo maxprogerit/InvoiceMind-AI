@@ -52,6 +52,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/firm/members/{userId}/access/{organizationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["grant"];
+        post?: never;
+        delete: operations["revoke"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/firm/clients/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["updateClient"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/webhooks": {
         parameters: {
             query?: never;
@@ -292,6 +324,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/firm/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["members"];
+        put?: never;
+        post: operations["addMember"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/firm/clients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["clients"];
+        put?: never;
+        post: operations["createClient"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/firm/clients/{id}/deactivate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["deactivate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/firm/clients/{id}/activate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["activate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/switch-organization": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["switchOrganization"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/register": {
         parameters: {
             query?: never;
@@ -516,6 +628,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/firm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["info"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/export/invoices": {
         parameters: {
             query?: never;
@@ -524,6 +652,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["invoices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/organizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["organizations"];
         put?: never;
         post?: never;
         delete?: never;
@@ -724,6 +868,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/firm/members/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["remove"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -853,6 +1013,38 @@ export interface components {
             perEur: number;
             /** Format: date-time */
             createdAt: string;
+        };
+        GrantAccessRequest: {
+            /** @enum {string} */
+            role: "USER" | "APPROVER" | "ADMIN";
+        };
+        ClientAccess: {
+            /** Format: uuid */
+            organizationId: string;
+            /** @enum {string} */
+            role: "USER" | "APPROVER" | "ADMIN";
+        };
+        UpdateClientRequest: {
+            name?: string;
+            baseCurrency?: string;
+        };
+        ClientSummary: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            baseCurrency: string;
+            active: boolean;
+            /** Format: int64 */
+            documents: number;
+            /** Format: int64 */
+            inReview: number;
+            /** Format: int64 */
+            failed: number;
+            /** Format: int64 */
+            awaitingApproval: number;
+            monthToDateTotal: number;
+            /** Format: int64 */
+            monthToDateOtherCurrency: number;
         };
         CreateEndpointRequest: {
             url: string;
@@ -997,11 +1189,33 @@ export interface components {
             /** Format: date-time */
             receivedAt: string;
         };
-        RegisterRequest: {
-            organizationName: string;
-            fullName: string;
+        CreateMemberRequest: {
             email: string;
+            fullName: string;
             password: string;
+            /** @enum {string} */
+            firmRole: "FIRM_ADMIN" | "ACCOUNTANT";
+            access: components["schemas"]["ClientAccess"][];
+        };
+        FirmMemberDto: {
+            /** Format: uuid */
+            userId: string;
+            email: string;
+            fullName: string;
+            /** @enum {string} */
+            firmRole: "FIRM_ADMIN" | "ACCOUNTANT";
+            enabled: boolean;
+            /** Format: uuid */
+            homeOrganizationId: string;
+            access: components["schemas"]["ClientAccess"][];
+        };
+        CreateClientRequest: {
+            name: string;
+            baseCurrency: string;
+        };
+        SwitchOrganizationRequest: {
+            /** Format: uuid */
+            organizationId: string;
         };
         AuthResponse: {
             accessToken: string;
@@ -1019,6 +1233,16 @@ export interface components {
             /** Format: uuid */
             organizationId: string;
             organizationName: string;
+            /** Format: uuid */
+            firmId?: string;
+            /** @enum {string} */
+            firmRole?: "FIRM_ADMIN" | "ACCOUNTANT";
+        };
+        RegisterRequest: {
+            organizationName: string;
+            fullName: string;
+            email: string;
+            password: string;
         };
         LoginRequest: {
             email: string;
@@ -1039,6 +1263,8 @@ export interface components {
         NotificationDto: {
             /** Format: uuid */
             id: string;
+            /** Format: uuid */
+            organizationId: string;
             type: string;
             title: string;
             body: string;
@@ -1096,6 +1322,39 @@ export interface components {
             ecbCoveredTo?: string;
             lastError?: string;
             manualRates: components["schemas"]["ManualRate"][];
+        };
+        FirmInfo: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            plan: string;
+            /** Format: int32 */
+            documentLimit?: number;
+            /** Format: int64 */
+            documentsThisMonth: number;
+            /** @enum {string} */
+            firmRole: "FIRM_ADMIN" | "ACCOUNTANT";
+            /** Format: int32 */
+            clientCount: number;
+        };
+        ClientRef: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            active: boolean;
+        };
+        FirmTeam: {
+            clients: components["schemas"]["ClientRef"][];
+            members: components["schemas"]["FirmMemberDto"][];
+        };
+        OrganizationOption: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            /** @enum {string} */
+            role: "USER" | "APPROVER" | "ADMIN";
+            home: boolean;
+            active: boolean;
         };
         AuthConfig: {
             sso: components["schemas"]["Sso"];
@@ -1346,6 +1605,80 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ManualRate"];
+                };
+            };
+        };
+    };
+    grant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+                organizationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GrantAccessRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ClientAccess"];
+                };
+            };
+        };
+    };
+    revoke: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+                organizationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    updateClient: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateClientRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ClientSummary"];
                 };
             };
         };
@@ -1798,6 +2131,164 @@ export interface operations {
             };
         };
     };
+    members: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["FirmTeam"];
+                };
+            };
+        };
+    };
+    addMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateMemberRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["FirmMemberDto"];
+                };
+            };
+        };
+    };
+    clients: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ClientSummary"][];
+                };
+            };
+        };
+    };
+    createClient: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateClientRequest"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ClientSummary"];
+                };
+            };
+        };
+    };
+    deactivate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ClientSummary"];
+                };
+            };
+        };
+    };
+    activate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ClientSummary"];
+                };
+            };
+        };
+    };
+    switchOrganization: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                refresh_token?: string;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SwitchOrganizationRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AuthResponse"];
+                };
+            };
+        };
+    };
     register: {
         parameters: {
             query?: never;
@@ -2132,6 +2623,26 @@ export interface operations {
             };
         };
     };
+    info: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["FirmInfo"];
+                };
+            };
+        };
+    };
     invoices: {
         parameters: {
             query?: {
@@ -2159,6 +2670,26 @@ export interface operations {
                 };
                 content: {
                     "*/*": string;
+                };
+            };
+        };
+    };
+    organizations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["OrganizationOption"][];
                 };
             };
         };
@@ -2411,6 +2942,26 @@ export interface operations {
             header?: never;
             path: {
                 id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
             };
             cookie?: never;
         };

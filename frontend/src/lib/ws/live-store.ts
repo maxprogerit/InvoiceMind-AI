@@ -8,12 +8,15 @@ interface LiveState {
   latest: Record<string, { status: InvoiceStatus; at: string; failureReason?: string }>;
   setConnected: (connected: boolean) => void;
   apply: (event: StatusEvent) => void;
+  /** Forgets everything pushed for the previous client company. */
+  reset: () => void;
 }
 
 export const useLive = create<LiveState>((set) => ({
   connected: false,
   latest: {},
   setConnected: (connected) => set({ connected }),
+  reset: () => set({ latest: {} }),
   apply: (e) =>
     set((s) => ({ latest: { ...s.latest, [e.invoiceId]: { status: e.status, at: e.at, failureReason: e.failureReason } } })),
 }));
