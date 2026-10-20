@@ -6,6 +6,14 @@ import { api, authFetch, fetchBlob, toApiError, unwrap } from "./client";
 import {
   IN_FLIGHT,
   type AuditEntry,
+  type AuthUser,
+  type ClientAccess,
+  type ClientSummary,
+  type FirmInfo,
+  type FirmRole,
+  type FirmTeam,
+  type OrganizationOption,
+  type Role,
   type CreatedWebhook,
   type EmailIngestStatus,
   type FxStatus,
@@ -28,6 +36,7 @@ import {
   type WebhookDelivery,
   type WebhookEndpoint,
 } from "./types";
+import { useAuth } from "@/lib/auth/store";
 import { useLive } from "@/lib/ws/live-store";
 
 export interface InvoiceFilters {
@@ -439,3 +448,114 @@ export const useAuthConfig = () =>
     queryFn: () => unwrap(api.GET("/api/v1/auth/config")) as Promise<{ sso: { enabled: boolean; label?: string } }>,
     staleTime: 5 * 60_000,
   });
+
+// ------------------------------------------------------------------- firms
+/** The client companies the signed-in person can switch to. */
+export function useOrganizations() {
+  return useQuery({
+    queryKey: ["organizations"],
+    queryFn: () => unwrap(api.GET("/api/v1/auth/organizations")) as Promise<OrganizationOption[]>,
+    staleTime: 60_000,
+  });
+}
+
+/**
+ * Moves the session into another client company. The server answers with a token for it; everything cached belongs to the
+ * previous company, so the cache is reset, and the live connection re-opens by itself because it follows the company id.
+ */
+export function useSwitchOrganization() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (organizationId: string) =>
+      unwrap(api.POST("/api/v1/auth/switch-organization", { body: { organizationId } })) as Promise<{ accessToken: string; user: AuthUser }>,
+    onSuccess: async (res) => {
+      useAuth.getState().setSession(res.accessToken, res.user);
+      useLive.getState().reset();
+      await qc.resetQueries();
+    },
+  });
+}
+
+export function useFirm(options?: { enabled?: boolean }) {
+  return useQuery({
+    enabled: options?.enabled ?? true,
+    queryKey: ["firm"],
+    queryFn: () => unwrap(api.GET("/api/v1/firm")) as Promise<FirmInfo>,
+  });
+}
+
+export function useFirmClients() {
+  return useQuery({
+    queryKey: ["firm", "clients"],
+    queryFn: () => unwrap(api.GET("/api/v1/firm/clients")) as Promise<ClientSummary[]>,
+  });
+}
+
+function useFirmInvalidation() {
+  const qc = useQueryClient();
+  return () => Promise.all([qc.invalidateQueries({ queryKey: ["firm"] }), qc.invalidateQueries({ queryKey: ["organizations"] })]);
+}
+
+export function useCreateClient() {
+  const invalidate = useFirmInvalidation();
+  return useMutation({
+    mutationFn: (body: { name: string; baseCurrency: string }) => unwrap(api.POST("/api/v1/firm/clients", { body })),
+    onSuccess: invalidate,
+  });
+}
+
+export function useSetClientActive() {
+  const invalidate = useFirmInvalidation();
+  return useMutation({
+    mutationFn: ({ id, active }: { id: string; active: boolean }) =>
+      unwrap(
+        active
+          ? api.POST("/api/v1/firm/clients/{id}/activate", { params: { path: { id } } })
+          : api.POST("/api/v1/firm/clients/{id}/deactivate", { params: { path: { id } } }),
+      ),
+    onSuccess: invalidate,
+  });
+}
+
+export function useFirmTeam() {
+  return useQuery({ queryKey: ["firm", "team"], queryFn: () => unwrap(api.GET("/api/v1/firm/members")) as Promise<FirmTeam> });
+}
+
+export function useAddFirmMember() {
+  const invalidate = useFirmInvalidation();
+  return useMutation({
+    mutationFn: (body: {
+      email: string;
+      fullName: string;
+      password: string;
+      firmRole: FirmRole;
+      access: ClientAccess[];
+    }) => unwrap(api.POST("/api/v1/firm/members", { body })),
+    onSuccess: invalidate,
+  });
+}
+
+/** Gives a member a role in a client, or (role = null) takes the client away. */
+export function useSetAccess() {
+  const invalidate = useFirmInvalidation();
+  return useMutation({
+    mutationFn: ({ userId, organizationId, role }: { userId: string; organizationId: string; role: Role | null }) =>
+      role
+        ? unwrap(
+            api.PUT("/api/v1/firm/members/{userId}/access/{organizationId}", {
+              params: { path: { userId, organizationId } },
+              body: { role },
+            }),
+          )
+        : unwrap(api.DELETE("/api/v1/firm/members/{userId}/access/{organizationId}", { params: { path: { userId, organizationId } } })),
+    onSuccess: invalidate,
+  });
+}
+
+export function useRemoveFirmMember() {
+  const invalidate = useFirmInvalidation();
+  return useMutation({
+    mutationFn: (userId: string) => unwrap(api.DELETE("/api/v1/firm/members/{userId}", { params: { path: { userId } } })),
+    onSuccess: invalidate,
+  });
+}

@@ -1,5 +1,6 @@
 package com.invoicemind.ai.auth;
 
+import com.invoicemind.ai.firm.FirmRole;
 import com.invoicemind.ai.user.Role;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -22,8 +23,15 @@ public final class AuthDtos {
 
   public record LoginRequest(@NotBlank @Email String email, @NotBlank @Size(max = 128) String password) {}
 
+  /** {@code organizationId} / {@code role} are the active client company and the role there; the firm fields are null outside a firm. */
   public record UserDto(@NotNull UUID id, @NotNull String email, @NotNull String fullName, @NotNull Role role,
-                        @NotNull UUID organizationId, @NotNull String organizationName) {}
+                        @NotNull UUID organizationId, @NotNull String organizationName,
+                        UUID firmId, FirmRole firmRole) {}
+
+  public record SwitchOrganizationRequest(@NotNull UUID organizationId) {}
+
+  public record OrganizationOption(@NotNull UUID id, @NotNull String name, @NotNull Role role, @NotNull boolean home,
+                                   @NotNull boolean active) {}
 
   public record AuthResponse(@NotNull String accessToken, @NotNull long expiresIn, @NotNull UserDto user) {}
 }

@@ -70,6 +70,8 @@ export function LiveProvider({ children }: { children: React.ReactNode }) {
         client.subscribe("/user/queue/notifications", (m) => {
           const n = JSON.parse(m.body) as NotificationItem;
           void qc.invalidateQueries({ queryKey: ["notifications"] });
+          // a person working in several client companies gets pushes for all of them; only the open one pops up
+          if (n.organizationId !== useAuth.getState().user?.organizationId) return;
           if (n.type === "AWAITING_APPROVAL" || n.type === "APPROVED" || n.type === "REJECTED") {
             toast.info(n.title, { description: n.body });
           }

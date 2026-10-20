@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.time.Duration;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseCookie;
@@ -72,6 +73,23 @@ public class AuthController {
   @GetMapping("/me")
   public UserDto me() {
     return authService.me(CurrentUser.get());
+  }
+
+  /** The client companies the caller can switch to. */
+  @GetMapping("/organizations")
+  public List<AuthDtos.OrganizationOption> organizations() {
+    return authService.organizations(CurrentUser.get());
+  }
+
+  /**
+   * Moves the session to another client company and returns an access token for it. The refresh cookie (when sent) is
+   * only used to remember the choice for later refreshes; authentication is the bearer token.
+   */
+  @PostMapping("/switch-organization")
+  public AuthResponse switchOrganization(
+      @Valid @RequestBody AuthDtos.SwitchOrganizationRequest req,
+      @CookieValue(name = REFRESH_COOKIE, required = false) String refreshToken) {
+    return authService.switchOrganization(CurrentUser.get(), req.organizationId(), refreshToken);
   }
 
   private ResponseEntity<AuthResponse> withCookie(AuthService.Session session, int status) {

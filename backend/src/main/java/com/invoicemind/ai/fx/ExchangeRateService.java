@@ -179,14 +179,20 @@ public class ExchangeRateService {
 
   @Transactional
   public String setBaseCurrency(AuthPrincipal me, String requested) {
+    return setBaseCurrency(me.organizationId(), me.userId(), requested);
+  }
+
+  /** Same change for a named organisation; the caller has already checked that the actor may change it (firm admins do, per client). */
+  @Transactional
+  public String setBaseCurrency(UUID organizationId, UUID actor, String requested) {
     String code = isoCode(requested);
-    OrganizationEntity o = organizations.findById(me.organizationId()).orElseThrow(() -> ApiException.notFound("Organization"));
+    OrganizationEntity o = organizations.findById(organizationId).orElseThrow(() -> ApiException.notFound("Organization"));
     if (!o.getBaseCurrency().equals(code)) {
-      audit.log(me.organizationId(), me.userId(), "BASE_CURRENCY_CHANGED", AuditService.ORGANIZATION, me.organizationId(),
+      audit.log(organizationId, actor, "BASE_CURRENCY_CHANGED", AuditService.ORGANIZATION, organizationId,
           Map.of("from", o.getBaseCurrency(), "to", code));
       o.setBaseCurrency(code);
       organizations.save(o);
-      cache.invalidate(me.organizationId());
+      cache.invalidate(organizationId);
     }
     return code;
   }

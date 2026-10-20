@@ -10,13 +10,13 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface NotificationRepository extends JpaRepository<NotificationEntity, UUID> {
-  List<NotificationEntity> findTop50ByUserIdOrderByCreatedAtDesc(UUID userId);
+  List<NotificationEntity> findTop50ByUserIdAndOrganizationIdOrderByCreatedAtDesc(UUID userId, UUID organizationId);
 
-  long countByUserIdAndReadAtIsNull(UUID userId);
+  long countByUserIdAndOrganizationIdAndReadAtIsNull(UUID userId, UUID organizationId);
 
-  Optional<NotificationEntity> findByIdAndUserId(UUID id, UUID userId);
+  Optional<NotificationEntity> findByIdAndUserIdAndOrganizationId(UUID id, UUID userId, UUID organizationId);
 
   @Modifying
-  @Query("update NotificationEntity n set n.readAt = :now where n.userId = :userId and n.readAt is null")
-  int markAllRead(@Param("userId") UUID userId, @Param("now") Instant now);
+  @Query("update NotificationEntity n set n.readAt = :now where n.userId = :userId and n.organizationId = :org and n.readAt is null")
+  int markAllRead(@Param("userId") UUID userId, @Param("org") UUID organizationId, @Param("now") Instant now);
 }

@@ -2,6 +2,8 @@ package com.invoicemind.ai.user;
 
 import com.invoicemind.ai.auth.AuthService;
 import com.invoicemind.ai.config.AppProperties;
+import com.invoicemind.ai.firm.FirmRole;
+import com.invoicemind.ai.firm.FirmService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.ApplicationArguments;
@@ -21,7 +23,7 @@ public class DemoDataSeeder implements ApplicationRunner {
 
   private final AppProperties props;
   private final UserRepository users;
-  private final OrganizationRepository organizations;
+  private final FirmService firmService;
   private final AuthService authService;
 
   @Override
@@ -33,8 +35,9 @@ public class DemoDataSeeder implements ApplicationRunner {
       return;
     }
     if (users.findByEmailIgnoreCase("admin@" + DOMAIN).isPresent()) return;
-    OrganizationEntity org = organizations.save(new OrganizationEntity("Demo Company"));
-    authService.newUser(org.getId(), "admin@" + DOMAIN, "Demo Admin", password, Role.ADMIN);
+    OrganizationEntity org = firmService.createFirmOfOne("Demo Company");
+    UserEntity admin = authService.newUser(org.getId(), "admin@" + DOMAIN, "Demo Admin", password, Role.ADMIN);
+    firmService.addMember(org.getFirmId(), admin.getId(), FirmRole.FIRM_ADMIN);
     authService.newUser(org.getId(), "approver@" + DOMAIN, "Demo Approver", password, Role.APPROVER);
     authService.newUser(org.getId(), "user@" + DOMAIN, "Demo User", password, Role.USER);
     log.info("Seeded demo organisation: admin@{}, approver@{}, user@{}", DOMAIN, DOMAIN, DOMAIN);

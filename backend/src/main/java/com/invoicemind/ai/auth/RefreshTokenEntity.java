@@ -16,5 +16,7 @@ public class RefreshTokenEntity {
   private String tokenHash;
   private Instant expiresAt;
   private Instant revokedAt;
+  /** The client company the session was working in; restored by refresh. Null means the person's home company. */
+  private UUID activeOrganizationId;
   private Instant createdAt = Instant.now();
 }

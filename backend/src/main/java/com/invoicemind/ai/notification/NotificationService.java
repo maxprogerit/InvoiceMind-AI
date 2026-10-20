@@ -15,7 +15,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 @Service
 @RequiredArgsConstructor
 public class NotificationService {
-  public record NotificationDto(@NotNull UUID id, @NotNull String type, @NotNull String title, @NotNull String body,
+  public record NotificationDto(@NotNull UUID id, @NotNull UUID organizationId, @NotNull String type, @NotNull String title, @NotNull String body,
                                 UUID invoiceId, @NotNull boolean read, @NotNull Instant createdAt) {}
 
   private final NotificationRepository repository;
@@ -36,26 +36,30 @@ public class NotificationService {
   }
 
   @Transactional(readOnly = true)
-  public java.util.List<NotificationDto> latest(UUID userId) {
-    return repository.findTop50ByUserIdOrderByCreatedAtDesc(userId).stream().map(NotificationService::toDto).toList();
+  public java.util.List<NotificationDto> latest(UUID userId, UUID organizationId) {
+    return repository.findTop50ByUserIdAndOrganizationIdOrderByCreatedAtDesc(userId, organizationId).stream().map(NotificationService::toDto).toList();
   }
 
   @Transactional(readOnly = true)
-  public long unread(UUID userId) { return repository.countByUserIdAndReadAtIsNull(userId); }
+  public long unread(UUID userId, UUID organizationId) {
+    return repository.countByUserIdAndOrganizationIdAndReadAtIsNull(userId, organizationId);
+  }
 
   @Transactional
-  public boolean markRead(UUID userId, UUID id) {
-    return repository.findByIdAndUserId(id, userId).map(n -> {
+  public boolean markRead(UUID userId, UUID organizationId, UUID id) {
+    return repository.findByIdAndUserIdAndOrganizationId(id, userId, organizationId).map(n -> {
       if (n.getReadAt() == null) n.setReadAt(Instant.now());
       return true;
     }).orElse(false);
   }
 
   @Transactional
-  public int markAllRead(UUID userId) { return repository.markAllRead(userId, Instant.now()); }
+  public int markAllRead(UUID userId, UUID organizationId) {
+    return repository.markAllRead(userId, organizationId, Instant.now());
+  }
 
   static NotificationDto toDto(NotificationEntity n) {
-    return new NotificationDto(n.getId(), n.getType(), n.getTitle(), n.getBody(), n.getInvoiceId(),
+    return new NotificationDto(n.getId(), n.getOrganizationId(), n.getType(), n.getTitle(), n.getBody(), n.getInvoiceId(),
         n.getReadAt() != null, n.getCreatedAt());
   }
 

@@ -5,6 +5,7 @@ import com.invoicemind.ai.audit.AuditService.AuditEntryDto;
 import com.invoicemind.ai.common.ApiException;
 import com.invoicemind.ai.common.PageResponse;
 import com.invoicemind.ai.config.AppProperties;
+import com.invoicemind.ai.firm.FirmService;
 import com.invoicemind.ai.invoice.InvoiceDtos.DecisionRequest;
 import com.invoicemind.ai.invoice.InvoiceDtos.InvoiceDetail;
 import com.invoicemind.ai.invoice.InvoiceDtos.InvoiceSummary;
@@ -67,6 +68,7 @@ public class InvoiceService {
   private final ApplicationEventPublisher events;
   private final AppProperties props;
   private final Clock clock;
+  private final FirmService firms;
 
   // ------------------------------------------------------------------ upload
   @Transactional // the delegate below is a self-call, so this method must open the transaction itself
@@ -77,6 +79,7 @@ public class InvoiceService {
   public InvoiceSummary upload(MultipartFile file, AuthPrincipal me, String source) {
     rateLimiter.check("upload", me.userId().toString(), props.rateLimit().uploadPerMinute());
     ValidatedFile vf = fileValidator.validate(file);
+    firms.assertUploadAllowed(me);  // the firm's monthly document limit, summed over all of its clients
 
     InvoiceEntity inv = new InvoiceEntity();
     inv.setOrganizationId(me.organizationId());

@@ -89,6 +89,31 @@ roles USER / APPROVER / ADMIN; tenant isolation by organisation taken from the t
 bytes, 15 MB, PDF active-content scan); untrusted-data prompts with nonce delimiters, schema-validated and grounded model output;
 CSV/XLSX formula neutralisation; audit trail of every change.
 
+## Multi-client firms
+
+An accounting firm works for several client companies. A **firm** sits above its **client companies** (organisations):
+each client stays a separate data tenant with its own invoices, team, audit trail, knowledge base, webhooks and
+reporting currency; the firm only decides who may enter which client. Nothing changes for a company that registers on its
+own: it is a firm of one with a single client (itself), and the extra screens only appear when there is something to switch.
+
+- **Firm roles.** `FIRM_ADMIN` reaches every client of the firm (as ADMIN there) and manages clients and the firm team.
+  `ACCOUNTANT` reaches only the clients they were given, with the role they were given there (a person can be an approver
+  for one client and a plain user for another).
+- **Switching.** The client switcher (sidebar, only for people who can reach more than one client; searchable) asks the
+  server for a token for the chosen client (`POST /api/v1/auth/switch-organization`). The server checks the database, not the
+  old token; "no such client" and "not yours" give the identical 403. The page's cache is reset and the live connection
+  reconnects with the new token. The chosen client is stored with the refresh token, so a reload or a token refresh stays in
+  it; if access has been withdrawn in the meantime, the next refresh lands in the person's home client.
+- **Firm clients** (`/firm/clients`): documents, in review, awaiting approval, failed, and the approved total of the current
+  month per client. The total counts only invoices already in the client's reporting currency; approved invoices in other
+  currencies are shown as a count, never converted behind your back. A row opens that client.
+- **Firm team** (`/firm/team`): the access matrix (person × client, with the role there). New accountants start with one client
+  (their home, where they land on sign-in) and get more in the table. Removing a person disables the account.
+- **Monthly document limit.** `firms.monthly_document_limit` (null = unlimited, the default) caps the uploads of the whole firm
+  per calendar month (UTC), summed over all of its clients, including mail ingestion. Over the limit an upload answers
+  `402 firm_limit_reached`, and the refusal is audited. There is no billing and no UI to set the limit:
+  `update firms set monthly_document_limit = 200 where id = '…'`.
+
 ## Configuration
 
 Everything is an environment variable; [`.env.example`](.env.example) lists them all with comments (secrets are never committed).
@@ -118,6 +143,7 @@ cd backend && mvn -DskipTests package                                           
 - Webhook delivery is at-least-once (receivers deduplicate on the event id) and the signing secret is stored in the database in clear.
 - E-mail ingestion polls one mailbox every minute and trusts `From` unless `MAIL_REQUIRE_AUTH_RESULTS=true`.
 - Single sign-on does not map provider groups to roles and sign-out does not end the session at the provider.
+- Firms: an e-mail address belongs to one account, so one person cannot be two separate users in two firms. Withdrawing access, deactivating a client or removing a team member shows in an open session when its 15-minute token expires (`/auth/me` and refresh check at once). The monthly limit is not locked, so simultaneous uploads can overshoot it slightly, and deleting a document does not give the quota back. There is no screen to edit a client's name or currency or to set the limit.
 - Zero-value invoices are rejected by validation. Files are stored on a local volume unless S3 is configured.
 - The compose file is for a single host; terminate TLS in front of the frontend for anything public.
 
