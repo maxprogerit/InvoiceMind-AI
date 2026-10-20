@@ -7,6 +7,10 @@ import com.invoicemind.ai.auth.AuthDtos.RegisterRequest;
 import com.invoicemind.ai.auth.AuthDtos.UserDto;
 import com.invoicemind.ai.common.ApiException;
 import com.invoicemind.ai.config.AppProperties;
+import com.invoicemind.ai.firm.FirmRole;
+import com.invoicemind.ai.firm.FirmService;
+import com.invoicemind.ai.firm.UserOrgAccessEntity;
+import com.invoicemind.ai.firm.UserOrgAccessRepository;
 import com.invoicemind.ai.security.AuthPrincipal;
 import com.invoicemind.ai.security.JwtService;
 import com.invoicemind.ai.user.OrganizationEntity;
@@ -44,6 +48,8 @@ public class AuthService {
   private final JwtService jwtService;
   private final AuditService audit;
   private final AppProperties props;
+  private final FirmService firmService;
+  private final UserOrgAccessRepository access;
 
   /** Hash compared against when the e-mail is unknown, so unknown/known accounts take similar time. */
   private String dummyHash;
@@ -53,8 +59,9 @@ public class AuthService {
     if (users.findByEmailIgnoreCase(req.email().trim()).isPresent()) {
       throw ApiException.conflict("email_taken", "An account with this e-mail already exists");
     }
-    OrganizationEntity org = organizations.save(new OrganizationEntity(req.organizationName().trim()));
+    OrganizationEntity org = firmService.createFirmOfOne(req.organizationName().trim());
     UserEntity user = newUser(org.getId(), req.email(), req.fullName(), req.password(), Role.ADMIN);
+    firmService.addMember(org.getFirmId(), user.getId(), FirmRole.FIRM_ADMIN);
     audit.log(org.getId(), user.getId(), "ORGANIZATION_REGISTERED", AuditService.USER, user.getId(),
         Map.of("organization", org.getName()));
     return startSession(user, org.getName());
@@ -117,7 +124,9 @@ public class AuthService {
     user.setFullName(fullName.trim());
     user.setPasswordHash(passwordEncoder.encode(rawPassword));
     user.setRole(role);
-    return users.save(user);
+    user = users.save(user);
+    access.save(new UserOrgAccessEntity(user.getId(), orgId, role));
+    return user;
   }
 
   /** A session for a user who has already been authenticated by other means (single sign-on). */
