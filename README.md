@@ -46,6 +46,8 @@ docker compose up --build       # first build takes a few minutes
 # open http://localhost
 ```
 
+http://localhost shows a short landing page to visitors who are not signed in (with links to sign in and register); signed-in people go straight to their invoices.
+
 Sign in with a seeded demo account (password is `DEMO_PASSWORD` from `.env`, default `Demo12345!`):
 
 | Account | Role |
@@ -224,11 +226,11 @@ cd frontend && npm ci && BACKEND_INTERNAL_URL=http://127.0.0.1:18080 npm run dev
 ```bash
 cd backend && mvn verify                                         # 170 tests; needs Docker (Testcontainers)
 docker build --target test -t im-ai-test ai-service && docker run --rm im-ai-test   # 45 tests, real Tesseract/Poppler (add --build-arg WITH_PADDLE=1 for the PaddleOCR tests)
-cd frontend && npm run lint && npm run typecheck && npm test     # 38 unit tests
+cd frontend && npm run lint && npm run typecheck && npm test     # 49 unit tests
 
 # browser end-to-end on the full stack, with an offline AI test double (no API key, no cost)
 docker compose -f docker-compose.yml -f docker-compose.e2e.yml up --build -d --wait
-cd frontend && npx playwright install chromium && E2E_BASE_URL=http://localhost npx playwright test   # 17 scenarios
+cd frontend && npx playwright install chromium && E2E_BASE_URL=http://localhost npx playwright test   # 23 scenarios
 ```
 
 CI (`.github/workflows/ci.yml`) runs all of the above plus a check that the generated TypeScript API types match the backend.

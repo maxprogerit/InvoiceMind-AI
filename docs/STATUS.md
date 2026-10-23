@@ -16,8 +16,8 @@ and tested against fakes, but never run against the real external service in thi
 | Fresh `git clone` → `cp .env.example .env` → `docker compose up --build --wait` | 7 services healthy, nothing edited by hand (done before the optional-feature round). After it, the stack was rebuilt from scratch (`down -v`, `up --build --wait`) from the current working tree: 7 healthy, 11 browser scenarios pass; a fresh `git clone` was not repeated |
 | Backend `mvn verify` | **170 tests, 0 failures** (150 before firms + 20 for firms; unit + Testcontainers integration on real PostgreSQL/pgvector, Kafka, Redis; plus a real IMAP server, OIDC server and S3-compatible store) |
 | ai-service `pytest` in Docker with real Tesseract + Poppler | **45 tests, 0 failures** (47 in the image built with PaddleOCR, where the real-engine tests of `tests/test_paddle.py` run instead of being skipped) |
-| Frontend `eslint`, `tsc`, `vitest` | clean, **38 tests** (28 before firms) |
-| Playwright against the full stack through Nginx | **17 scenarios pass** (the 11 below, plus 6 for a firm with two clients; register → upload → live status → correct → approve → analytics → XLSX → knowledge → credit note → settings and exchange rates → webhook → roles → session expiry) |
+| Frontend `eslint`, `tsc`, `vitest` | clean, **49 tests** (28 before firms, 10 for firms, 11 for the landing page and the button) |
+| Playwright against the full stack through Nginx | **23 scenarios pass** (the 11 below, plus 6 for a firm with two clients and 6 for the landing page; register → upload → live status → correct → approve → analytics → XLSX → knowledge → credit note → settings and exchange rates → webhook → roles → session expiry) |
 | Real OCR through the whole pipeline | text PDF read from its text layer (confidence 1.0); PNG scan read by Tesseract (0.93) |
 | Real extraction, knowledge base and screenshots | done with `gpt-5.5` on 2026-10-15: evaluation 18/18, live stack 5/5, RAG answer with citation |
 | Firms (firm → client companies) | built and run on 2026-10-20: V8 applied on V1-V7 data (`FirmMigrationIT`), switching and isolation (`FirmSwitchIT`, 10 tests), firm API and limit (`FirmApiIT`, 9 tests), switcher unit tests, a Playwright scenario with two clients. The isolation guard `assertOrgBelongsToFirm` was mutation-checked: with the firm filter removed, `FirmApiIT` fails |
@@ -105,3 +105,14 @@ Kept here because they are the kind of thing only running the system finds:
 ## Decisions taken
 
 See [ARCHITECTURE.md](ARCHITECTURE.md): Kafka for the processing queue, STOMP for live status, Redis for rate limits and cache, one organisation per registration, pgvector instead of a separate vector database, credit notes stored negative, EUR-pivot rates that never guess, transactional-outbox webhooks with an SSRF guard, OIDC with subject pinning.
+
+### Landing page and the soft accent
+
+| Claim | Status | Evidence / gap |
+|---|---|---|
+| `/` shows a landing page to anonymous visitors, signed-in people still land on `/invoices`, `/login` and `/register` are unchanged | WORKS | `landing.test.tsx`, `e2e/landing.spec.ts`, and the 11 earlier browser scenarios unchanged and passing |
+| The conveyor drawing is CSS only, loops (belt, beam, invoices, arm) and stops under `prefers-reduced-motion`, leaving a still frame with the three outcomes | WORKS | `e2e/landing.spec.ts` reads the computed animations in both modes; checked by eye on screenshots at 1440 px and 390 px |
+| No horizontal scroll on a phone | WORKS | measured at 390 px (`scrollWidth` equals `clientWidth`) |
+| Text contrast inside the drawing and the page | WORKS (computed) | every text/background pair used is at least 4.5:1 (lowest: coral on the soft accent, 5.5:1). `--dim` (3.6:1 on the background) is not used for text on the landing page; the existing app does use it for small labels, which does not meet AA, and was left alone |
+| Large coral surfaces use `--color-accent-soft` | WORKS for what was changed | the large and full-width primary buttons, and the top strip of the sign-in screens. Left at the full accent on purpose: small buttons, badges, dots, focus rings, chart bars and the upload progress bar (soft on its track would be 1.04:1, invisible) |
+| Real browsers other than Chromium, screen readers | NOT TESTED | |

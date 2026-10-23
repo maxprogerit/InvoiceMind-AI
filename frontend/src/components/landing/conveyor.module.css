@@ -1,0 +1,347 @@
+/*
+ * The scanning gate, drawn with gradients and borders only. Every length is in cqw (percent of the scene's own width),
+ * so the whole drawing scales as one piece; the scene is 100 wide and 56 high.
+ *
+ * Timing reuses the app's tokens: the beam pulses on the same 1.8s ease-in-out as --animate-pulse-soft, the belt cleats
+ * run on a linear loop like --animate-flow. The one loop that is new is the 6s trip of an invoice along the belt.
+ * Every card shares the 6s loop and is offset with a negative delay, so the first frame is already a full scene.
+ */
+
+.viewport {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+}
+
+.scene {
+  position: relative;
+  container-type: inline-size;
+  width: 100%;
+  aspect-ratio: 100 / 56;
+}
+
+/* On a narrow screen the scene keeps a 540px layout and is cropped from the left: gate, verified card, flagged card and bin stay in view. */
+@media (max-width: 560px) {
+  .scene {
+    width: max(540px, 100%);
+    margin-left: min(0px, calc(100% - 540px));
+  }
+  .amount {
+    white-space: nowrap;
+  }
+  .gateLabel {
+    display: none;
+  }
+}
+
+/* ------------------------------------------------------------------ status chip */
+.chip {
+  position: absolute;
+  right: 2cqw;
+  top: 2.2cqw;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.9cqw;
+  padding: 0.7cqw 1.5cqw;
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-control);
+  background: var(--color-surface-2);
+  font-family: var(--font-mono);
+  font-size: clamp(11px, 1.35cqw, 13px);
+  color: var(--color-fg);
+}
+
+.chipDot {
+  width: 0.9cqw;
+  min-width: 7px;
+  aspect-ratio: 1;
+  border-radius: 999px;
+  background: var(--color-accent);
+}
+
+/* ------------------------------------------------------------------ gate */
+.gateLabel {
+  position: absolute;
+  left: 24cqw;
+  width: 38cqw;
+  top: 1.6cqw;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: clamp(10px, 1.2cqw, 12px);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+/* behind the belt and the cards, so an invoice inside the gate stays fully legible */
+.gate {
+  position: absolute;
+  left: 40cqw;
+  top: 5.5cqw;
+  width: 6cqw;
+  height: 31.5cqw;
+  z-index: 0;
+  overflow: hidden;
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-control);
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-surface-3) 60%, transparent),
+    color-mix(in srgb, var(--color-surface) 30%, transparent)
+  );
+}
+
+.beam {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  height: 26%;
+  background: linear-gradient(
+    180deg,
+    transparent,
+    color-mix(in srgb, var(--color-accent) 42%, transparent) 62%,
+    color-mix(in srgb, var(--color-accent) 12%, transparent)
+  );
+  border-bottom: 1px solid color-mix(in srgb, var(--color-accent) 70%, transparent);
+  animation: sweep 1.8s ease-in-out infinite;
+}
+
+@keyframes sweep {
+  from { transform: translateY(-100%); opacity: 0.35; }
+  50%  { opacity: 1; }
+  to   { transform: translateY(400%); opacity: 0.35; }
+}
+
+/* ------------------------------------------------------------------ belt */
+.belt {
+  position: absolute;
+  inset-inline: 0;
+  top: 31cqw;
+  height: 6cqw;
+  z-index: 1;
+  border-block: 1px solid var(--color-line-strong);
+  box-shadow: 0 1.4cqw 2.4cqw rgb(0 0 0 / 0.45);
+  background:
+    repeating-linear-gradient(90deg, rgb(255 255 255 / 0.07) 0 0.35cqw, transparent 0.35cqw 12.4cqw),
+    repeating-linear-gradient(0deg, rgb(255 255 255 / 0.03) 0 1px, transparent 1px 3px),
+    linear-gradient(180deg, var(--color-surface-3), var(--color-surface) 55%, var(--color-bg));
+  background-position: 0 0, 0 0, 0 0;
+  mask-image: linear-gradient(90deg, transparent, #000 14%);
+  animation: tread 0.6s linear infinite;
+}
+
+/* one cleat spacing per cycle, at the speed the cards travel, so the belt and what rides on it agree */
+@keyframes tread {
+  to { background-position: 12.4cqw 0, 0 0, 0 0; }
+}
+
+/* ------------------------------------------------------------------ invoice cards */
+.card {
+  --edge: var(--color-line-strong);
+  --rest-x: 0cqw;
+  --o-in: 0;
+  --o-scan: 0;
+  --o-done: 0;
+  position: absolute;
+  left: 0;
+  top: 20.5cqw;
+  z-index: 2;
+  width: 19cqw;
+  height: 10.5cqw;
+  padding: 1.1cqw 1.2cqw;
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  background: var(--color-surface-2);
+  font-family: var(--font-mono);
+  transform: translateX(var(--rest-x));
+  /* keyframe names are hashed by CSS modules, so they are written out here instead of being passed in a custom property */
+  animation: travel 6s linear var(--delay) infinite, edgeOk 6s linear var(--delay) infinite;
+}
+
+.vendor {
+  font-size: clamp(10px, 1.3cqw, 12px);
+  color: var(--color-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.amount {
+  margin-top: 0.4cqw;
+  font-size: clamp(12px, 1.7cqw, 16px);
+  font-weight: 600;
+  color: var(--color-fg);
+}
+
+.status {
+  position: relative;
+  margin-top: 0.8cqw;
+  height: 1.6em;
+  font-size: clamp(10px, 1.3cqw, 12px);
+}
+
+.status > span {
+  position: absolute;
+  left: 0;
+  top: 0;
+  white-space: nowrap;
+}
+
+.stIn   { opacity: var(--o-in);   color: var(--color-muted);  animation: showIn 6s linear var(--delay) infinite; }
+.stScan { opacity: var(--o-scan); color: var(--color-accent); animation: showScan 6s linear var(--delay) infinite; }
+.stDone { opacity: var(--o-done); color: var(--done-color, var(--color-ok)); animation: showDone 6s linear var(--delay) infinite; }
+
+/* progress through the gate: before it 0 to 33%, inside it 34 to 53%, after it 54% on */
+@keyframes showIn   { 0%, 33% { opacity: 1; } 34%, 100% { opacity: 0; } }
+@keyframes showScan { 0%, 33% { opacity: 0; } 34%, 53% { opacity: 1; } 54%, 100% { opacity: 0; } }
+@keyframes showDone { 0%, 53% { opacity: 0; } 54%, 100% { opacity: 1; } }
+
+@keyframes edgeOk {
+  0%, 33% { border-color: var(--color-line-strong); }
+  34%, 53% { border-color: var(--color-accent); }
+  54%, 100% { border-color: var(--color-ok); }
+}
+@keyframes edgeWarn {
+  0%, 33% { border-color: var(--color-line-strong); }
+  34%, 53% { border-color: var(--color-accent); }
+  54%, 100% { border-color: var(--color-warn); }
+}
+
+@keyframes travel {
+  from { transform: translateX(-20cqw); }
+  to   { transform: translateX(104cqw); }
+}
+
+/* the flagged card rides as far as the arm, is pushed down into the bin, and starts again from the left */
+@keyframes travelFlagged {
+  0%   { transform: translate(-20cqw, 0); opacity: 1; }
+  79%  { transform: translate(78cqw, 0) rotate(0deg); opacity: 1; }
+  90%  { transform: translate(80cqw, 19.5cqw) rotate(6deg); opacity: 1; }
+  95%  { transform: translate(80cqw, 19.5cqw) rotate(6deg); opacity: 1; }
+  98%  { transform: translate(80cqw, 19.5cqw) rotate(6deg); opacity: 0; }
+  99%  { transform: translate(-20cqw, 0); opacity: 0; }
+  100% { transform: translate(-20cqw, 0); opacity: 1; }
+}
+
+.cardA { --rest-x: 34cqw; --edge: var(--color-accent); --o-scan: 1; --delay: -2.61s; }
+.cardB { --rest-x: 56cqw; --edge: var(--color-ok);     --o-done: 1; --delay: -3.68s; }
+.cardC {
+  --rest-x: 78cqw;
+  --edge: var(--color-warn);
+  --o-done: 1;
+  --done-color: var(--color-warn);
+  --delay: -4.74s;
+  animation: travelFlagged 6s linear var(--delay) infinite, edgeWarn 6s linear var(--delay) infinite;
+}
+
+/* ------------------------------------------------------------------ sorting arm and bin */
+.arm {
+  --rest-angle: 14deg;
+  --delay: -4.74s;
+  position: absolute;
+  left: 75.2cqw;
+  top: 17cqw;
+  z-index: 4;
+  width: 13cqw;
+  height: 1.3cqw;
+  min-height: 6px;
+  border: 1px solid var(--color-line-strong);
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--color-surface-3), var(--color-surface));
+  transform-origin: 0.9cqw 50%;
+  transform: rotate(var(--rest-angle));
+  animation: swing 6s ease-in-out var(--delay) infinite;
+}
+
+/* the pivot pin */
+.arm::before {
+  content: "";
+  position: absolute;
+  left: 0.35cqw;
+  top: 50%;
+  width: 1.1cqw;
+  min-width: 7px;
+  aspect-ratio: 1;
+  translate: 0 -50%;
+  border-radius: 999px;
+  background: var(--color-line-strong);
+}
+
+@keyframes swing {
+  0%, 73% { transform: rotate(0deg); }
+  82%, 88% { transform: rotate(58deg); }
+  96%, 100% { transform: rotate(0deg); }
+}
+
+.bin {
+  position: absolute;
+  left: 70cqw;
+  top: 41.5cqw;
+  z-index: 1;
+  width: 28cqw;
+  height: 12cqw;
+  border: 1.5px dashed color-mix(in srgb, var(--color-warn) 65%, transparent);
+  border-radius: 8px;
+}
+
+.binLabel {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 0.9cqw;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: clamp(10px, 1.3cqw, 12px);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-warn);
+}
+
+/* ------------------------------------------------------------------ backdrop */
+.glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(60% 55% at 68% 48%, rgb(255 107 87 / 0.13), transparent 70%);
+}
+
+/* ------------------------------------------------------------------ reduced motion: one still frame with all three outcomes */
+@media (prefers-reduced-motion: reduce) {
+  .chipDot,
+  .beam,
+  .belt,
+  .card,
+  .card > *,
+  .status > span,
+  .arm {
+    animation: none !important;
+  }
+  .beam {
+    top: 38%;
+    opacity: 0.8;
+  }
+}
+
+/* ------------------------------------------------------------------ gate lintel and arm post (structure, drawn in front of nothing that moves) */
+.lintel {
+  position: absolute;
+  left: 38.6cqw;
+  top: 5cqw;
+  z-index: 3;
+  width: 8.8cqw;
+  height: 1.2cqw;
+  min-height: 6px;
+  border: 1px solid var(--color-line-strong);
+  border-radius: 4px;
+  background: var(--color-surface-3);
+}
+
+.armPost {
+  position: absolute;
+  left: calc(75.2cqw + 0.7cqw);
+  top: 5cqw;
+  z-index: 3;
+  width: 2px;
+  height: 12.6cqw;
+  background: var(--color-line-strong);
+}
