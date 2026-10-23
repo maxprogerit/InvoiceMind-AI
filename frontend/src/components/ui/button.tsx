@@ -22,8 +22,23 @@ export const buttonVariants = cva(
         sm: "h-8 px-3 text-xs",
         lg: "h-12 px-6 text-sm",
         icon: "size-9",
+        /* a default-height button that fills its container, e.g. the call to action of a card */
+        block: "h-10 w-full px-4",
       },
     },
+    compoundVariants: [
+      /*
+       * Large primary surfaces (the large and the full-width button) use the soft accent: a solid coral block that size
+       * dominates the screen. The label stays coral on the soft fill (5.5:1, above the 4.5:1 AA minimum) and the border
+       * keeps the edge. Small primary buttons keep the full accent, where it is a signal rather than a surface.
+       */
+      {
+        variant: "default",
+        size: ["lg", "block"],
+        className:
+          "border border-accent/40 bg-accent-soft text-accent hover:border-accent hover:bg-accent-soft hover:text-accent-hover",
+      },
+    ],
     defaultVariants: { variant: "default", size: "default" },
   },
 );

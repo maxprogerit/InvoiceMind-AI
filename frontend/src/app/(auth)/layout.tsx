@@ -19,7 +19,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
 
   return (
     <div className="relative min-h-dvh overflow-hidden">
-      <div className="fixed inset-x-0 top-0 z-10 h-2 bg-accent" aria-hidden />
+      <div className="fixed inset-x-0 top-0 z-10 h-2 bg-accent-soft" aria-hidden />
       <div className="bg-grid pointer-events-none absolute inset-0" aria-hidden />
       <div
         className="pointer-events-none absolute -left-40 top-1/3 size-[36rem] rounded-full bg-accent/10 blur-[120px]"

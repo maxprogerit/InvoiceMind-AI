@@ -21,6 +21,8 @@ docker compose up --build     # the first build takes a few minutes
 # open http://localhost
 ```
 
+http://localhost shows a short landing page to visitors who are not signed in (with links to sign in and register); signed-in people go straight to their invoices.
+
 Four containers: `postgres` (with pgvector), `ai-service` (OCR and every OpenAI call), `backend` (Spring Boot) and
 `frontend` (Next.js, the only published port; it also proxies `/api` and the WebSocket to the backend).
 

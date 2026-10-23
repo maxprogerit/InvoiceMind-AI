@@ -83,7 +83,7 @@ export function InvoicePreviewCard({ invoiceId }: { invoiceId: string | undefine
           )}
           {data.status === "FAILED" && data.failureReason && <p className="mt-4 text-[13px] text-bad">{data.failureReason}</p>}
 
-          <Button asChild className="mt-5 w-full" variant={data.permissions.canEdit || data.permissions.canApprove ? "default" : "outline"}>
+          <Button asChild className="mt-5" size="block" variant={data.permissions.canEdit || data.permissions.canApprove ? "default" : "outline"}>
             <Link href={`/invoices/${data.id}`}>
               {data.permissions.canEdit ? "Review & edit" : "Open invoice"} <ArrowUpRight />
             </Link>
