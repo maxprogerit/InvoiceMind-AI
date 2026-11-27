@@ -20,10 +20,11 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 /**
- * End-to-end through the real stack: HTTP upload -> Postgres -> Kafka -> consumer -> (fake) ai-service ->
+ * End-to-end through the real stack: HTTP upload -> Postgres (processing_jobs) -> worker -> (fake) ai-service ->
  * deterministic validation -> status events. Only the ai-service itself is a test double.
  */
 class PipelineIT extends AbstractIntegrationTest {
+  @org.springframework.beans.factory.annotation.Autowired com.invoicemind.ai.processing.ProcessingJobQueue jobs;
 
   static String id(String prefix) { return prefix + "-" + UUID.randomUUID().toString().substring(0, 8); }
 
@@ -233,7 +234,9 @@ class PipelineIT extends AbstractIntegrationTest {
     JsonNode failed = awaitStatus(s, invoice, "FAILED", "VALIDATED");
     assertThat(failed.get("status").asText()).isEqualTo("FAILED");
     assertThat(failed.get("failureReason").asText()).contains("rate limited");
-    assertThat(FakeAiServiceForTests.extractCalls(sc)).isEqualTo(2); // app.ai.retry-attempts=2 in the test profile
+    // the job queue retried the job with backoff (max-attempts=5), each attempt with app.ai.retry-attempts=2
+    assertThat(FakeAiServiceForTests.extractCalls(sc)).isEqualTo(5 * 2);
+    assertThat(jobs.statuses(invoice)).containsExactly("FAILED");
   }
 
   @Test

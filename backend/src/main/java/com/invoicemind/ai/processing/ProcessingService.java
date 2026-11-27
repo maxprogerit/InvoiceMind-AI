@@ -43,7 +43,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * The invoice pipeline: claim -> OCR -> LLM extraction -> deterministic validation.
  * Each stage commits in its own short transaction; no transaction is open during HTTP calls.
- * Everything coming back from the ai-service is treated as untrusted input.
+ * Everything coming back from the extract-service is treated as untrusted input. Driven by {@link ProcessingWorker}.
  */
 @Slf4j
 @Service
@@ -53,6 +53,15 @@ public class ProcessingService {
   }
 
   private static final int MAX_OCR_CHARS = 200_000;
+
+  /** What the worker should do with the job after one attempt. */
+  public record Outcome(Kind kind, String detail) {
+    public enum Kind { DONE, RETRY, FAILED }
+
+    static Outcome done() { return new Outcome(Kind.DONE, null); }
+    static Outcome retry(String why) { return new Outcome(Kind.RETRY, why); }
+    static Outcome failed(String why) { return new Outcome(Kind.FAILED, why); }
+  }
 
   private final InvoiceRepository invoices;
   private final VendorService vendors;
@@ -87,12 +96,16 @@ public class ProcessingService {
     this.tx = new TransactionTemplate(txManager);
   }
 
-  /** Idempotent: a duplicate Kafka delivery finds the invoice already claimed and returns. */
-  public void process(UUID invoiceId) {
+  /**
+   * One attempt at processing the invoice. Idempotent: an invoice that is not waiting (already processed,
+   * deleted, or retried by hand) is skipped. Transient failures of the AI service (timeouts, 5xx) are retried
+   * by the job queue with backoff unless this is the last attempt; anything else fails the invoice at once.
+   */
+  public Outcome process(UUID invoiceId, boolean lastAttempt) {
     Integer claimed = tx.execute(s -> invoices.claimForProcessing(invoiceId, Instant.now(clock)));
     if (claimed == null || claimed == 0) {
       log.info("Invoice {} is not waiting for processing, skipping", invoiceId);
-      return;
+      return Outcome.done();
     }
     InvoiceHandle handle = tx.execute(s -> {
       InvoiceEntity i = invoices.findById(invoiceId).orElseThrow();
@@ -111,14 +124,34 @@ public class ProcessingService {
       if (extraction.extraction() == null) throw new ProcessingException("The AI service returned no extraction");
       storeExtraction(invoiceId, ocr, extraction);
       finishValidation(invoiceId);
+      return Outcome.done();
     } catch (AiClientException e) {
+      if (e.retryable() && !lastAttempt) {
+        log.warn("Transient AI service failure for invoice {} ({}), will retry", invoiceId, e.code());
+        resetForRetry(invoiceId);
+        return Outcome.retry(e.code() + ": " + e.getMessage());
+      }
       fail(invoiceId, e.getMessage(), e.code());
+      return Outcome.failed(e.code());
     } catch (ProcessingException e) {
       fail(invoiceId, e.getMessage(), "processing_error");
+      return Outcome.failed("processing_error");
     } catch (RuntimeException e) {
       log.error("Unexpected failure while processing invoice {}", invoiceId, e);
       fail(invoiceId, "Unexpected processing error", "internal_error");
+      return Outcome.failed("internal_error");
     }
+  }
+
+  /** Puts an invoice that was being processed back to UPLOADED so the next attempt can claim it. */
+  public void resetForRetry(UUID invoiceId) {
+    tx.executeWithoutResult(s -> invoices.findById(invoiceId).ifPresent(inv -> {
+      if (inv.getStatus() == InvoiceStatus.PROCESSING) {
+        inv.setStatus(InvoiceStatus.UPLOADED);
+        invoices.saveAndFlush(inv);
+        status.publish(inv);
+      }
+    }));
   }
 
   private record InvoiceHandle(String storageKey, String filename) {}
@@ -230,10 +263,6 @@ public class ProcessingService {
       webhooks.invoiceEvent("invoice.failed", inv);
       status.publish(inv);
     }));
-  }
-
-  public void markFailedFromDeadLetter(UUID id) {
-    fail(id, "Processing was aborted after repeated infrastructure errors; please retry", "dead_letter");
   }
 
   // ------------------------------------------------------------- helpers

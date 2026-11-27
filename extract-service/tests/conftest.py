@@ -1,123 +1,94 @@
-from __future__ import annotations
-
 import os
-import shutil
-from pathlib import Path
+from types import SimpleNamespace
 
-# Settings are required at import time of app.main, so provide safe test values first.
-# setdefault: a developer's real environment still wins if they set these deliberately.
-os.environ.setdefault("API_KEY", "test-api-key")
-os.environ.setdefault("DATABASE_URL", "sqlite://")  # replaced by fixtures that need a real DB
-
-# Windows convenience: pick up the default Tesseract install location if it is not on PATH.
-if shutil.which("tesseract") is None and not os.environ.get("TESSERACT_CMD"):
-    _default = Path(os.environ.get("LOCALAPPDATA", "")) / "Programs" / "Tesseract-OCR" / "tesseract.exe"
-    for candidate in (_default, Path(r"C:\Program Files\Tesseract-OCR\tesseract.exe")):
-        if candidate.exists():
-            os.environ["TESSERACT_CMD"] = str(candidate)
-            break
+os.environ.setdefault("EXTRACT_SERVICE_TOKEN", "test-token")
+os.environ["OPENAI_PRICE_INPUT_PER_1M"] = "0.10"
+os.environ["OPENAI_PRICE_OUTPUT_PER_1M"] = "0.50"
+os.environ["OPENAI_EMBEDDING_PRICE_PER_1M"] = "0.02"
 
 import pytest  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
 
-from app.core.config import get_settings  # noqa: E402
-from app.services.ocr import configure_tesseract, tesseract_available  # noqa: E402
+from app.extraction.extractor import OpenAIExtractor  # noqa: E402
+from app.main import app  # noqa: E402
+from app.config import get_settings  # noqa: E402
+from app.schemas import FieldConfidence, InvoiceExtraction, LineItem  # noqa: E402
 
-SAMPLES = Path(__file__).parent / "samples"
-
-configure_tesseract(get_settings().tesseract_cmd)
-
-requires_tesseract = pytest.mark.skipif(
-    not tesseract_available(), reason="Tesseract is not installed / not found"
-)
+HEADERS = {"X-Internal-Token": "test-token"}
 
 
-@pytest.fixture
-def sample_bytes():
-    def _load(name: str) -> bytes:
-        return (SAMPLES / name).read_bytes()
+class FakeOpenAIClientForTests:
+    """Test double for openai.OpenAI. Records every `responses.parse` call and returns
+    whatever `behaviour(kwargs)` produces (a response object or raises an exception)."""
 
-    return _load
+    def __init__(self, behaviour):
+        self.calls: list[dict] = []
+        outer = self
 
+        class _Responses:
+            def parse(self, **kwargs):
+                outer.calls.append(kwargs)
+                return behaviour(kwargs)
 
-# ---- API-level fixtures -----------------------------------------------------------------------
-
-API_KEY = "test-api-key"
-AUTH = {"X-API-Key": API_KEY}
-
-
-@pytest.fixture
-def db_engine():
-    """In-memory SQLite by default; set TEST_DATABASE_URL to run the same tests on real PostgreSQL.
-
-    Tables are created with metadata.create_all here (tests only). The app itself never does this:
-    the schema comes from Alembic migrations.
-    """
-    from sqlalchemy import create_engine
-    from sqlalchemy.pool import StaticPool
-
-    import app.models  # noqa: F401
-    from app.core.database import Base
-
-    url = os.environ.get("TEST_DATABASE_URL")
-    if url:
-        engine = create_engine(url)
-    else:
-        engine = create_engine("sqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False})
-    Base.metadata.drop_all(engine)
-    Base.metadata.create_all(engine)
-    yield engine
-    Base.metadata.drop_all(engine)
-    engine.dispose()
+        self.responses = _Responses()
 
 
-class FakeExtractor:
-    """Stands in for OpenAI: returns a canned invoice (or raises) and counts calls."""
+def make_extraction(**overrides) -> InvoiceExtraction:
+    base = dict(
+        document_type="invoice",
+        vendor="ACME GmbH",
+        invoice_number="INV-0042",
+        invoice_date="2026-03-14",
+        due_date="2026-04-13",
+        currency="EUR",
+        line_items=[LineItem(description="Consulting", quantity="10", unit_price="100.00", total="1000.00")],
+        subtotal="1000.00",
+        tax="190.00",
+        total="1190.00",
+        confidence=FieldConfidence(
+            vendor=0.98, invoice_number=0.99, invoice_date=0.95, due_date=0.9,
+            currency=0.97, line_items=0.9, subtotal=0.95, tax=0.95, total=0.99,
+        ),
+        needs_review=False,
+        review_reasons=[],
+    )
+    base.update(overrides)
+    return InvoiceExtraction(**base)
 
-    def __init__(self, invoice=None, error=None):
-        from app.services.llm_extraction import LlmExtractionResult  # local: needs settings env
 
-        self._result_cls = LlmExtractionResult
-        self.invoice = invoice
-        self.error = error
-        self.calls = 0
-        self.last_text = None
+def make_response(parsed, input_tokens=1000, output_tokens=200, status="completed", output=None):
+    return SimpleNamespace(
+        status=status,
+        output=output or [],
+        output_parsed=parsed,
+        usage=SimpleNamespace(input_tokens=input_tokens, output_tokens=output_tokens),
+    )
 
-    def extract(self, text: str):
-        self.calls += 1
-        self.last_text = text
-        if self.error:
-            raise self.error
-        return self._result_cls(
-            invoice=self.invoice,
-            model_name="fake-model",
-            prompt_tokens=100,
-            completion_tokens=50,
-            latency_ms=1.0,
-        )
+
+INVOICE_TEXT = """ACME GmbH
+Rechnung / Invoice INV-0042
+Date: 2026-03-14   Due: 2026-04-13
+Consulting  10 x 100.00  1,000.00
+Subtotal 1,000.00
+VAT 19% 190.00
+Total EUR 1,190.00
+"""
 
 
 @pytest.fixture
-def fake_extractor():
-    from tests.invoice_factory import make_invoice
-
-    return FakeExtractor(invoice=make_invoice())
+def client():
+    with TestClient(app) as c:
+        yield c
 
 
 @pytest.fixture
-def client(db_engine, fake_extractor):
-    from fastapi.testclient import TestClient
-    from sqlalchemy.orm import Session
+def with_model(client):
+    """Install a fake model behaviour; returns the fake client for call inspection."""
 
-    from app.api.invoices import get_invoice_extractor
-    from app.core.database import get_db
-    from app.main import app
+    def install(behaviour):
+        fake = FakeOpenAIClientForTests(behaviour)
+        app.state.extractor = OpenAIExtractor(fake, get_settings())
+        return fake
 
-    def override_get_db():
-        with Session(db_engine, expire_on_commit=False) as session:
-            yield session
-
-    app.dependency_overrides[get_db] = override_get_db
-    app.dependency_overrides[get_invoice_extractor] = lambda: fake_extractor
-    # raise_server_exceptions=False: we want to see the 500 JSON our handler produces
-    yield TestClient(app, raise_server_exceptions=False)
-    app.dependency_overrides.clear()
+    yield install
+    app.state.extractor = None

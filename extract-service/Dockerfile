@@ -1,33 +1,28 @@
-FROM python:3.12-slim
-
-# Space-separated Tesseract language packs to install, e.g. --build-arg TESSERACT_LANGS="eng rus".
-# OCR_LANGUAGES (runtime) must only name packs that were installed here.
-ARG TESSERACT_LANGS="eng"
-
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
-
+FROM python:3.11-slim AS base
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends tesseract-ocr $(for l in $TESSERACT_LANGS; do printf 'tesseract-ocr-%s ' "$l"; done) \
-    && rm -rf /var/lib/apt/lists/*
+ && apt-get install -y --no-install-recommends \
+      tesseract-ocr tesseract-ocr-eng tesseract-ocr-deu tesseract-ocr-rus poppler-utils \
+ && rm -rf /var/lib/apt/lists/*
+WORKDIR /srv
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Unprivileged user: a bug in PDF/image parsing must not run as root.
-RUN useradd --create-home --uid 10001 appuser
+# `docker build --target test extract-service && docker run --rm <image>` runs the suite
+# with the real Tesseract/Poppler binaries.
+FROM base AS test
+COPY requirements-dev.txt .
+RUN pip install --no-cache-dir -r requirements-dev.txt
+COPY . .
+ENV EXTRACT_SERVICE_TOKEN=test-token
+CMD ["pytest", "-q"]
 
-WORKDIR /app
-
-# Dependencies first so this layer is cached until requirements.txt changes.
-COPY requirements.txt .
-RUN pip install -r requirements.txt
-
-COPY alembic.ini ./
-COPY alembic ./alembic
+FROM base AS runtime
+RUN useradd --create-home --uid 10001 app
 COPY app ./app
-
-USER appuser
+USER app
+# Internal only: compose publishes no port for this service; the backend reaches it on the private network.
 EXPOSE 8000
-
-# One process per container; scale by running more containers, not --workers.
+HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=5 \
+  CMD python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4).status==200 else 1)"
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

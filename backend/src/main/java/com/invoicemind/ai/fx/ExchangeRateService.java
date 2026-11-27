@@ -1,6 +1,5 @@
 package com.invoicemind.ai.fx;
 
-import com.invoicemind.ai.analytics.AnalyticsCache;
 import com.invoicemind.ai.audit.AuditService;
 import com.invoicemind.ai.common.ApiException;
 import com.invoicemind.ai.config.AppProperties;
@@ -52,7 +51,6 @@ public class ExchangeRateService {
   private final RateSource source;
   private final AppProperties props;
   private final OrganizationRepository organizations;
-  private final AnalyticsCache cache;
   private final AuditService audit;
   private final Clock clock;
   private final PlatformTransactionManager txManager;
@@ -192,7 +190,6 @@ public class ExchangeRateService {
           Map.of("from", o.getBaseCurrency(), "to", code));
       o.setBaseCurrency(code);
       organizations.save(o);
-      cache.invalidate(organizationId);
     }
     return code;
   }
@@ -215,7 +212,6 @@ public class ExchangeRateService {
         .addValue("d", Date.valueOf(req.date())).addValue("c", code).addValue("r", req.perEur()), Long.class);
     audit.log(me.organizationId(), me.userId(), "FX_RATE_SET", AuditService.ORGANIZATION, me.organizationId(),
         Map.of("currency", code, "date", req.date().toString(), "perEur", req.perEur().toPlainString()));
-    cache.invalidate(me.organizationId());
     return new ManualRate(id, code, req.date(), req.perEur(), Instant.now(clock));
   }
 
@@ -226,7 +222,6 @@ public class ExchangeRateService {
     if (n == 0) throw ApiException.notFound("Rate");
     audit.log(me.organizationId(), me.userId(), "FX_RATE_DELETED", AuditService.ORGANIZATION, me.organizationId(),
         Map.of("id", id));
-    cache.invalidate(me.organizationId());
   }
 
   private List<ManualRate> manualRates(UUID org) {

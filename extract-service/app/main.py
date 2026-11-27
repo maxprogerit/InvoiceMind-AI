@@ -1,99 +1,212 @@
-from __future__ import annotations
-
+import hmac
 import logging
 import time
 import uuid
-from typing import Awaitable, Callable
+from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, Response
+from fastapi import Depends, FastAPI, File, Header, Request, UploadFile
+from fastapi.concurrency import run_in_threadpool
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from app.api import health, invoices
-from app.core.config import get_settings
-from app.core.errors import InvoiceExtractError
-from app.core.logging import configure_logging, request_id_ctx
-from app.services.ocr import configure_tesseract
+from .config import Settings, get_settings
+from .errors import ApiError
+from .extraction.extractor import OpenAIExtractor
+from .logging_setup import log, request_id_var, setup_logging
+from .ocr.registry import build_engine
+from .ocr.service import OcrService
+from .knowledge.service import KnowledgeService
+from .tracing import setup_tracing
+from .schemas import (
+    EmbedRequest,
+    EmbedResponse,
+    ExplainRequest,
+    ExplainResponse,
+    ExtractRequest,
+    ExtractResponse,
+    InvoiceResult,
+    OcrResponse,
+)
+from .validation import validate_invoice
 
-logger = logging.getLogger("app.request")
-
-PLACEHOLDER_API_KEY = "change-me"
+logger = logging.getLogger("extract-service")
 
 
-def _error_response(request: Request, status_code: int, code: str, message: str) -> JSONResponse:
-    # request.state (not the ContextVar): the ContextVar is already reset when the handler for an
-    # unhandled exception runs.
-    request_id = getattr(request.state, "request_id", "-")
-    return JSONResponse(
-        status_code=status_code,
-        content={"error": {"code": code, "message": message, "request_id": request_id}},
-        headers={"X-Request-ID": request_id},
-    )
-
-
-def create_app() -> FastAPI:
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     settings = get_settings()
-    configure_logging(settings.log_level)
-    configure_tesseract(settings.tesseract_cmd)
+    setup_logging(settings.log_level)
+    app.state.ocr = OcrService(build_engine(settings), settings)
+    app.state.extractor = OpenAIExtractor.from_settings(settings)
+    app.state.knowledge = KnowledgeService(app.state.extractor.client, settings) if app.state.extractor else None
+    log(
+        logger,
+        "extract-service started",
+        ocr_engine=settings.ocr_engine,
+        model=settings.openai_model,
+        openai_configured=app.state.extractor is not None,
+    )
+    yield
 
-    if settings.app_env == "production" and settings.api_key.get_secret_value() == PLACEHOLDER_API_KEY:
-        raise RuntimeError("API_KEY is still the placeholder value; set a real secret before running in production")
-    if settings.openai_api_key is None:
-        logger.warning("OPENAI_API_KEY is not set: POST /invoices will return 503 until it is configured")
 
-    app = FastAPI(
-        title="InvoiceExtract API",
-        version="0.1.0",
-        description="Upload an invoice (PDF/image), get validated structured data back. "
-        "Personal portfolio project.",
-        docs_url="/docs" if settings.enable_docs else None,
-        redoc_url=None,
-        openapi_url="/openapi.json" if settings.enable_docs else None,
+app = FastAPI(title="InvoiceMind extract-service", version="1.0.0", lifespan=lifespan)
+setup_tracing(app, get_settings())
+
+
+# ------------------------------------------------------------ plumbing ----
+@app.middleware("http")
+async def request_context(request: Request, call_next):
+    rid = request.headers.get("x-request-id") or uuid.uuid4().hex[:16]
+    token = request_id_var.set(rid)
+    started = time.perf_counter()
+    status = 500
+    try:
+        response = await call_next(request)
+        status = response.status_code
+        response.headers["X-Request-ID"] = rid
+        return response
+    finally:
+        log(
+            logger,
+            "request",
+            method=request.method,
+            path=request.url.path,
+            status=status,
+            duration_ms=int((time.perf_counter() - started) * 1000),
+        )
+        request_id_var.reset(token)
+
+
+def _error(status: int, code: str, message: str) -> JSONResponse:
+    return JSONResponse(
+        status_code=status,
+        content={"error": {"code": code, "message": message, "request_id": request_id_var.get()}},
     )
 
-    @app.middleware("http")
-    async def request_context(
-        request: Request, call_next: Callable[[Request], Awaitable[Response]]
-    ) -> Response:
-        # Reuse the caller's id if provided (useful behind a gateway), otherwise generate one.
-        request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex
-        request.state.request_id = request_id
-        token = request_id_ctx.set(request_id)
-        started = time.perf_counter()
-        status_code = 500
-        try:
-            response = await call_next(request)
-            status_code = response.status_code
-        finally:
-            logger.info(
-                "request completed",
-                extra={
-                    "method": request.method,
-                    "path": request.url.path,
-                    "status": status_code,
-                    "latency_ms": round((time.perf_counter() - started) * 1000, 1),
-                },
-            )
-            request_id_ctx.reset(token)
-        response.headers["X-Request-ID"] = request_id
-        return response
 
-    @app.exception_handler(InvoiceExtractError)
-    async def handle_domain_error(request: Request, exc: InvoiceExtractError) -> JSONResponse:
-        return _error_response(request, exc.status_code, exc.code, exc.message)
-
-    @app.exception_handler(Exception)
-    async def handle_unexpected(request: Request, exc: Exception) -> JSONResponse:
-        # Full stack trace goes to the log only; the client gets a generic message.
-        logger.error(
-            "unhandled exception",
-            exc_info=(type(exc), exc, exc.__traceback__),
-            extra={"request_id_from_state": getattr(request.state, "request_id", "-")},
-        )
-        return _error_response(request, 500, "internal_error", "An unexpected error occurred")
-
-    app.include_router(health.router)
-    app.include_router(invoices.router)
-    return app
+@app.exception_handler(ApiError)
+async def api_error_handler(_: Request, exc: ApiError):
+    return _error(exc.status, exc.code, exc.message)
 
 
-app = create_app()
+@app.exception_handler(RequestValidationError)
+async def validation_handler(_: Request, exc: RequestValidationError):
+    # Do not echo the submitted body back (it may contain document text).
+    fields = sorted({".".join(str(p) for p in e["loc"][1:]) or "body" for e in exc.errors()})
+    return _error(422, "invalid_request", f"Invalid request fields: {', '.join(fields)}")
+
+
+@app.exception_handler(Exception)
+async def unhandled_handler(_: Request, exc: Exception):
+    logger.exception("unhandled error")
+    return _error(500, "internal_error", "Internal error")
+
+
+def require_internal_token(
+    x_internal_token: str | None = Header(default=None),
+    settings: Settings = Depends(get_settings),
+) -> None:
+    if not x_internal_token or not hmac.compare_digest(x_internal_token, settings.extract_service_token):
+        raise ApiError(401, "unauthorized", "Missing or invalid internal token")
+
+
+# ------------------------------------------------------------ endpoints ----
+@app.get("/health")
+def health(request: Request, settings: Settings = Depends(get_settings)):
+    engine = request.app.state.ocr.engine
+    try:
+        engine_version = engine.version()
+    except Exception:  # binary missing: report, don't crash the probe
+        engine_version = None
+    return {
+        "status": "ok" if engine_version else "degraded",
+        "ocr_engine": engine.name,
+        "ocr_engine_version": engine_version,
+        "openai_configured": request.app.state.extractor is not None,
+        "model": settings.openai_model,
+    }
+
+
+@app.post("/ocr", response_model=OcrResponse, dependencies=[Depends(require_internal_token)])
+async def ocr(request: Request, file: UploadFile = File(...), settings: Settings = Depends(get_settings)):
+    data = await file.read(settings.max_upload_bytes + 1)
+    result = await run_in_threadpool(request.app.state.ocr.process, data)
+    log(
+        logger,
+        "ocr done",
+        bytes=len(data),
+        mime=result.mime_type,
+        pages=result.page_count,
+        chars=len(result.text),
+        confidence=result.confidence,
+        methods=sorted({p.method for p in result.pages}),
+    )
+    return result
+
+
+@app.post("/extract", response_model=ExtractResponse, dependencies=[Depends(require_internal_token)])
+async def extract(body: ExtractRequest, request: Request):
+    extractor: OpenAIExtractor | None = request.app.state.extractor
+    if extractor is None:
+        raise ApiError(503, "llm_not_configured", "OPENAI_API_KEY is not configured")
+    return await run_in_threadpool(extractor.extract, body.text)
+
+
+def text_source(ocr: OcrResponse) -> str:
+    methods = {p.method for p in ocr.pages}
+    if methods == {"text-layer"}:
+        return "text_layer"
+    if methods == {"ocr"}:
+        return "ocr"
+    return "mixed"
+
+
+@app.post("/invoices", response_model=InvoiceResult, dependencies=[Depends(require_internal_token)])
+async def process_invoice(request: Request, file: UploadFile = File(...), settings: Settings = Depends(get_settings)):
+    """The one call the backend makes per document: file -> text -> model -> deterministic validation.
+
+    Errors: 413/415/422 for the file itself (never retried by the backend), 503 when the model is not configured,
+    502/504 for model failures (retried by the backend with backoff)."""
+    extractor: OpenAIExtractor | None = request.app.state.extractor
+    if extractor is None:
+        raise ApiError(503, "llm_not_configured", "OPENAI_API_KEY is not configured")
+    data = await file.read(settings.max_upload_bytes + 1)
+    ocr_result = await run_in_threadpool(request.app.state.ocr.process, data)
+    if not ocr_result.text.strip():
+        raise ApiError(422, "no_text", "No text could be read from the document")
+    extracted = await run_in_threadpool(extractor.extract, ocr_result.text)
+    validation = validate_invoice(extracted.extraction)
+    log(
+        logger,
+        "invoice processed",
+        bytes=len(data),
+        pages=ocr_result.page_count,
+        source=text_source(ocr_result),
+        validation=validation.status.value,
+        issues=len(validation.issues),
+    )
+    return InvoiceResult(
+        source=text_source(ocr_result),
+        ocr=ocr_result,
+        extraction=extracted.extraction,
+        validation=validation,
+        injection_suspected=extracted.injection_suspected,
+        usage=extracted.usage,
+    )
+
+
+def _knowledge(request: Request) -> KnowledgeService:
+    service: KnowledgeService | None = request.app.state.knowledge
+    if service is None:
+        raise ApiError(503, "llm_not_configured", "OPENAI_API_KEY is not configured")
+    return service
+
+
+@app.post("/embed", response_model=EmbedResponse, dependencies=[Depends(require_internal_token)])
+async def embed(body: EmbedRequest, request: Request):
+    return await run_in_threadpool(_knowledge(request).embed, body.texts)
+
+
+@app.post("/explain", response_model=ExplainResponse, dependencies=[Depends(require_internal_token)])
+async def explain(body: ExplainRequest, request: Request):
+    return await run_in_threadpool(_knowledge(request).explain, body)

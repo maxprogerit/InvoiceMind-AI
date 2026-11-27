@@ -5,9 +5,9 @@ from typing import Any, List
 
 import pytest
 
-from app.schemas.extraction import ExtractedInvoice
-from app.schemas.validation import InvoiceStatus, Severity
-from app.services.invoice_validation import validate_invoice
+from app.schemas import InvoiceExtraction as ExtractedInvoice
+from app.schemas import Severity, ValidationStatus as InvoiceStatus
+from app.validation import validate_invoice
 from tests.invoice_factory import line, make_invoice as make
 
 D = Decimal
@@ -67,7 +67,7 @@ def test_line_total_mismatch_is_flagged_with_line_index():
     )
     result = validate_invoice(inv)
     mismatches = [i for i in result.issues if i.code == "line_total_mismatch"]
-    assert [i.field for i in mismatches] == ["line_items[1].line_total"]
+    assert [i.field for i in mismatches] == ["line_items[1].total"]
     assert "149.97" in mismatches[0].message
     assert result.status is InvoiceStatus.NEEDS_REVIEW
 
@@ -173,7 +173,7 @@ def test_invalid_currency_codes(code):
 # ---- missing data -----------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("field", ["vendor_name", "invoice_number", "invoice_date", "currency", "total"])
+@pytest.mark.parametrize("field", ["vendor", "invoice_number", "invoice_date", "currency", "total"])
 def test_missing_required_field_forces_review(field):
     result = validate_invoice(make(**{field: None}))
     missing = [i for i in result.issues if i.code == "missing_field"]
@@ -182,8 +182,8 @@ def test_missing_required_field_forces_review(field):
 
 
 def test_blank_string_counts_as_missing():
-    result = validate_invoice(make(vendor_name="   "))
-    assert ("missing_field", "vendor_name") in [(i.code, i.field) for i in result.issues]
+    result = validate_invoice(make(vendor="   "))
+    assert ("missing_field", "vendor") in [(i.code, i.field) for i in result.issues]
 
 
 def test_missing_optional_fields_only_warn():
@@ -208,8 +208,8 @@ def test_nothing_monetary_extracted_is_failed():
 
 
 def test_completely_empty_extraction_is_failed_and_does_not_crash():
-    empty = ExtractedInvoice(
-        vendor_name=None, invoice_number=None, invoice_date=None, due_date=None, currency=None,
+    empty = make(
+        vendor=None, invoice_number=None, invoice_date=None, due_date=None, currency=None,
         line_items=[], subtotal=None, tax=None, total=None,
     )
     result = validate_invoice(empty)

@@ -4,7 +4,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
-from app.schemas.extraction import ExtractedInvoice, LineItem
+from app.schemas import FieldConfidence, InvoiceExtraction, LineItem
 
 D = Decimal
 
@@ -14,14 +14,15 @@ def line(desc="Widget", qty="10", price="12.50", total="125.00") -> LineItem:
         description=desc,
         quantity=None if qty is None else D(qty),
         unit_price=None if price is None else D(price),
-        line_total=None if total is None else D(total),
+        total=None if total is None else D(total),
     )
 
 
-def make_invoice(**overrides: Any) -> ExtractedInvoice:
-    """A fully consistent invoice (matches tests/samples/invoice_text.pdf); override to break it."""
+def make_invoice(**overrides: Any) -> InvoiceExtraction:
+    """A fully consistent invoice ; override to break it."""
     base = dict(
-        vendor_name="Acme Test Supplies Ltd",
+        document_type="invoice",
+        vendor="Acme Test Supplies Ltd",
         invoice_number="INV-2026-0042",
         invoice_date="2026-03-15",
         due_date="2026-04-14",
@@ -34,6 +35,9 @@ def make_invoice(**overrides: Any) -> ExtractedInvoice:
         subtotal=D("349.97"),
         tax=D("69.99"),
         total=D("419.96"),
+        confidence=FieldConfidence(**{k: 0.95 for k in FieldConfidence.model_fields}),
+        needs_review=False,
+        review_reasons=[],
     )
     base.update(overrides)
-    return ExtractedInvoice(**base)
+    return InvoiceExtraction(**base)

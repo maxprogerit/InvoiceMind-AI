@@ -2,6 +2,7 @@ package com.invoicemind.ai.support;
 
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.wait.strategy.Wait;
+import org.testcontainers.containers.wait.strategy.WaitAllStrategy;
 
 /**
  * A real S3-compatible server for the storage tests: SeaweedFS (master + volume + filer + S3 gateway in one
@@ -27,8 +28,12 @@ public final class S3ServerForTests {
           .withEnv("S3_SECRET_KEY", SECRET_KEY)
           .withCreateContainerCmdModifier(cmd -> cmd.withEntrypoint("sh", "-c", START))
           .withExposedPorts(8333, 9333)
-          // ready once the master can hand out a writable volume, i.e. the first PUT will succeed
-          .waitingFor(Wait.forHttp("/dir/assign").forPort(9333).forResponsePredicate(body -> body.contains("\"fid\"")));
+          // ready once the master can hand out a writable volume (the first PUT will succeed) AND the S3 gateway,
+          // which starts after the master, answers HTTP at all (any status: anonymous requests are refused)
+          .waitingFor(new WaitAllStrategy()
+              .withStrategy(Wait.forHttp("/dir/assign").forPort(9333).forResponsePredicate(body -> body.contains("\"fid\"")))
+              .withStrategy(Wait.forHttp("/").forPort(8333).forStatusCodeMatching(code -> code > 0))
+              .withStartupTimeout(java.time.Duration.ofMinutes(2)));
       c.start(); // only published once started, so a failed start is reported again instead of half-initialised
       container = c;
     }

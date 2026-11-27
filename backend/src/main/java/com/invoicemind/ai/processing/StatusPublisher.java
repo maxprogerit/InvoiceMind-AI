@@ -1,6 +1,5 @@
 package com.invoicemind.ai.processing;
 
-import com.invoicemind.ai.analytics.AnalyticsCache;
 import com.invoicemind.ai.config.WebSocketConfig;
 import com.invoicemind.ai.invoice.InvoiceEntity;
 import com.invoicemind.ai.invoice.InvoiceStatus;
@@ -25,7 +24,6 @@ public class StatusPublisher {
                             String failureReason, Instant at) {}
 
   private final SimpMessagingTemplate messaging;
-  private final AnalyticsCache analyticsCache;
 
   public void publish(InvoiceEntity invoice) {
     StatusEvent event = new StatusEvent(invoice.getId(), invoice.getStatus(), invoice.getVendorName(),
@@ -33,7 +31,6 @@ public class StatusPublisher {
     UUID uploader = invoice.getUploadedBy();
     String topic = WebSocketConfig.REVIEWERS_TOPIC.formatted(invoice.getOrganizationId());
     afterCommit(() -> {
-      analyticsCache.invalidate(invoice.getOrganizationId()); // every status change can move the numbers
       messaging.convertAndSendToUser(uploader.toString(), "/queue/invoices", event);
       messaging.convertAndSend(topic, event);
     });

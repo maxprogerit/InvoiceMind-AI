@@ -18,20 +18,19 @@ flowchart LR
 
   subgraph Backend[Spring Boot 3 · Java 21]
     BE[REST API · JWT · RBAC]
-    PIPE[Processing pipeline<br/>Kafka consumer]
+    PIPE[Processing pipeline<br/>job worker]
     VAL[Deterministic validator]
     KB[Knowledge service<br/>chunk · embed · search]
     WS[STOMP broker<br/>live status]
   end
 
-  BE -- "invoice.uploaded" --> KAFKA[(Kafka)]
-  KAFKA --> PIPE
+  BE -- "insert job (same transaction)" --> JOBS[(processing_jobs<br/>in PostgreSQL)]
+  JOBS -- "FOR UPDATE SKIP LOCKED" --> PIPE
   PIPE --> VAL
   PIPE -- "HTTP, retries, circuit breaker" --> AI
   KB -- "/embed /explain" --> AI
   PIPE --> WS
   BE --> PG[(PostgreSQL 16<br/>+ pgvector)]
-  BE --> REDIS[(Redis<br/>rate limits · analytics cache)]
   BE --> FS[(File storage<br/>volume or S3)]
   BE -- "signed webhooks" --> ERP((ERP / accounting<br/>systems))
   BE -- "ECB rates" --> ECB((Frankfurter API))
@@ -39,7 +38,7 @@ flowchart LR
   IDP((OIDC provider)) <-- "SSO" --> BE
   BE -. "OTLP spans" .-> OTEL[(OTLP collector<br/>optional)]
 
-  subgraph AI[ai-service · FastAPI · Python 3.11]
+  subgraph AI[extract-service · FastAPI · Python 3.11 · internal network only]
     OCR[OCR<br/>text layer → Tesseract]
     EXT[Extraction<br/>OpenAI Responses API<br/>structured output]
     EMB[Embeddings + explanation]
@@ -52,11 +51,9 @@ flowchart LR
 |---|---|---|
 | `nginx` | Only published entry point (port 80). Proxies `/api`, `/ws`, everything else to Next.js; 16 MB body limit; security headers | no |
 | `frontend` | Next.js 15 standalone server | no |
-| `backend` | Auth (password + OIDC), tenancy, invoices, approvals, analytics, currency conversion, export, audit, notifications, knowledge base, webhooks, e-mail ingestion, Kafka producer/consumer, STOMP | files on a volume, or none when S3 is used |
-| `ai-service` | OCR (Tesseract, optionally PaddleOCR) and every call to OpenAI. The backend never talks to OpenAI directly | no |
+| `backend` | Auth (password + OIDC), tenancy, invoices, approvals, analytics, currency conversion, export, audit, notifications, knowledge base, webhooks, e-mail ingestion, job queue + worker, STOMP | files on a volume, or none when S3 is used |
+| `extract-service` | File -> text (text layer or Tesseract) -> OpenAI structured output -> deterministic validation, plus embeddings for the knowledge base; every call to OpenAI. No published port, token required. The backend never talks to OpenAI directly | no |
 | `postgres` | System of record, plus vector search (pgvector) | yes |
-| `kafka` | Durable queue between "uploaded" and "processed" | yes |
-| `redis` | Rate limiting and analytics cache; losing it loses nothing | no persistence |
 
 ## The invoice lifecycle
 
@@ -88,9 +85,9 @@ sequenceDiagram
   actor U as User
   participant API as Backend API
   participant PG as PostgreSQL
-  participant K as Kafka
+  participant K as processing_jobs
   participant C as Consumer
-  participant AI as ai-service
+  participant AI as extract-service
   participant O as OpenAI
   participant WS as STOMP
 
@@ -117,45 +114,37 @@ sequenceDiagram
 
 ## Decisions
 
-### Why Kafka for processing (and not `@Async`)
+### Why a PostgreSQL job queue (and no Kafka or Redis)
 
-Processing an invoice takes seconds to minutes and depends on two external systems. An in-process
-`@Async` executor loses work when the JVM restarts, has no backpressure and no retry story, and ties
-throughput to one instance. Kafka gives:
+Processing an invoice takes seconds to minutes and depends on the extract-service and OpenAI, so it must be
+durable, retryable and must survive a restart. Earlier versions used Kafka for this and Redis for rate limits and
+an analytics cache. At this product's scale (hundreds to a few thousand documents a day) PostgreSQL covers all of it,
+with one less moving part to run, back up and secure:
 
-- **Durability**: the message outlives a backend crash. A lost or never-sent message is also covered:
-  the `ProcessingSweeper` re-enqueues invoices still `UPLOADED` after two minutes and fails invoices stuck
-  in `PROCESSING` after ten.
-- **Idempotency**: delivery is at-least-once, so the consumer *claims* an invoice with a conditional
-  `UPDATE ... WHERE status = 'UPLOADED'`. A duplicate delivery claims nothing and returns.
-- **Scaling**: three partitions and three consumer threads; more backend instances join the same group.
-- **Failure isolation**: business failures (unreadable file, model refusal, AI outage) are caught and turned
-  into a `FAILED` status the user can retry. Only infrastructure failures propagate to Kafka's error handler,
-  which retries twice and then publishes to `invoice.uploaded.DLT`, whose listener marks the invoice `FAILED`.
-- **Publish after commit**: the event is sent from an `AFTER_COMMIT` listener, so a consumer can never see an
-  invoice row that does not exist yet.
+- **Queue**: `processing_jobs`. The job row is inserted in the *same transaction* as the invoice, so there is no
+  "row committed but message lost" window (Kafka needed an after-commit publish plus a sweeper for that).
+- **Claiming**: `UPDATE ... WHERE id IN (SELECT ... FOR UPDATE SKIP LOCKED LIMIT n) RETURNING ...`. Several threads
+  or backend instances poll the same table and never receive the same job; a locked row is skipped, not waited for
+  (`ProcessingJobQueueIT.lockedJobsAreSkippedNotWaitedFor`).
+- **Retries**: transient failures of the extract-service (timeouts, 502/503/504) put the job back with
+  `run_after = now + base x 2^(attempt-1)`; permanent ones (4xx, model not configured, refusal) fail the invoice at
+  once. After `max-attempts` the invoice becomes `FAILED` and can be retried by a person.
+- **Crashed workers**: a job `RUNNING` for longer than `stuck-after-minutes` is handed out again, or failed when it
+  has used all its attempts.
+- **Rate limits**: `rate_limit_counters`, one atomic upsert per request in fixed one-minute windows.
+- **Analytics**: computed directly from indexed columns; the cache was removed.
+- **Tracing**: the W3C `traceparent` of the request is stored on the job, and the worker continues that trace.
 
-The honest cost: Kafka is heavy for a single-service product and adds an operational dependency. It is
-justified here because the pipeline is the product's core and genuinely asynchronous; it is not used for
-anything it does not need to be.
+The honest cost: polling adds up to `poll-interval` (1 s) of latency, and the queue shares the database's capacity.
+Kafka would earn its place again with many consumers of the same events or a throughput that the database cannot
+absorb; neither is the case here.
 
-### Why Redis exists
-
-Two uses, both optional in the sense that Redis being down degrades rather than breaks:
-
-1. **Rate limiting** (fixed-window counters): login/register per IP and per e-mail, upload per user,
-   refresh per IP (its own, higher bucket because every page load refreshes the session). If Redis is
-   unreachable the limiter fails open and logs a warning.
-2. **Analytics cache**: results are cached for five minutes under a key that embeds a per-organisation
-   version counter. Any status change bumps the counter, which invalidates every cached result of that
-   organisation at once, so numbers never lag behind an approval.
-
-### Why a separate `ai-service`
+### Why a separate `extract-service`
 
 OCR (Tesseract, Poppler) and the OpenAI client are Python-native, need system binaries, and change at a
 different pace than the business backend. Keeping them behind two small HTTP contracts (`/ocr`, `/extract`,
 plus `/embed`, `/explain`) means the backend can be tested with a stub, the OCR engine can be swapped
-(`app/ocr/base.py` is the interface; Tesseract and, optionally, PaddleOCR implement it) and all LLM spending is metered in one place. The backend
+(`app/ocr/base.py` is the interface; Tesseract implements it) and all LLM spending is metered in one place. The backend
 authenticates to it with a shared internal token; the service is not published to the network.
 
 ### Why pgvector instead of a vector database
@@ -241,9 +230,9 @@ erDiagram
 
 ### Tracing
 
-With `TRACING_ENABLED=true` both services export OpenTelemetry spans (W3C `traceparent`). The backend's Kafka producer and
+With `TRACING_ENABLED=true` both services export OpenTelemetry spans (W3C `traceparent`). The job row carries the request's `traceparent`, and the worker and
 listener are observed, so the trace continues across the queue: HTTP upload → `invoice.uploaded` send/receive → the backend's
-OCR and extraction calls → the ai-service's request, `ocr.process` and `llm.extract` spans (model, token counts, cost; never
+OCR and extraction calls → the extract-service's request, `ocr.process` and `llm.extract` spans (model, token counts, cost; never
 document content). Log lines carry the trace id.
 
 ## Trust boundaries
@@ -330,18 +319,18 @@ processing time and the decision (who, when, comment); `knowledge_chunks.embeddi
 ## Observability
 
 Every request carries an `X-Request-ID` (accepted if well-formed, otherwise generated), placed in the logging
-context and forwarded to the ai-service, so one upload can be followed across services. Backend logs are
-structured JSON (ECS format) in Docker; the ai-service logs one JSON object per line and **never logs document
+context and forwarded to the extract-service, so one upload can be followed across services. Backend logs are
+structured JSON (ECS format) in Docker; the extract-service logs one JSON object per line and **never logs document
 content**, only sizes and a hash. Processing time, token usage and estimated cost are persisted per invoice and
-aggregated on the analytics page. With `TRACING_ENABLED=true` a trace spans backend, Kafka and ai-service (see Tracing above). Health checks: `/actuator/health/readiness` (backend), `/health` (ai-service).
+aggregated on the analytics page. With `TRACING_ENABLED=true` a trace spans backend, the job queue and extract-service (see Tracing above). Health checks: `/actuator/health/readiness` (backend), `/health` (extract-service).
 
 ## Testing strategy
 
 | Layer | What | Where |
 |---|---|---|
 | Unit | validator rules, file gatekeeping, JWT, export safety, chunker, AI client retries and circuit breaker | `backend/src/test` |
-| Integration | full application on real PostgreSQL (pgvector), Kafka and Redis via Testcontainers: auth, tenancy, pipeline, approvals, analytics, exports, WebSocket, knowledge, credit notes, currency conversion, webhooks, tracing propagation; plus real protocol servers: IMAP (GreenMail), OIDC (mock-oauth2-server), S3 (SeaweedFS) | `backend/src/test` (`*IT`) |
-| Service | OCR on real Tesseract/Poppler, extraction with a fake OpenAI client, injection and hallucination cases, error mapping | `ai-service/tests` (run in Docker) |
+| Integration | full application on real PostgreSQL (pgvector) via Testcontainers: auth, tenancy, pipeline, approvals, analytics, exports, WebSocket, knowledge, credit notes, currency conversion, webhooks, tracing propagation; plus real protocol servers: IMAP (GreenMail), OIDC (mock-oauth2-server), S3 (SeaweedFS) | `backend/src/test` (`*IT`) |
+| Service | OCR on real Tesseract/Poppler, extraction with a fake OpenAI client, injection and hallucination cases, error mapping | `extract-service/tests` (run in Docker) |
 | Firms | V8 migration applied to V1-V7 data (`FirmMigrationIT`, Flyway on a throw-away Postgres); switching, role from the access row, refresh keeping the client, isolation between clients and between firms (`FirmSwitchIT`); firm API, summary, team, limit (`FirmApiIT`) | `backend/src/test` |
 | Frontend unit | formatting, live arithmetic, token refresh single-flight, API errors, components, the client switcher and the switch hook | `frontend/src/**/*.test.ts(x)` |
 | End to end | a real browser against the whole stack | `frontend/e2e` |

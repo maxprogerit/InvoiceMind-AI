@@ -12,14 +12,14 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 /**
- * Distributed tracing: one trace follows an upload from the HTTP request through the Kafka hop into the
+ * Distributed tracing: one trace follows an upload from the HTTP request through the Postgres job queue into the
  * ai-service calls, so a slow or failed invoice can be followed across services.
  */
 class TracingIT extends AbstractIntegrationTest {
   private static final String TRACE_ID = "0af7651916cd43dd8448eb211c80319c";
 
   @Test
-  void theCallersTraceContinuesThroughKafkaIntoTheAiService() {
+  void theCallersTraceContinuesThroughTheJobQueueIntoTheAiService() {
     Session admin = api.registerOrg("Trace Inc");
     String id = "trace-" + UUID.randomUUID().toString().substring(0, 8);
     FakeAiServiceForTests.scenario(id, FakeAiServiceForTests.okOcr(id), PipelineIT.extraction("ACME GmbH", "INV-" + id,
@@ -30,7 +30,7 @@ class TracingIT extends AbstractIntegrationTest {
     assertThat(up.status()).isEqualTo(202);
     awaitStatus(admin, UUID.fromString(up.json().get("id").asText()), "VALIDATED", "NEEDS_REVIEW", "FAILED");
 
-    // the OCR and extraction calls happen later, on a Kafka consumer thread, yet belong to the caller's trace
+    // the OCR and extraction calls happen later, on a job worker thread, yet belong to the caller's trace
     assertThat(FakeAiServiceForTests.traceparent(id, "ocr")).startsWith("00-" + TRACE_ID + "-").endsWith("-01");
     assertThat(FakeAiServiceForTests.traceparent(id, "extract")).startsWith("00-" + TRACE_ID + "-");
     // each hop is its own span: the parent span id sent onwards is not the caller's

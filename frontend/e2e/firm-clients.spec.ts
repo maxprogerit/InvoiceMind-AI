@@ -8,7 +8,7 @@ const PASSWORD = "Passw0rd!long";
 /**
  * An accounting firm with two client companies: the accountant creates both, uploads an invoice into each, switches
  * between them and must only ever see the data of the company they are working in.
- * The ai-service in this stack is the rule-based test double (docker-compose.e2e.yml).
+ * The extract-service in this stack is the rule-based test double (docker-compose.e2e.yml).
  */
 test.describe.serial("firm with two client companies", () => {
   let page: Page;

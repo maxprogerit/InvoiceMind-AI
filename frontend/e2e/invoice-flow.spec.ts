@@ -8,7 +8,7 @@ const PASSWORD = "Passw0rd!long";
 
 /**
  * One fresh organisation per run, so the test is repeatable and never collides with duplicate detection.
- * The ai-service in this stack is the rule-based test double (docker-compose.e2e.yml): real OCR, no LLM.
+ * The extract-service in this stack is the rule-based test double (docker-compose.e2e.yml): real OCR, no LLM.
  */
 test.describe.serial("invoice lifecycle in the browser", () => {
   let page: Page;

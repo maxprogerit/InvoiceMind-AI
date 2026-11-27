@@ -33,7 +33,7 @@ prices from `.env.example`; set `OPENAI_PRICE_*` to the real ones.*
 | **Explain** | Upload your policies; "Why was this flagged?" answers from them with cited sources (RAG on pgvector). |
 | **Credit notes** | Recognised as their own document type, stored with negative amounts, validated with the mirrored rules, filterable and exportable. |
 | **Convert** | Report in one currency: every invoice at the ECB rate of its own date; manual rates for currencies the ECB lacks; anything without a rate is listed as "not converted", never guessed. |
-| **Integrate** | Signed webhooks for ERP / accounting systems, e-mail ingestion (IMAP), single sign-on (OpenID Connect), S3 storage, OpenTelemetry tracing, a second OCR engine (PaddleOCR). All optional, see [Optional features](#optional-features). |
+| **Integrate** | Signed webhooks for ERP / accounting systems, e-mail ingestion (IMAP), single sign-on (OpenID Connect), S3 storage, OpenTelemetry tracing. All optional, see [Optional features](#optional-features). |
 
 ## Quick start (5 commands)
 
@@ -86,8 +86,7 @@ What "verified" means for each one is in [docs/STATUS.md](docs/STATUS.md).
 | **E-mail ingestion** | `MAIL_INGEST_ENABLED=true` + `MAIL_INGEST_ADDRESS`, `MAIL_IMAP_*` | *Settings* shows your address `invoices+<token>@your-domain` |
 | **Single sign-on** | `OIDC_ENABLED=true` + issuer, client id/secret; register `<app url>/api/v1/auth/oidc/callback` at the provider | "Continue with …" button on the login page |
 | **S3 storage** | `STORAGE_TYPE=s3` and the `S3_*` variables (AWS S3, MinIO, SeaweedFS ...) | invoice files in a bucket instead of a volume |
-| **Tracing** | `TRACING_ENABLED=true` and `OTEL_EXPORTER_OTLP_ENDPOINT` of any OTLP/HTTP collector (Jaeger, Tempo ...) | one trace per upload across backend, Kafka and ai-service |
-| **PaddleOCR** | build with `WITH_PADDLE=1`, run with `OCR_ENGINE=paddle` (`PADDLE_LANG=de`, `en`, `ru` ...) | second OCR engine; measured against Tesseract in [docs/OCR-COMPARISON.md](docs/OCR-COMPARISON.md) (same accuracy on the sample scans, much slower on CPU) |
+| **Tracing** | `TRACING_ENABLED=true` and `OTEL_EXPORTER_OTLP_ENDPOINT` of any OTLP/HTTP collector (Jaeger, Tempo ...) | one trace per upload across backend, the job queue and extract-service |
 
 ### Webhooks: verifying a request
 
@@ -118,23 +117,20 @@ groups; an admin changes them under *Team*.
 flowchart LR
   U[Browser<br/>Next.js 15] -->|HTTP, WebSocket| N[Nginx]
   N --> B[Spring Boot backend]
-  B -->|invoice.uploaded| K[(Kafka)]
-  K --> B
-  B --> P[(PostgreSQL + pgvector)]
-  B --> R[(Redis)]
-  B -->|OCR, extract, embed, explain| A[ai-service<br/>FastAPI + Tesseract]
+  B --> P[(PostgreSQL + pgvector<br/>data + job queue)]
+  B -->|"POST /invoices, embed, explain<br/>internal network + token"| A[extract-service<br/>FastAPI + Tesseract]
   A --> O((OpenAI API))
 ```
 
-Details, the lifecycle diagram, the Kafka-vs-`@Async` decision and the trust boundaries are in
+Details, the lifecycle diagram, the job-queue decision and the trust boundaries are in
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 | Part | Stack |
 |---|---|
 | `frontend/` | Next.js 15 (App Router), React 19, TypeScript, Tailwind v4, Radix UI, TanStack Query, Framer Motion, Recharts, STOMP.js, generated OpenAPI client |
-| `backend/` | Spring Boot 3.4, Java 21, JPA + Flyway, Spring Security + JWT, Kafka, Redis, STOMP, Resilience4j, Apache POI, springdoc |
-| `ai-service/` | Python 3.11, FastAPI, Pydantic v2, Tesseract + pdfplumber + Poppler, OpenAI Python SDK (Responses API) |
-| infrastructure | PostgreSQL 16 with pgvector, Kafka (KRaft), Redis, Nginx, Docker Compose |
+| `backend/` | Spring Boot 3.4, Java 21, JPA + Flyway, Spring Security + JWT, STOMP, Resilience4j, Apache POI, springdoc |
+| `extract-service/` | Python 3.11, FastAPI, Pydantic v2 (money as `Decimal`), Tesseract + pdfplumber + Poppler, OpenAI Python SDK (Responses API). Imported from InvoiceExtract with `git subtree` (its history is kept) and merged with the former `ai-service` |
+| infrastructure | PostgreSQL 16 with pgvector (also the job queue and rate-limit counters), Nginx, Docker Compose |
 
 ## Roles
 
@@ -191,7 +187,7 @@ Everything is an environment variable; see [`.env.example`](.env.example) (secre
 | `OPENAI_MODEL` / `OPENAI_REASONING_EFFORT` | extraction model (default `gpt-5.5`) and reasoning effort |
 | `OPENAI_PRICE_INPUT_PER_1M` / `OPENAI_PRICE_OUTPUT_PER_1M` | only used to store an estimated cost per invoice |
 | `OPENAI_EMBEDDING_MODEL` | knowledge-base embeddings (default `text-embedding-3-small`) |
-| `JWT_SECRET`, `AI_SERVICE_TOKEN`, `POSTGRES_PASSWORD` | change the development values for anything real |
+| `JWT_SECRET`, `EXTRACT_SERVICE_TOKEN`, `POSTGRES_PASSWORD` | change the development values for anything real |
 | `DEMO_PASSWORD` | password of the three seeded demo users; empty disables seeding |
 | `HTTP_PORT` | published port (default 80) |
 | `FX_RATES_ENABLED` | download ECB reference rates for currency conversion (default true; only dates are sent) |
@@ -200,7 +196,6 @@ Everything is an environment variable; see [`.env.example`](.env.example) (secre
 | `OIDC_ENABLED`, `OIDC_ISSUER_URI`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_PROVISION_ORG_ID`, ... | single sign-on |
 | `WEBHOOKS_ALLOW_PRIVATE_TARGETS` | allow webhooks to private addresses (SSRF guard, default false) |
 | `TRACING_ENABLED`, `OTEL_EXPORTER_OTLP_ENDPOINT` | OpenTelemetry tracing |
-| `OCR_ENGINE`, `PADDLE_LANG`, build arg `WITH_PADDLE` | OCR engine (`tesseract` or `paddle`) |
 
 Behind TLS, also set `APP_COOKIES_SECURE=true` for the backend so the refresh cookie gets the `Secure` flag.
 
@@ -213,7 +208,7 @@ and paging, detail, correct, approve, reject, retry, file, OCR text, audit), `an
 ## Development
 
 ```bash
-docker compose up --build                       # the whole stack on http://localhost (real OpenAI-backed ai-service)
+docker compose up --build                       # the whole stack on http://localhost (real OpenAI-backed extract-service)
 
 # frontend development with hot reload; needs the backend reachable on the host, which the browser-test overlay publishes
 # on 127.0.0.1:18080 (it swaps the AI service for the offline test double: no key, no cost)
@@ -225,7 +220,7 @@ cd frontend && npm ci && BACKEND_INTERNAL_URL=http://127.0.0.1:18080 npm run dev
 
 ```bash
 cd backend && mvn verify                                         # 170 tests; needs Docker (Testcontainers)
-docker build --target test -t im-ai-test ai-service && docker run --rm im-ai-test   # 45 tests, real Tesseract/Poppler (add --build-arg WITH_PADDLE=1 for the PaddleOCR tests)
+docker build --target test -t im-extract-test extract-service && docker run --rm im-extract-test   # pytest with real Tesseract/Poppler; LIVE_OPENAI_SMOKE=1 + OPENAI_API_KEY adds the live smoke test
 cd frontend && npm run lint && npm run typecheck && npm test     # 49 unit tests
 
 # browser end-to-end on the full stack, with an offline AI test double (no API key, no cost)
@@ -235,7 +230,7 @@ cd frontend && npx playwright install chromium && E2E_BASE_URL=http://localhost 
 
 CI (`.github/workflows/ci.yml`) runs all of the above plus a check that the generated TypeScript API types match the backend.
 
-The e2e overlay swaps the OpenAI-backed service for [`e2e/fake-ai`](e2e/fake-ai): real OCR and a rule-based extractor.
+The e2e overlay swaps the OpenAI-backed extract-service for [`e2e/fake-ai`](e2e/fake-ai): real OCR and a rule-based extractor.
 It exists only for tests and is never part of the normal stack.
 
 ### Measuring extraction quality
@@ -263,9 +258,7 @@ neutralisation, audit trail. The full model is in [docs/ARCHITECTURE.md](docs/AR
 - Webhook delivery is at-least-once, so receivers must deduplicate on the event id. The signing secret is stored in the database in clear (it must be, to sign); protect database access accordingly.
 - E-mail ingestion polls one mailbox every minute (no IMAP IDLE) and trusts the `From` address unless `MAIL_REQUIRE_AUTH_RESULTS=true`.
 - Single sign-on maps no roles from provider groups, and sign-out does not end the session at the provider.
-- PaddleOCR uses one model per language (`PADDLE_LANG=de`, `ru` ...), unlike Tesseract's combined `eng+deu+rus`; the image is much larger with it.
-- Kafka and Redis run as single nodes.
-- Tesseract languages are English, German and Russian; other scripts need more language packs in the `ai-service` image.
+- Tesseract languages are English, German and Russian; other scripts need more language packs in the `extract-service` image.
 - The PDF active-content scan is a keyword check and cannot look inside compressed streams; PDFs are only ever rendered by the user's own browser.
 - The compose file is for a single host. Terminate TLS in front of Nginx for anything public.
 
@@ -277,7 +270,7 @@ Provider-group to role mapping for SSO, IMAP IDLE, connectors for specific ERP s
 
 ```text
 backend/      Spring Boot API, pipeline, validation, knowledge base      (+ Flyway migrations, tests)
-ai-service/   OCR and every OpenAI call                                   (+ pytest suite)
+extract-service/ file -> text -> model -> validated JSON; every OpenAI call (+ pytest suite)
 frontend/     Next.js application                                         (+ vitest, Playwright)
 samples/      synthetic invoices, ground truth, generator
 eval/         accuracy evaluation harness

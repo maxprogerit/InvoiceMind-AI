@@ -13,7 +13,8 @@ import com.invoicemind.ai.invoice.InvoiceDtos.LineItemDto;
 import com.invoicemind.ai.invoice.InvoiceDtos.OcrTextResponse;
 import com.invoicemind.ai.invoice.InvoiceDtos.UpdateInvoiceRequest;
 import com.invoicemind.ai.notification.NotificationService;
-import com.invoicemind.ai.processing.ProcessingQueue.InvoiceQueuedEvent;
+import com.invoicemind.ai.processing.ProcessingJobQueue;
+import com.invoicemind.ai.processing.TraceContextCodec;
 import com.invoicemind.ai.processing.StatusPublisher;
 import com.invoicemind.ai.ratelimit.RateLimiter;
 import com.invoicemind.ai.security.AuthPrincipal;
@@ -36,7 +37,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -65,7 +65,8 @@ public class InvoiceService {
   private final NotificationService notifications;
   private final WebhookOutbox webhooks;
   private final RateLimiter rateLimiter;
-  private final ApplicationEventPublisher events;
+  private final ProcessingJobQueue jobs;
+  private final TraceContextCodec traces;
   private final AppProperties props;
   private final Clock clock;
   private final FirmService firms;
@@ -95,7 +96,7 @@ public class InvoiceService {
     audit.log(me.organizationId(), me.userId(), "INVOICE_UPLOADED", AuditService.INVOICE, inv.getId(),
         Map.of("filename", vf.safeName(), "bytes", vf.data().length, "sha256", vf.sha256().substring(0, 16), "source", source));
     status.publish(inv);
-    events.publishEvent(new InvoiceQueuedEvent(inv.getId(), inv.getOrganizationId())); // -> Kafka after commit
+    jobs.enqueue(inv.getId(), traces.current(), props.processing().maxAttempts()); // same transaction as the row
     return mapper.toSummary(inv, nameOf(me));
   }
 
@@ -263,7 +264,7 @@ public class InvoiceService {
     invoices.saveAndFlush(inv);
     audit.log(me.organizationId(), me.userId(), "PROCESSING_RETRIED", AuditService.INVOICE, inv.getId(), null);
     status.publish(inv);
-    events.publishEvent(new InvoiceQueuedEvent(inv.getId(), inv.getOrganizationId()));
+    jobs.enqueue(inv.getId(), traces.current(), props.processing().maxAttempts());
     return mapper.toDetail(inv, me);
   }
 
