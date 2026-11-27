@@ -54,7 +54,7 @@ public class InvoiceMapper {
     return new InvoiceSummary(i.getId(), i.getStatus(), i.getDocumentType(), i.getOriginalFilename(), i.getVendorName(),
         i.getInvoiceNumber(), i.getInvoiceDate(), i.getDueDate(), i.getCurrency(), i.getTotal(),
         i.getUploadedBy(), uploaderName, errors, i.getIssues().size() - errors, i.getCreatedAt(),
-        i.getDuplicateStatus(), vendorVerified);
+        i.getDuplicateStatus(), vendorVerified, i.getSource());
   }
 
   public boolean isVendorVerified(InvoiceEntity i) {
@@ -92,7 +92,7 @@ public class InvoiceMapper {
         i.getVendorTaxId(),
         vendor == null ? null : new VendorRef(vendor.getId(), vendor.getName(), vendor.getTaxId(), vendor.getStatus().name()),
         duplicate,
-        i.getExpenseCategory(), memoryApplied(i), approval,
+        i.getExpenseCategory(), memoryApplied(i), approval, i.getSource(), i.getSourceEmail(),
         i.getFieldConfidence(), i.getModelReviewReasons(), i.isInjectionSuspected(), i.isHumanReviewed(),
         new OcrInfo(i.getOcrEngine(), i.getOcrConfidence(), i.getOcrPageCount(), i.getTextSource()), extractCheck(i),
         new UsageInfo(i.getLlmModel(), i.getInputTokens(), i.getOutputTokens(), i.getCostUsd()),

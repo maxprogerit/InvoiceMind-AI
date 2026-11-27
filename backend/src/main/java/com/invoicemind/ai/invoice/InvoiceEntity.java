@@ -74,6 +74,11 @@ public class InvoiceEntity {
   /** Extraction copied from this earlier invoice with the identical file: the model was not called again. */
   private UUID reusedFrom;
 
+  /** How the document arrived: WEB (single upload), BATCH (zip) or EMAIL. */
+  @Enumerated(EnumType.STRING)
+  private InvoiceSource source = InvoiceSource.WEB;
+  /** The sender of an e-mailed invoice (untrusted, shown for information). */
+  private String sourceEmail;
   /** Approved by the system under the approval rules (small amount, every check passed). */
   private boolean autoApproved;
   /** Expense category for the accounting export; may be pre-filled from vendor memory. */

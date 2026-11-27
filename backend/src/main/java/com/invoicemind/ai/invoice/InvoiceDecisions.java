@@ -102,7 +102,8 @@ public class InvoiceDecisions {
 
   /**
    * Small invoices whose rule says "automatic" are approved by the system as soon as they pass every check: status
-   * VALIDATED (all deterministic checks green), the vendor confirmed by a person, no duplicate. Returns true if so.
+   * VALIDATED (all deterministic checks green), the vendor confirmed by a person, no duplicate, and not received by
+   * e-mail (a sender address is easy to forge). Returns true if so.
    */
   @Transactional(propagation = Propagation.MANDATORY)
   public boolean autoApproveIfEligible(InvoiceEntity inv) {
@@ -110,6 +111,8 @@ public class InvoiceDecisions {
         || !vendorVerified(inv)) {
       return false;
     }
+    // Anyone can send mail in a confirmed vendor's name; e-mailed invoices always need a person.
+    if (inv.getSource() == InvoiceSource.EMAIL) return false;
     Requirement need = requirement(inv);
     if (need.approvals() != 0) return false;
     inv.setAutoApproved(true);

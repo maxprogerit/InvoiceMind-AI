@@ -114,11 +114,26 @@ URLs are requested by the server, so private, loopback and link-local addresses 
 
 ### E-mail ingestion: how mail is accepted
 
-Send or forward invoices to the address shown under *Settings*. A message is imported only if it was addressed to that exact
-address (the plus-tag identifies your organisation; rotate it if it leaks) **and** the sender is an enabled user of your
-organisation; the document is attributed to that user and goes to review like any upload, nothing is approved automatically.
-`MAIL_REQUIRE_AUTH_RESULTS=true` additionally demands `dkim=pass` or `spf=pass` from your mail server, because the `From`
-header alone can be forged. Works with any IMAP mailbox that supports plus-addressing (use an app password).
+Each organisation has an address `invoices+<token>@your-domain` (shown under *Settings*; the token routes the mail to
+the organisation, rotate it if it leaks). Give it to your vendors or forward invoices to it.
+
+- **Who may send** (per organisation, *Settings*): *anyone*, the default for new organisations (vendors mail their
+  invoices; the document is attributed to the organisation's "E-mail intake" service account, or to the sender if
+  that is a user), or *only people of this organisation*. The sender is stored on the invoice.
+- Only PDF and image attachments are imported, through the same checks as an upload. **The mail text is untrusted and
+  never sent to the AI**; text parts and forwarded messages are ignored.
+- **E-mailed invoices are never approved automatically**, whatever the approval rules say: a sender address is easy
+  to forge. `MAIL_REQUIRE_AUTH_RESULTS=true` additionally demands `dkim=pass` or `spf=pass` from your mail server.
+- Idempotent by `Message-ID`: a message is claimed before anything is stored and flagged as read only after its
+  documents are queued; one that failed for a transient reason stays unread and is tried again.
+- The mailbox is polled every minute (no IMAP IDLE); any IMAP mailbox with plus-addressing works (use an app password).
+
+### Batch upload
+
+Drop several files at once, or a `.zip` of them, on *Upload*. In a zip, every PDF or image becomes an invoice and every
+other entry is listed with the reason it was skipped. Limits are counted while unpacking (the sizes a zip declares
+are not trusted): `BATCH_MAX_ENTRIES` (50) documents and `BATCH_MAX_TOTAL_BYTES` (200 MB) unpacked; entries with an
+absolute path or `..` are refused, archives inside the archive are not opened.
 
 ### Single sign-on: how accounts are linked
 

@@ -52,6 +52,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ingest/email/policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["policy"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/fx/manual": {
         parameters: {
             query?: never;
@@ -382,6 +398,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["approve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/invoices/zip": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["uploadZip"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1191,6 +1223,9 @@ export interface components {
             expenseCategory?: string;
             memoryApplied: components["schemas"]["MemoryAppliedDto"][];
             approval: components["schemas"]["ApprovalInfo"];
+            /** @enum {string} */
+            source: "WEB" | "BATCH" | "EMAIL";
+            sourceEmail?: string;
             fieldConfidence?: {
                 [key: string]: number;
             };
@@ -1265,6 +1300,30 @@ export interface components {
             name: string;
             taxId?: string;
             status: string;
+        };
+        PolicyRequest: {
+            /** @enum {string} */
+            acceptFrom: "ANYONE" | "USERS";
+        };
+        EmailIngestStatus: {
+            enabled: boolean;
+            address?: string;
+            requireAuthResults: boolean;
+            /** @enum {string} */
+            acceptFrom: "ANYONE" | "USERS";
+            recent: components["schemas"]["MailMessageDto"][];
+        };
+        MailMessageDto: {
+            /** Format: int64 */
+            id: number;
+            from?: string;
+            subject?: string;
+            status: string;
+            reason?: string;
+            /** Format: int32 */
+            invoicesCreated: number;
+            /** Format: date-time */
+            receivedAt: string;
         };
         ManualRateRequest: {
             currency: string;
@@ -1449,6 +1508,8 @@ export interface components {
             /** @enum {string} */
             duplicateStatus: "NONE" | "DUPLICATE" | "POSSIBLE_DUPLICATE";
             vendorVerified: boolean;
+            /** @enum {string} */
+            source: "WEB" | "BATCH" | "EMAIL";
         };
         DecisionRequest: {
             comment?: string;
@@ -1458,23 +1519,13 @@ export interface components {
             decision: "NOT_DUPLICATE" | "DUPLICATE";
             comment?: string;
         };
-        EmailIngestStatus: {
-            enabled: boolean;
-            address?: string;
-            requireAuthResults: boolean;
-            recent: components["schemas"]["MailMessageDto"][];
+        BatchResult: {
+            created: components["schemas"]["InvoiceSummary"][];
+            skipped: components["schemas"]["Skipped"][];
         };
-        MailMessageDto: {
-            /** Format: int64 */
-            id: number;
-            from?: string;
-            subject?: string;
-            status: string;
-            reason?: string;
-            /** Format: int32 */
-            invoicesCreated: number;
-            /** Format: date-time */
-            receivedAt: string;
+        Skipped: {
+            name: string;
+            reason: string;
         };
         CreateMemberRequest: {
             email: string;
@@ -1915,6 +1966,30 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    policy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolicyRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EmailIngestStatus"];
+                };
             };
         };
     };
@@ -2559,6 +2634,33 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["InvoiceDetail"];
+                };
+            };
+        };
+    };
+    uploadZip: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["BatchResult"];
                 };
             };
         };

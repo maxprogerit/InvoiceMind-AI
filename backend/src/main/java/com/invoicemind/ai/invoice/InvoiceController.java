@@ -2,6 +2,7 @@ package com.invoicemind.ai.invoice;
 
 import com.invoicemind.ai.audit.AuditService.AuditEntryDto;
 import com.invoicemind.ai.common.PageResponse;
+import com.invoicemind.ai.ingest.BatchUploadService;
 import com.invoicemind.ai.invoice.InvoiceDtos.CorrectionDto;
 import com.invoicemind.ai.invoice.InvoiceDtos.DecisionRequest;
 import com.invoicemind.ai.invoice.InvoiceDtos.DuplicateDecisionRequest;
@@ -36,12 +37,19 @@ import org.springframework.web.multipart.MultipartFile;
 @RequiredArgsConstructor
 public class InvoiceController {
   private final InvoiceService service;
+  private final BatchUploadService batch;
 
   /** Accepts the file and returns immediately; extraction continues asynchronously (see status events). */
   @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   @ResponseStatus(HttpStatus.ACCEPTED)
   public InvoiceSummary upload(@RequestPart("file") MultipartFile file) {
     return service.upload(file, CurrentUser.get());
+  }
+
+  /** A .zip of PDFs and images: each becomes an invoice; refused entries are listed with the reason. */
+  @PostMapping(path = "/zip", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  public BatchUploadService.BatchResult uploadZip(@RequestPart("file") MultipartFile file) {
+    return batch.uploadZip(file, CurrentUser.get());
   }
 
   @GetMapping

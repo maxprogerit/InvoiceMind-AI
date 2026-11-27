@@ -19,6 +19,8 @@ public class UserEntity {
   @Enumerated(EnumType.STRING)
   private Role role;
   private boolean enabled = true;
+  /** A service account (e-mail intake): never signs in, not part of the team. */
+  private boolean systemAccount;
   /** Set on the first SSO login: (issuer, subject) identifies the person at the identity provider. */
   private String oidcIssuer;
   private String oidcSubject;

@@ -13,7 +13,7 @@ import { Card, CardLabel } from "@/components/ui/card";
 import { Input, Label } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/misc";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { useDeleteManualRate, useEmailIngest, useFxStatus, useRotateEmailAddress, useSetBaseCurrency, useSetManualRate } from "@/lib/api/hooks";
+import { useDeleteManualRate, useEmailIngest, useFxStatus, useEmailPolicy, useRotateEmailAddress, useSetBaseCurrency, useSetManualRate } from "@/lib/api/hooks";
 import { useAuth } from "@/lib/auth/store";
 import { formatDate } from "@/lib/format";
 
@@ -183,13 +183,14 @@ function ManualRates() {
 function EmailIngestCard() {
   const { data } = useEmailIngest();
   const rotate = useRotateEmailAddress();
+  const policy = useEmailPolicy();
   const [copied, setCopied] = useState(false);
   return (
     <Card className="p-6">
       <CardLabel>E-mail ingestion</CardLabel>
       <p className="mt-3 max-w-2xl text-sm text-muted">
-        Forward or send invoices to your organisation&apos;s address. Attached PDFs and images are imported like uploads and go through the same checks and approval.
-        The sender must be a user of this organisation; their e-mail address decides who the document is attributed to.
+        Give this address to your vendors, or forward invoices to it. Attached PDFs and images are imported like uploads and go through the same
+        checks; the sender is stored on the invoice and the mail text is never read by the AI. E-mailed invoices are never approved automatically.
       </p>
       {!data ? (
         <Skeleton className="mt-4 h-10" />
@@ -230,6 +231,29 @@ function EmailIngestCard() {
             </Button>
           </div>
           {data.requireAuthResults && <p className="mt-2 text-xs text-dim">Senders must be verified by the mail server (DKIM or SPF pass).</p>}
+          <fieldset className="mt-4">
+            <legend className="text-sm font-medium">Accept invoices from</legend>
+            <div className="mt-2 flex flex-wrap gap-4 text-sm">
+              {(
+                [
+                  ["ANYONE", "Anyone (vendors mail their invoices)"],
+                  ["USERS", "Only people of this organisation"],
+                ] as const
+              ).map(([value, label]) => (
+                <label key={value} className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="accept-from"
+                    value={value}
+                    checked={data.acceptFrom === value}
+                    disabled={policy.isPending}
+                    onChange={() => policy.mutate(value, { onSuccess: () => toast.success("Saved"), onError: (e) => toast.error(e.message) })}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </fieldset>
           <div className="mt-5 overflow-hidden rounded-control border border-line">
             <Table>
               <THead>

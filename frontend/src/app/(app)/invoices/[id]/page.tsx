@@ -44,6 +44,7 @@ function ProcessingCard({ inv }: { inv: InvoiceDetail }) {
         <Meta label="File">{inv.originalFilename}</Meta>
         <Meta label="Size">{formatBytes(inv.fileSize)}</Meta>
         <Meta label="Uploaded by">{inv.uploadedByName}</Meta>
+        <Meta label="Arrived via">{inv.source === "EMAIL" ? `e-mail from ${inv.sourceEmail ?? "unknown"}` : inv.source === "BATCH" ? "zip upload" : "upload"}</Meta>
         <Meta label="Uploaded">{formatDateTime(inv.createdAt)}</Meta>
         <Meta label="Read with">
           {inv.ocr.engine ? `${inv.ocr.engine} · ${inv.ocr.pageCount ?? "?"} p · ${formatPercent(Number(inv.ocr.confidence ?? 0))}` : "—"}

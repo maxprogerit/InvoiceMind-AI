@@ -144,6 +144,9 @@ app:
     retry-after-minutes: 15
   seed:
     demo-password: ${APP_DEMO_PASSWORD:}
+  batch:                                   # .zip upload limits (sizes are counted while unpacking)
+    max-entries: ${BATCH_MAX_ENTRIES:50}
+    max-total-bytes: ${BATCH_MAX_TOTAL_BYTES:209715200}
   duplicates:
     window-days: ${DUPLICATE_WINDOW_DAYS:7}   # same vendor + total within this many days = possible duplicate
   reminders:                               # daily digest of overdue invoices and invoices due soon

@@ -12,7 +12,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardLabel } from "@/components/ui/card";
 import { Progress } from "@/components/ui/misc";
-import { ApiError, uploadInvoice } from "@/lib/api/client";
+import { ApiError, uploadInvoice, uploadZip } from "@/lib/api/client";
 import { useInvoice, useRetry } from "@/lib/api/hooks";
 import { formatBytes, formatMoney } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -24,7 +24,11 @@ const ACCEPT = {
   "image/jpeg": [".jpg", ".jpeg"],
   "image/tiff": [".tif", ".tiff"],
   "image/webp": [".webp"],
+  "application/zip": [".zip"],
+  "application/x-zip-compressed": [".zip"],
 };
+
+const isZip = (f: File) => f.name.toLowerCase().endsWith(".zip");
 
 interface Item {
   key: string;
@@ -33,6 +37,8 @@ interface Item {
   phase: "queued" | "uploading" | "done" | "error";
   invoiceId?: string;
   error?: string;
+  /** An entry of an uploaded .zip: nothing to retry from here. */
+  fromArchive?: string;
 }
 
 const uid = () => Math.random().toString(36).slice(2, 10);
@@ -53,8 +59,20 @@ export default function UploadPage() {
       if (!item) continue;
       running.current++;
       patch(key, { phase: "uploading", progress: 0, error: undefined });
-      uploadInvoice(item.file, (p) => patch(key, { progress: p }))
-        .then(({ id }) => patch(key, { phase: "done", progress: 1, invoiceId: id }))
+      const job = isZip(item.file)
+        ? uploadZip(item.file, (p) => patch(key, { progress: p })).then((result) => {
+            // the archive row becomes one row per document in it, plus one per refused entry with the reason
+            const archive = item.file.name;
+            const rows: Item[] = [
+              ...result.created.map<Item>((c) => ({ key: uid(), file: new File([], c.originalFilename), progress: 1, phase: "done", invoiceId: c.id, fromArchive: archive })),
+              ...result.skipped.map<Item>((s) => ({ key: uid(), file: new File([], s.name), progress: 0, phase: "error", error: s.reason, fromArchive: archive })),
+            ];
+            itemsRef.current = itemsRef.current.flatMap((i) => (i.key === key ? rows : [i]));
+            setItems(itemsRef.current);
+            toast.success(`${archive}: ${result.created.length} invoice${result.created.length === 1 ? "" : "s"} imported`);
+          })
+        : uploadInvoice(item.file, (p) => patch(key, { progress: p })).then(({ id }) => patch(key, { phase: "done", progress: 1, invoiceId: id }));
+      job
         .catch((e: unknown) => patch(key, { phase: "error", error: e instanceof ApiError ? e.message : "Upload failed" }))
         .finally(() => {
           running.current--;
@@ -77,7 +95,7 @@ export default function UploadPage() {
   const onDrop = useCallback(
     (accepted: File[], rejected: FileRejection[]) => {
       for (const r of rejected) {
-        const reason = r.errors[0]?.code === "file-too-large" ? "is larger than 15 MB" : r.errors[0]?.code === "file-invalid-type" ? "is not a PDF or image" : "was rejected";
+        const reason = r.errors[0]?.code === "file-too-large" ? "is larger than 15 MB" : r.errors[0]?.code === "file-invalid-type" ? "is not a PDF, an image or a .zip" : "was rejected";
         toast.error(`${r.file.name} ${reason}`);
       }
       if (accepted.length) enqueue(accepted);
@@ -121,7 +139,7 @@ export default function UploadPage() {
             </div>
             <div>
               <p className="text-xl font-semibold">{isDragActive ? "Release to upload" : "Drag and drop invoices"}</p>
-              <p className="mt-1.5 font-mono text-xs text-dim">PDF · PNG · JPG · TIFF · WEBP — up to 15 MB each</p>
+              <p className="mt-1.5 font-mono text-xs text-dim">PDF · PNG · JPG · TIFF · WEBP — up to 15 MB each · or a .zip of them</p>
             </div>
             <Button onClick={open} size="lg">
               Browse files
@@ -195,7 +213,7 @@ function UploadRow({ item, onRemove, onRetryUpload }: { item: Item; onRemove: ()
               )}
             </div>
           </div>
-          <p className="font-mono text-[11px] text-dim">{formatBytes(item.file.size)}</p>
+          <p className="font-mono text-[11px] text-dim">{item.fromArchive ? `from ${item.fromArchive}` : formatBytes(item.file.size)}</p>
 
           {(item.phase === "uploading" || item.phase === "queued") && (
             <Progress value={item.phase === "queued" ? 0 : item.progress * 100} className="mt-3" />
@@ -206,9 +224,11 @@ function UploadRow({ item, onRemove, onRetryUpload }: { item: Item; onRemove: ()
               <span className="flex items-center gap-2">
                 <AlertCircle className="size-4 shrink-0" /> {item.error}
               </span>
-              <Button size="sm" variant="outline" onClick={onRetryUpload}>
-                <RotateCw /> Retry
-              </Button>
+              {!item.fromArchive && (
+                <Button size="sm" variant="outline" onClick={onRetryUpload}>
+                  <RotateCw /> Retry
+                </Button>
+              )}
             </div>
           )}
 

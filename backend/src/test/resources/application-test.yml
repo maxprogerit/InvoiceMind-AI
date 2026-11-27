@@ -37,6 +37,9 @@ app:
     retry-after-minutes: 0   # tests flip the fake rate source on and off
   seed:
     demo-password: ""
+  batch:
+    max-entries: 5
+    max-total-bytes: 3000000   # small, so the zip-bomb test stays fast
   reminders:
     cron: "-"            # the tests call sendDigest() themselves
 

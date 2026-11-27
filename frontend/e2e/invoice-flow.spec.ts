@@ -261,6 +261,16 @@ test.describe.serial("invoice lifecycle in the browser", () => {
     await expect(page.getByText(/No webhooks yet/)).toBeVisible();
   });
 
+  test("a .zip upload imports every document in it and explains what it skipped", async () => {
+    await page.goto("/upload");
+    await page.setInputFiles("input[type=file]", path.join(FIXTURES, "e2e-batch.zip"));
+    const rows = page.locator("ul[aria-label=Uploads] > li");
+    await expect(rows.filter({ hasText: "03-german-eur.pdf" })).toBeVisible();
+    await expect(rows.filter({ hasText: "06-german-no-tax.pdf" })).toBeVisible();
+    await expect(rows.filter({ hasText: "readme.txt" }).getByText(/Only PDF/)).toBeVisible();
+    await expect(rows.filter({ hasText: "from e2e-batch.zip" }).first()).toBeVisible();
+  });
+
   test("an admin adds an accountant, who reviews everything but approves nothing", async () => {
     await page.goto("/team");
     await page.getByRole("button", { name: /Add member/ }).first().click();

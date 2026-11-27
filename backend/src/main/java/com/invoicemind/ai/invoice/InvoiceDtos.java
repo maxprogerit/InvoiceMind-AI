@@ -74,7 +74,8 @@ public final class InvoiceDtos {
       @NotNull String originalFilename, String vendorName,
       String invoiceNumber, LocalDate invoiceDate, LocalDate dueDate, String currency, BigDecimal total,
       @NotNull UUID uploadedBy, @NotNull String uploadedByName, @NotNull int errorCount, @NotNull int warningCount,
-      @NotNull Instant createdAt, @NotNull DuplicateStatus duplicateStatus, @NotNull boolean vendorVerified) {}
+      @NotNull Instant createdAt, @NotNull DuplicateStatus duplicateStatus, @NotNull boolean vendorVerified,
+      @NotNull InvoiceSource source) {}
 
   /** {@code source}: text_layer (PDF text read directly), ocr (Tesseract) or mixed (both, per page). */
   public record OcrInfo(String engine, BigDecimal confidence, Integer pageCount, String source) {}
@@ -91,6 +92,7 @@ public final class InvoiceDtos {
       BigDecimal subtotal, BigDecimal tax, BigDecimal total,
       String vendorTaxId, VendorRef vendor, @NotNull DuplicateInfo duplicate,
       String expenseCategory, @NotNull List<MemoryAppliedDto> memoryApplied, @NotNull ApprovalInfo approval,
+      @NotNull InvoiceSource source, String sourceEmail,
       Map<String, Double> fieldConfidence, List<String> modelReviewReasons, @NotNull boolean injectionSuspected,
       @NotNull boolean humanReviewed, @NotNull OcrInfo ocr, ExtractCheck extractCheck, @NotNull UsageInfo usage, Long processingMs,
       String failureReason,

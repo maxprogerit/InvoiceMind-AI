@@ -21,6 +21,9 @@ public class OrganizationEntity {
   private UUID firmId;
   /** A deactivated client company cannot be switched into; its data is kept. */
   private boolean active = true;
+  /** Who may send invoices to the organisation's e-mail address: ANYONE (vendors) or USERS (only its users). */
+  @Enumerated(EnumType.STRING)
+  private com.invoicemind.ai.ingest.IngestPolicy ingestAcceptFrom = com.invoicemind.ai.ingest.IngestPolicy.ANYONE;
   private Instant createdAt = Instant.now();
 
   public OrganizationEntity(String name) { this.name = name; }

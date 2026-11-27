@@ -83,12 +83,15 @@ public class InvoiceService {
 
   // ------------------------------------------------------------------ upload
   @Transactional // the delegate below is a self-call, so this method must open the transaction itself
-  public InvoiceSummary upload(MultipartFile file, AuthPrincipal me) { return upload(file, me, "web"); }
+  public InvoiceSummary upload(MultipartFile file, AuthPrincipal me) { return upload(file, me, InvoiceSource.WEB, null); }
 
-  /** {@code source} ("web", "email") is recorded in the audit trail so it is clear how a document arrived. */
+  /**
+   * {@code source} is stored on the invoice and in the audit trail, so it is clear how a document arrived;
+   * {@code sourceEmail} is the sender of an e-mailed one. Batch and e-mail intake are rate-limited by their callers.
+   */
   @Transactional
-  public InvoiceSummary upload(MultipartFile file, AuthPrincipal me, String source) {
-    rateLimiter.check("upload", me.userId().toString(), props.rateLimit().uploadPerMinute());
+  public InvoiceSummary upload(MultipartFile file, AuthPrincipal me, InvoiceSource source, String sourceEmail) {
+    if (source == InvoiceSource.WEB) rateLimiter.check("upload", me.userId().toString(), props.rateLimit().uploadPerMinute());
     ValidatedFile vf = fileValidator.validate(file);
     firms.assertUploadAllowed(me);  // the firm's monthly document limit, summed over all of its clients
 
@@ -100,11 +103,13 @@ public class InvoiceService {
     inv.setContentType(vf.contentType());
     inv.setFileSize(vf.data().length);
     inv.setFileSha256(vf.sha256());
+    inv.setSource(source);
+    inv.setSourceEmail(sourceEmail);
     inv = invoices.saveAndFlush(inv);
     inv.setStorageKey(storage.store(me.organizationId(), inv.getId(), vf.extension(), vf.data()));
 
     audit.log(me.organizationId(), me.userId(), "INVOICE_UPLOADED", AuditService.INVOICE, inv.getId(),
-        Map.of("filename", vf.safeName(), "bytes", vf.data().length, "sha256", vf.sha256().substring(0, 16), "source", source));
+        Map.of("filename", vf.safeName(), "bytes", vf.data().length, "sha256", vf.sha256().substring(0, 16), "source", source.name().toLowerCase(Locale.ROOT)));
     status.publish(inv);
     jobs.enqueue(inv.getId(), traces.current(), props.processing().maxAttempts()); // same transaction as the row
     return mapper.toSummary(inv, nameOf(me));

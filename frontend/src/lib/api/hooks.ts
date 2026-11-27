@@ -464,6 +464,15 @@ export const useEmailIngest = (enabled = true) =>
     refetchInterval: 15_000, // new mail shows up without a reload
   });
 
+export function useEmailPolicy() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (acceptFrom: "ANYONE" | "USERS") =>
+      unwrap(api.PUT("/api/v1/ingest/email/policy", { body: { acceptFrom } })) as Promise<EmailIngestStatus>,
+    onSuccess: (data) => qc.setQueryData(["ingest", "email"], data),
+  });
+}
+
 export function useRotateEmailAddress() {
   const qc = useQueryClient();
   return useMutation({
