@@ -100,7 +100,8 @@ public class ReminderService {
   /** Sends today's digest for one organisation unless it was already sent today. Public for tests. */
   public Digest sendDigest(UUID organizationId, LocalDate today) {
     List<InvoiceEntity> open = invoices.findByOrganizationIdAndStatusInAndDueDateBefore(organizationId,
-        ReviewQueue.PAYABLE, today.plusDays(daysAhead + 1L));
+        ReviewQueue.PAYABLE, today.plusDays(daysAhead + 1L)).stream()
+        .filter(i -> i.getExportedAt() == null).toList(); // exported invoices are paid from the accounting system
     List<InvoiceEntity> overdue = open.stream().filter(i -> i.getDueDate().isBefore(today))
         .sorted(Comparator.comparing(InvoiceEntity::getDueDate)).toList();
     List<InvoiceEntity> dueSoon = open.stream().filter(i -> !i.getDueDate().isBefore(today))

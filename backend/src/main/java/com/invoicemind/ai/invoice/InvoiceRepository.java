@@ -17,6 +17,15 @@ public interface InvoiceRepository extends JpaRepository<InvoiceEntity, UUID>, J
 
   long countByVendorId(UUID vendorId);
 
+  long countByOrganizationIdAndStatusAndExportedAtIsNull(UUID organizationId, InvoiceStatus status);
+
+  @Query("""
+      select i from InvoiceEntity i where i.organizationId = :org and i.status = :status and i.exportedAt is null
+      order by i.createdAt asc""")
+  List<InvoiceEntity> findForAccountingExport(@Param("org") UUID organizationId, @Param("status") InvoiceStatus status);
+
+  List<InvoiceEntity> findByOrganizationIdAndExportBatchId(UUID organizationId, UUID exportBatchId);
+
   List<InvoiceEntity> findByOrganizationIdAndStatusInAndDueDateBefore(UUID organizationId,
                                                                     Collection<InvoiceStatus> statuses,
                                                                     java.time.LocalDate before);

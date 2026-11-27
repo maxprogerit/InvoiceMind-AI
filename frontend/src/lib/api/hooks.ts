@@ -660,3 +660,35 @@ export function useSaveApprovalRules() {
     },
   });
 }
+
+// ------------------------------------------------------ accounting export
+export const useAccountingPending = () =>
+  useQuery({
+    queryKey: ["accounting", "pending"],
+    queryFn: () => unwrap(api.GET("/api/v1/export/accounting/pending")) as Promise<{ approvedNotExported: number }>,
+  });
+
+export const useAccountingBatches = () =>
+  useQuery({
+    queryKey: ["accounting", "batches"],
+    queryFn: () =>
+      unwrap(api.GET("/api/v1/export/accounting/batches")) as Promise<
+        { id: string; target: "XERO" | "QBO"; invoices: number; createdByName?: string; createdAt: string }[]
+      >,
+  });
+
+export function useAccountingExport() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { target: "XERO" | "QBO"; account: string; taxCode?: string; dateStyle: "DMY" | "MDY" | "ISO" }) =>
+      unwrap(api.POST("/api/v1/export/accounting", { body })) as Promise<{
+        batchId: string;
+        invoices: number;
+        skipped: { id: string; label: string; reason: string }[];
+      }>,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["accounting"] });
+      void qc.invalidateQueries({ queryKey: ["invoices"] });
+    },
+  });
+}

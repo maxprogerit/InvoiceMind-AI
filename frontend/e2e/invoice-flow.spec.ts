@@ -261,6 +261,18 @@ test.describe.serial("invoice lifecycle in the browser", () => {
     await expect(page.getByText(/No webhooks yet/)).toBeVisible();
   });
 
+  test("approved invoices go to accounting once, as a Xero bill import", async () => {
+    await page.goto("/export");
+    await expect(page.getByText(/approved invoices? waiting/)).toBeVisible();
+    await page.fill("#acct-account", "429");
+    const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Export to Xero" }).click()]);
+    expect(download.suggestedFilename()).toMatch(/^xero-bills-.*\.csv$/);
+    const chunks: Buffer[] = [];
+    for await (const chunk of await download.createReadStream()) chunks.push(chunk as Buffer);
+    expect(Buffer.concat(chunks).toString().split("\n")[0]).toContain("*ContactName");
+    await expect(page.getByText("No approved invoices are waiting.")).toBeVisible(); // marked: not exported twice
+  });
+
   test("a .zip upload imports every document in it and explains what it skipped", async () => {
     await page.goto("/upload");
     await page.setInputFiles("input[type=file]", path.join(FIXTURES, "e2e-batch.zip"));

@@ -500,6 +500,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/export/accounting": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["exportToAccounting"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/switch-organization": {
         parameters: {
             query?: never;
@@ -812,6 +828,54 @@ export interface paths {
             cookie?: never;
         };
         get: operations["invoices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/export/accounting/pending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["pending"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/export/accounting/batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["batches"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/export/accounting/batches/{id}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["batchFile"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1521,9 +1585,9 @@ export interface components {
         };
         BatchResult: {
             created: components["schemas"]["InvoiceSummary"][];
-            skipped: components["schemas"]["Skipped"][];
+            skipped: components["schemas"]["ZipSkipped"][];
         };
-        Skipped: {
+        ZipSkipped: {
             name: string;
             reason: string;
         };
@@ -1550,6 +1614,27 @@ export interface components {
         CreateClientRequest: {
             name: string;
             baseCurrency: string;
+        };
+        Options: {
+            /** @enum {string} */
+            target: "XERO" | "QBO";
+            account: string;
+            taxCode?: string;
+            /** @enum {string} */
+            dateStyle: "DMY" | "MDY" | "ISO";
+        };
+        AccountingExportDto: {
+            /** Format: uuid */
+            batchId: string;
+            /** Format: int32 */
+            invoices: number;
+            skipped: components["schemas"]["ExportSkipped"][];
+        };
+        ExportSkipped: {
+            /** Format: uuid */
+            id: string;
+            label: string;
+            reason: string;
         };
         SwitchOrganizationRequest: {
             /** Format: uuid */
@@ -1704,6 +1789,21 @@ export interface components {
         FirmTeam: {
             clients: components["schemas"]["ClientRef"][];
             members: components["schemas"]["FirmMemberDto"][];
+        };
+        PendingDto: {
+            /** Format: int64 */
+            approvedNotExported: number;
+        };
+        BatchDto: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            target: "XERO" | "QBO";
+            /** Format: int32 */
+            invoices: number;
+            createdByName?: string;
+            /** Format: date-time */
+            createdAt: string;
         };
         OrganizationOption: {
             /** Format: uuid */
@@ -2817,6 +2917,30 @@ export interface operations {
             };
         };
     };
+    exportToAccounting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Options"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AccountingExportDto"];
+                };
+            };
+        };
+    };
     switchOrganization: {
         parameters: {
             query?: never;
@@ -3277,6 +3401,68 @@ export interface operations {
             };
             header?: never;
             path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+        };
+    };
+    pending: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PendingDto"];
+                };
+            };
+        };
+    };
+    batches: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["BatchDto"][];
+                };
+            };
+        };
+    };
+    batchFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;

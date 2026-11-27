@@ -74,6 +74,9 @@ public class InvoiceEntity {
   /** Extraction copied from this earlier invoice with the identical file: the model was not called again. */
   private UUID reusedFrom;
 
+  /** Handed to accounting (Xero / QuickBooks export); such an invoice is not exported again and no longer "overdue" here. */
+  private Instant exportedAt;
+  private UUID exportBatchId;
   /** How the document arrived: WEB (single upload), BATCH (zip) or EMAIL. */
   @Enumerated(EnumType.STRING)
   private InvoiceSource source = InvoiceSource.WEB;

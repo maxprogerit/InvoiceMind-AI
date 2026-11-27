@@ -6,6 +6,7 @@ import { Suspense, useState } from "react";
 import { toast } from "sonner";
 
 import { InvoiceFiltersBar } from "@/components/invoices/invoice-filters";
+import { AccountingExportCard } from "@/components/export/accounting-export-card";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardLabel } from "@/components/ui/card";
@@ -13,6 +14,7 @@ import { Input, Label } from "@/components/ui/input";
 import { ApiError, downloadBlob, fetchBlob } from "@/lib/api/client";
 import { useInvoices, type InvoiceFilters } from "@/lib/api/hooks";
 import { ALL_STATUSES, type InvoiceStatus } from "@/lib/api/types";
+import { useAuth } from "@/lib/auth/store";
 import { cn } from "@/lib/utils";
 
 const FORMATS = [
@@ -64,9 +66,11 @@ function ExportBody() {
   }
 
   const total = count.data?.totalItems;
+  const role = useAuth((s) => s.user?.role);
+  const canExportToAccounting = role === "ADMIN" || role === "ACCOUNTANT";
   return (
     <>
-      <PageHeader title="Export" subtitle="Download exactly the invoices you filter below." />
+      <PageHeader title="Export" subtitle="Hand approved invoices to accounting, or download exactly the invoices you filter." />
 
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(320px,1fr)]">
         <Card className="overflow-hidden">
@@ -90,6 +94,7 @@ function ExportBody() {
         </Card>
 
         <div className="space-y-4">
+          {canExportToAccounting && <AccountingExportCard />}
           {FORMATS.map(({ id, label, ext, icon: Icon, text }) => (
             <Card key={id} className={cn("flex items-center gap-4 p-5", busy === id && "border-accent/60")}>
               <div className="grid size-12 shrink-0 place-items-center rounded-control bg-surface-2 text-accent">

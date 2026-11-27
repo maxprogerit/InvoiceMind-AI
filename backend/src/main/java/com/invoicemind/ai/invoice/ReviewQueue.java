@@ -11,7 +11,7 @@ public enum ReviewQueue {
   POSSIBLE_DUPLICATE,
   /** The vendor was created from a document and nobody confirmed it yet. */
   UNVERIFIED_VENDOR,
-  /** The due date has passed and the invoice is still open (not rejected, not handed to accounting). */
+  /** The due date has passed and the invoice is still open (not rejected, not yet exported to accounting). */
   OVERDUE;
 
   /** Invoices that still need something from someone. */

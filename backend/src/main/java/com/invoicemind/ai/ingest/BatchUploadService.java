@@ -37,9 +37,9 @@ import org.springframework.web.multipart.MultipartFile;
 @Slf4j
 @Service
 public class BatchUploadService {
-  public record Skipped(@NotNull String name, @NotNull String reason) {}
+  public record ZipSkipped(@NotNull String name, @NotNull String reason) {}
 
-  public record BatchResult(@NotNull List<InvoiceSummary> created, @NotNull List<Skipped> skipped) {}
+  public record BatchResult(@NotNull List<InvoiceSummary> created, @NotNull List<ZipSkipped> skipped) {}
 
   private static final Set<String> ARCHIVE_EXTENSIONS = Set.of("zip", "7z", "rar", "gz", "tgz", "tar", "bz2", "xz", "jar");
 
@@ -65,7 +65,7 @@ public class BatchUploadService {
     rateLimiter.check("batch", me.userId().toString(), 5);
     if (zip == null || zip.isEmpty()) throw ApiException.badRequest("empty_file", "The archive is empty");
     List<InvoiceSummary> created = new ArrayList<>();
-    List<Skipped> skipped = new ArrayList<>();
+    List<ZipSkipped> skipped = new ArrayList<>();
     long total = 0;
     int documents = 0;
     try (InputStream raw = zip.getInputStream()) {
@@ -81,38 +81,38 @@ public class BatchUploadService {
           if (entry.isDirectory()) continue;
           String name = baseName(path);
           if (!safePath(path)) {
-            skipped.add(new Skipped(path, "Unsafe path in the archive (absolute or with '..'); not imported"));
+            skipped.add(new ZipSkipped(path, "Unsafe path in the archive (absolute or with '..'); not imported"));
             continue;
           }
           if (name.isEmpty() || name.startsWith(".") || path.startsWith("__MACOSX/")) continue;
           if (ARCHIVE_EXTENSIONS.contains(extension(name))) {
-            skipped.add(new Skipped(name, "Archives inside the archive are not opened"));
+            skipped.add(new ZipSkipped(name, "Archives inside the archive are not opened"));
             continue;
           }
           if (documents >= maxEntries) {
-            skipped.add(new Skipped(name, "More than " + maxEntries + " documents in one archive; the rest was not imported"));
+            skipped.add(new ZipSkipped(name, "More than " + maxEntries + " documents in one archive; the rest was not imported"));
             break;
           }
           Entry read = read(in, maxFileBytes, maxTotalBytes - total);
           if (read == null) {
-            skipped.add(new Skipped(name, "The archive unpacks to more than " + (maxTotalBytes / 1_048_576) + " MB; stopped here"));
+            skipped.add(new ZipSkipped(name, "The archive unpacks to more than " + (maxTotalBytes / 1_048_576) + " MB; stopped here"));
             break;
           }
           total += read.size();
           if (read.data() == null) {
-            skipped.add(new Skipped(name, "Larger than " + (maxFileBytes / 1_048_576) + " MB"));
+            skipped.add(new ZipSkipped(name, "Larger than " + (maxFileBytes / 1_048_576) + " MB"));
             continue;
           }
           byte[] data = read.data();
           if (data.length >= 4 && data[0] == 'P' && data[1] == 'K') {
-            skipped.add(new Skipped(name, "Archives inside the archive are not opened"));
+            skipped.add(new ZipSkipped(name, "Archives inside the archive are not opened"));
             continue;
           }
           documents++;
           try {
             created.add(invoices.upload(new BytesMultipartFile(name, data), me, InvoiceSource.BATCH, null));
           } catch (ApiException e) {
-            skipped.add(new Skipped(name, e.getMessage()));
+            skipped.add(new ZipSkipped(name, e.getMessage()));
           }
         }
       }

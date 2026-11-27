@@ -163,6 +163,14 @@ Details, the lifecycle diagram, the job-queue decision and the trust boundaries 
 | `extract-service/` | Python 3.11, FastAPI, Pydantic v2 (money as `Decimal`), Tesseract + pdfplumber + Poppler, OpenAI Python SDK (Responses API). Imported from InvoiceExtract with `git subtree` (its history is kept) and merged with the former `ai-service` |
 | infrastructure | PostgreSQL 16 with pgvector (also the job queue and rate-limit counters), Nginx, Docker Compose |
 
+## Export to accounting
+
+*Export → To accounting* (accountants and admins) turns every approved, not yet exported invoice into a bill-import
+CSV for **Xero** or **QuickBooks Online**, marks those invoices and never exports them twice; earlier files stay
+downloadable. Exported invoices leave the *Overdue* queue and the reminders. Exact columns, sources and what could not
+be verified: [docs/ACCOUNTING-EXPORT.md](docs/ACCOUNTING-EXPORT.md). Systems that should react at once get the signed
+`invoice.approved` webhook instead (below).
+
 ## Roles and approvals
 
 | | ACCOUNTANT | APPROVER | ADMIN |

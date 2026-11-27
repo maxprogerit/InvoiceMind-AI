@@ -80,6 +80,7 @@ public record InvoiceFilter(
           case OVERDUE -> {
             p.add(cb.lessThan(root.get("dueDate"), today == null ? LocalDate.now() : today));
             p.add(root.get("status").in(ReviewQueue.PAYABLE));
+            p.add(cb.isNull(root.get("exportedAt"))); // handed to accounting: paid from there
           }
         }
       }
