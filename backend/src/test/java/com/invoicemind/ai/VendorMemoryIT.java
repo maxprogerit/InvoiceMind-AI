@@ -114,7 +114,7 @@ class VendorMemoryIT extends AbstractIntegrationTest {
   @Test
   void everyCorrectionIsStoredWithBeforeAfterWhoAndWhen() {
     Session admin = api.registerOrg("Corrections Inc");
-    Session accountant = api.createUser(admin, "USER");
+    Session accountant = api.createUser(admin, "ACCOUNTANT");
     JsonNode inv = process(accountant, "Fennel Foods", "EUR", "2026-03-01", "2026-03-31");
     correct(accountant, inv, Map.of("invoiceNumber", "FF-2026-77", "total", new java.math.BigDecimal("101.50")));
 

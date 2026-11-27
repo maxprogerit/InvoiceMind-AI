@@ -37,6 +37,8 @@ app:
     retry-after-minutes: 0   # tests flip the fake rate source on and off
   seed:
     demo-password: ""
+  reminders:
+    cron: "-"            # the tests call sendDigest() themselves
 
 management:
   tracing:

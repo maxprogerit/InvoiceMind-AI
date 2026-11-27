@@ -22,7 +22,7 @@ class WorkflowIT extends AbstractIntegrationTest {
   void approverApprovesWithCommentAndEverythingIsAudited() {
     Session admin = api.registerOrg("Approve Inc");
     Session approver = api.createUser(admin, "APPROVER");
-    Session user = api.createUser(admin, "USER");
+    Session user = api.createUser(admin, "ACCOUNTANT");
     UUID invoice = upload(user, ok());
     awaitStatus(user, invoice, "VALIDATED");
 
@@ -56,7 +56,7 @@ class WorkflowIT extends AbstractIntegrationTest {
   void rejectionNeedsACommentAndNotifiesTheUploader() {
     Session admin = api.registerOrg("Reject Inc");
     Session approver = api.createUser(admin, "APPROVER");
-    Session user = api.createUser(admin, "USER");
+    Session user = api.createUser(admin, "ACCOUNTANT");
     UUID invoice = upload(user, ok());
     awaitStatus(user, invoice, "VALIDATED");
 
@@ -83,20 +83,24 @@ class WorkflowIT extends AbstractIntegrationTest {
     assertThat(r.status()).isEqualTo(403);
     assertThat(api.get("/api/v1/invoices/" + own, approver.token()).json().get("status").asText()).isEqualTo("VALIDATED");
 
-    // someone else can; so can an admin on their own upload (documented break-glass)
+    // someone else can
     api.verifyVendorOf(admin.token(), own);
     assertThat(api.post("/api/v1/invoices/" + own + "/approve", admin.token(), Map.of()).status()).isEqualTo(200);
+    // and the rule holds for admins too: nobody approves their own upload
     UUID adminOwn = upload(admin, ok());
     awaitStatus(admin, adminOwn, "VALIDATED");
     api.verifyVendorOf(admin.token(), adminOwn);
-    assertThat(api.post("/api/v1/invoices/" + adminOwn + "/approve", admin.token(), Map.of()).status()).isEqualTo(200);
+    Resp adminSelf = api.post("/api/v1/invoices/" + adminOwn + "/approve", admin.token(), Map.of());
+    assertThat(adminSelf.status()).isEqualTo(403);
+    assertThat(adminSelf.json().get("message").asText()).contains("uploaded yourself");
+    assertThat(api.post("/api/v1/invoices/" + adminOwn + "/approve", approver.token(), Map.of()).status()).isEqualTo(200);
   }
 
   @Test
   void invoicesNeedingReviewCannotBeApprovedButCanBeRejected() {
     Session admin = api.registerOrg("Review Inc");
     Session approver = api.createUser(admin, "APPROVER");
-    Session user = api.createUser(admin, "USER");
+    Session user = api.createUser(admin, "ACCOUNTANT");
     String sc = PipelineIT.scenario("ACME GmbH", "INV-" + PipelineIT.id("w"), "1000.00", "190.00", "9999.00");
     UUID invoice = upload(user, sc);
     awaitStatus(user, invoice, "NEEDS_REVIEW");
@@ -114,7 +118,7 @@ class WorkflowIT extends AbstractIntegrationTest {
   @Test
   void adminCanDeleteUnapprovedInvoicesAndTheFileGoesToo() {
     Session admin = api.registerOrg("Delete Inc");
-    Session user = api.createUser(admin, "USER");
+    Session user = api.createUser(admin, "ACCOUNTANT");
     UUID invoice = upload(user, ok());
     awaitStatus(user, invoice, "VALIDATED");
 
@@ -128,7 +132,7 @@ class WorkflowIT extends AbstractIntegrationTest {
   @Test
   void organisationWideAuditLogIsFilterableAndPaged() {
     Session admin = api.registerOrg("Audit Inc");
-    Session user = api.createUser(admin, "USER");
+    Session user = api.createUser(admin, "ACCOUNTANT");
     UUID invoice = upload(user, ok());
     awaitStatus(user, invoice, "VALIDATED");
 
@@ -136,7 +140,7 @@ class WorkflowIT extends AbstractIntegrationTest {
     assertThat(all.get("totalItems").asInt()).isGreaterThanOrEqualTo(5);
     JsonNode filtered = api.get("/api/v1/audit?action=INVOICE_UPLOADED&entityType=INVOICE", admin.token()).json();
     assertThat(filtered.get("totalItems").asInt()).isEqualTo(1);
-    assertThat(filtered.get("items").get(0).get("userName").asText()).isEqualTo("USER user");
+    assertThat(filtered.get("items").get(0).get("userName").asText()).isEqualTo("ACCOUNTANT user");
     JsonNode bySystem = api.get("/api/v1/audit?action=VALIDATION_COMPLETED", admin.token()).json();
     assertThat(bySystem.get("items").get(0).get("userName").asText()).isEqualTo("System");
     assertThat(api.get("/api/v1/audit?userId=" + user.userId(), admin.token()).json().get("totalItems").asInt()).isGreaterThanOrEqualTo(1);
@@ -146,7 +150,7 @@ class WorkflowIT extends AbstractIntegrationTest {
   @Test
   void notificationsCanBeMarkedRead() {
     Session admin = api.registerOrg("Notify Inc");
-    Session user = api.createUser(admin, "USER");
+    Session user = api.createUser(admin, "ACCOUNTANT");
     UUID invoice = upload(user, ok());
     awaitStatus(user, invoice, "VALIDATED");
 
@@ -159,7 +163,7 @@ class WorkflowIT extends AbstractIntegrationTest {
     assertThat(api.post("/api/v1/notifications/read-all", user.token(), null).status()).isEqualTo(204);
     assertThat(api.get("/api/v1/notifications", user.token()).json().get("unreadCount").asInt()).isZero();
     // someone else's notification id is a 404
-    Session other = api.createUser(admin, "USER");
+    Session other = api.createUser(admin, "ACCOUNTANT");
     assertThat(api.post("/api/v1/notifications/" + id + "/read", other.token(), null).status()).isEqualTo(404);
   }
 }

@@ -102,7 +102,7 @@ class EmailIngestIT extends AbstractIntegrationTest {
   @Test
   void aMailFromAKnownSenderBecomesInvoicesThatFlowThroughThePipeline() throws Exception {
     Session admin = api.registerOrg("Mail Inc");
-    Session user = api.createUser(admin, "USER");
+    Session user = api.createUser(admin, "ACCOUNTANT");
     String token = token(admin);
     assertThat(api.get("/api/v1/ingest/email", admin.token()).json().get("address").asText())
         .isEqualTo("invoices+" + token + "@example.com");
@@ -133,8 +133,8 @@ class EmailIngestIT extends AbstractIntegrationTest {
   @Test
   void messagesThatDoNotQualifyAreRejectedAndLoggedNotProcessed() throws Exception {
     Session admin = api.registerOrg("Mail Rules Inc");
-    Session user = api.createUser(admin, "USER");
-    Session disabled = api.createUser(admin, "USER");
+    Session user = api.createUser(admin, "ACCOUNTANT");
+    Session disabled = api.createUser(admin, "ACCOUNTANT");
     Session stranger = api.registerOrg("Mail Stranger Inc");
     String token = token(admin);
     assertThat(api.patch("/api/v1/users/" + disabled.userId(), admin.token(), Map.of("enabled", false)).status()).isEqualTo(200);
@@ -169,7 +169,7 @@ class EmailIngestIT extends AbstractIntegrationTest {
   @Test
   void aMessageIsNeverProcessedTwiceEvenIfItReappearsUnread() throws Exception {
     Session admin = api.registerOrg("Mail Dup Inc");
-    Session user = api.createUser(admin, "USER");
+    Session user = api.createUser(admin, "ACCOUNTANT");
     String token = token(admin);
     String id = "<same-" + UUID.randomUUID() + "@test>";
     Att attachment = pdf("once.pdf");
@@ -185,7 +185,7 @@ class EmailIngestIT extends AbstractIntegrationTest {
   @Test
   void anotherPollFindsNothingNewAndAttachmentsAreCapped() throws Exception {
     Session admin = api.registerOrg("Mail Cap Inc");
-    Session user = api.createUser(admin, "USER");
+    Session user = api.createUser(admin, "ACCOUNTANT");
     String token = token(admin);
     List<Att> seven = new ArrayList<>();
     for (int i = 0; i < 7; i++) seven.add(pdf("doc-" + i + ".pdf"));
@@ -200,7 +200,7 @@ class EmailIngestIT extends AbstractIntegrationTest {
   @Test
   void rotatingTheTokenInvalidatesTheOldAddress() throws Exception {
     Session admin = api.registerOrg("Mail Rotate Inc");
-    Session user = api.createUser(admin, "USER");
+    Session user = api.createUser(admin, "ACCOUNTANT");
     String oldToken = token(admin);
 
     JsonNode rotated = api.post("/api/v1/ingest/email/token", admin.token(), null).json();
@@ -219,7 +219,7 @@ class EmailIngestIT extends AbstractIntegrationTest {
   @Test
   void whenRequiredTheMailServersAuthenticationResultsMustVouchForTheSender() throws Exception {
     Session admin = api.registerOrg("Mail Auth Inc");
-    Session user = api.createUser(admin, "USER");
+    Session user = api.createUser(admin, "ACCOUNTANT");
     String token = token(admin);
     MailProperties strictProps = new MailProperties(true, mailProps.address(), mailProps.host(), mailProps.port(),
         mailProps.username(), mailProps.password(), false, "INBOX", 3600, true, 20, 5, 30_000_000);

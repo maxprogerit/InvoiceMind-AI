@@ -616,7 +616,7 @@ export const useVerifyVendor = () =>
   useVendorMutation((id: string) => unwrap(api.POST("/api/v1/vendors/{id}/verify", { params: { path: { id } } })));
 
 export const useUpdateVendor = () =>
-  useVendorMutation(({ id, ...body }: { id: string; name: string; taxId?: string; defaultCurrency?: string }) =>
+  useVendorMutation(({ id, ...body }: { id: string; name: string; taxId?: string; defaultCurrency?: string; paymentTermsDays?: number }) =>
     unwrap(api.PUT("/api/v1/vendors/{id}", { params: { path: { id } }, body })),
   );
 
@@ -634,3 +634,20 @@ export const useRemoveAlias = () =>
   useVendorMutation(({ id, aliasId }: { id: string; aliasId: number }) =>
     unwrap(api.DELETE("/api/v1/vendors/{id}/aliases/{aliasId}", { params: { path: { id, aliasId } } })),
   );
+
+// ---------------------------------------------------------- approval rules
+export type ApprovalRule = { currency: string; autoApproveBelow?: number; twoApproversAbove?: number };
+
+export const useApprovalRules = () =>
+  useQuery({ queryKey: ["approval-rules"], queryFn: () => unwrap(api.GET("/api/v1/approval-rules")) as Promise<{ rules: ApprovalRule[] }> });
+
+export function useSaveApprovalRules() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (rules: ApprovalRule[]) => unwrap(api.PUT("/api/v1/approval-rules", { body: { rules } })),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["approval-rules"] });
+      void qc.invalidateQueries({ queryKey: ["invoice"] });
+    },
+  });
+}

@@ -88,7 +88,7 @@ services:
       OIDC_PUBLIC_URL: ${OIDC_PUBLIC_URL:-}
       OIDC_REQUIRE_EMAIL_VERIFIED: ${OIDC_REQUIRE_EMAIL_VERIFIED:-true}
       OIDC_PROVISION_ORG_ID: ${OIDC_PROVISION_ORG_ID:-}
-      OIDC_DEFAULT_ROLE: ${OIDC_DEFAULT_ROLE:-USER}
+      OIDC_DEFAULT_ROLE: ${OIDC_DEFAULT_ROLE:-ACCOUNTANT}
       OIDC_ALLOWED_EMAIL_DOMAINS: ${OIDC_ALLOWED_EMAIL_DOMAINS:-}
       STORAGE_TYPE: ${STORAGE_TYPE:-local}
       S3_ENDPOINT: ${S3_ENDPOINT:-}
@@ -100,6 +100,16 @@ services:
       S3_CREATE_BUCKET: ${S3_CREATE_BUCKET:-false}
       TRACING_ENABLED: ${TRACING_ENABLED:-false}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4318}
+      # outgoing mail: daily due-date reminders (defaults to the local Mailpit below)
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_AUTH: ${SMTP_AUTH:-false}
+      SMTP_STARTTLS: ${SMTP_STARTTLS:-false}
+      MAIL_FROM: ${MAIL_FROM:-invoicemind@localhost}
+      APP_PUBLIC_URL: ${APP_PUBLIC_URL:-http://localhost}
+      REMINDERS_DAYS_AHEAD: ${REMINDERS_DAYS_AHEAD:-3}
       LOG_FORMAT: ecs
     volumes:
       - storage_data:/data/storage
@@ -107,6 +117,15 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       extract-service: { condition: service_healthy }
+
+  # Catches every e-mail the backend sends (reminders) for local testing: http://127.0.0.1:8025
+  # For real mail set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_AUTH=true, SMTP_STARTTLS=true in .env.
+  mailpit:
+    <<: *restart
+    image: axllent/mailpit:v1.21
+    ports:
+      - "127.0.0.1:${MAILPIT_UI_PORT:-8025}:8025"
+    networks: [edge]
 
   frontend:
     <<: *restart

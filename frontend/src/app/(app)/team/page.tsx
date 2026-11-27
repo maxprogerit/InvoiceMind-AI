@@ -24,21 +24,21 @@ import { useAuth } from "@/lib/auth/store";
 import { formatDate } from "@/lib/format";
 
 const ROLES: { id: Role; label: string; hint: string }[] = [
-  { id: "USER", label: "User", hint: "Uploads invoices, sees only their own" },
-  { id: "APPROVER", label: "Approver", hint: "Sees the whole organisation, approves and rejects" },
-  { id: "ADMIN", label: "Admin", hint: "Everything, plus team management and deletion" },
+  { id: "ACCOUNTANT", label: "Accountant", hint: "Uploads, reviews and corrects invoices, confirms vendors; does not approve" },
+  { id: "APPROVER", label: "Approver", hint: "Approves and rejects within the approval rules, never their own uploads" },
+  { id: "ADMIN", label: "Admin", hint: "Everything, plus team, settings and approval rules" },
 ];
 
 const schema = z.object({
   fullName: z.string().trim().min(1, "Required").max(200),
   email: z.string().email("Enter a valid e-mail"),
-  role: z.enum(["USER", "APPROVER", "ADMIN"]),
+  role: z.enum(["ACCOUNTANT", "APPROVER", "ADMIN"]),
   password: z.string().min(10, "At least 10 characters").regex(/[A-Za-z]/, "Include a letter").regex(/\d/, "Include a digit"),
 });
 
 function AddMember({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
   const create = useCreateUser();
-  const form = useForm<z.infer<typeof schema>>({ resolver: zodResolver(schema), defaultValues: { fullName: "", email: "", role: "USER", password: "" } });
+  const form = useForm<z.infer<typeof schema>>({ resolver: zodResolver(schema), defaultValues: { fullName: "", email: "", role: "ACCOUNTANT", password: "" } });
   const e = form.formState.errors;
   const role = form.watch("role");
 

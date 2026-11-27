@@ -14,7 +14,8 @@ public final class MailServerForTests {
   private MailServerForTests() {}
 
   private static GreenMail start() {
-    GreenMail g = new GreenMail(new ServerSetup[]{new ServerSetup(0, "127.0.0.1", ServerSetup.PROTOCOL_IMAP)});
+    GreenMail g = new GreenMail(new ServerSetup[]{new ServerSetup(0, "127.0.0.1", ServerSetup.PROTOCOL_IMAP),
+        new ServerSetup(0, "127.0.0.1", ServerSetup.PROTOCOL_SMTP)});
     g.setUser(ADDRESS, LOGIN, PASSWORD);
     g.start();
     return g;
@@ -23,4 +24,7 @@ public final class MailServerForTests {
   public static GreenMail server() { return SERVER; }
 
   public static int imapPort() { return SERVER.getImap().getPort(); }
+
+  /** Outgoing mail (reminders) goes here; GreenMail keeps every message it receives. */
+  public static int smtpPort() { return SERVER.getSmtp().getPort(); }
 }

@@ -47,6 +47,15 @@ public final class InvoiceDtos {
   public record CorrectionDto(@NotNull Long id, @NotNull String field, String oldValue, String newValue,
                               String userName, @NotNull Instant at) {}
 
+  public record GivenApproval(@NotNull String name, @NotNull Instant at, String comment) {}
+
+  /**
+   * Approval progress under the organisation's rules: {@code required} 0 (automatic), 1 or 2; {@code rule} in words;
+   * {@code given}: approvals so far; {@code autoApproved}: the system approved it under the rule.
+   */
+  public record ApprovalInfo(@NotNull int required, @NotNull String rule, @NotNull List<GivenApproval> given,
+                             @NotNull boolean autoApproved) {}
+
   public record QueueCounts(@NotNull long needsReview, @NotNull long possibleDuplicate, @NotNull long unverifiedVendor,
                             @NotNull long overdue) {}
 
@@ -81,7 +90,7 @@ public final class InvoiceDtos {
       String vendorName, String invoiceNumber, LocalDate invoiceDate, LocalDate dueDate, String currency,
       BigDecimal subtotal, BigDecimal tax, BigDecimal total,
       String vendorTaxId, VendorRef vendor, @NotNull DuplicateInfo duplicate,
-      String expenseCategory, @NotNull List<MemoryAppliedDto> memoryApplied,
+      String expenseCategory, @NotNull List<MemoryAppliedDto> memoryApplied, @NotNull ApprovalInfo approval,
       Map<String, Double> fieldConfidence, List<String> modelReviewReasons, @NotNull boolean injectionSuspected,
       @NotNull boolean humanReviewed, @NotNull OcrInfo ocr, ExtractCheck extractCheck, @NotNull UsageInfo usage, Long processingMs,
       String failureReason,

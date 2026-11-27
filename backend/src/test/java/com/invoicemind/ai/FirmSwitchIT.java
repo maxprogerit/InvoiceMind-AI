@@ -76,7 +76,7 @@ class FirmSwitchIT extends AbstractIntegrationTest {
 
   @Test
   void switchGivesATokenForTheOtherClientWithTheRoleOfThatAccessRow() throws Exception {
-    Setup s = firmWithAccountant("USER");
+    Setup s = firmWithAccountant("ACCOUNTANT");
 
     JsonNode options = api.get("/api/v1/auth/organizations", s.accountant().token()).json();
     assertThat(options).hasSize(2);
@@ -87,15 +87,15 @@ class FirmSwitchIT extends AbstractIntegrationTest {
     String token = r.json().get("accessToken").asText();
     JsonNode c = claims(token, mapper);
     assertThat(c.get("org").asText()).isEqualTo(s.clientB().toString());
-    assertThat(c.get("role").asText()).isEqualTo("USER");               // the role in B, not the APPROVER of the home company
+    assertThat(c.get("role").asText()).isEqualTo("ACCOUNTANT");               // the role in B, not the APPROVER of the home company
     assertThat(c.get("firm").asText()).isEqualTo(firmOf(s.clientA()).toString());
     assertThat(c.get("firmRole").asText()).isEqualTo("ACCOUNTANT");
     assertThat(r.json().at("/user/organizationName").asText()).isEqualTo("Client B");
-    assertThat(r.json().at("/user/role").asText()).isEqualTo("USER");
+    assertThat(r.json().at("/user/role").asText()).isEqualTo("ACCOUNTANT");
 
     JsonNode me = api.get("/api/v1/auth/me", token).json();
     assertThat(me.get("organizationId").asText()).isEqualTo(s.clientB().toString());
-    assertThat(me.get("role").asText()).isEqualTo("USER");
+    assertThat(me.get("role").asText()).isEqualTo("ACCOUNTANT");
     // a USER in B cannot do what an APPROVER/ADMIN could; the privilege of the home company did not travel along
     assertThat(api.get("/api/v1/users", token).status()).isEqualTo(403);
     assertThat(api.get("/api/v1/knowledge/documents", token).status()).isEqualTo(403);
@@ -109,7 +109,7 @@ class FirmSwitchIT extends AbstractIntegrationTest {
 
   @Test
   void aCompanyThatDoesNotExistAndOneThatIsNotYoursAreAnsweredIdentically() {
-    Setup s = firmWithAccountant("USER");
+    Setup s = firmWithAccountant("ACCOUNTANT");
     Session stranger = api.registerOrg("Somebody Else");
 
     Resp missing = switchTo(s.accountant(), UUID.randomUUID());
@@ -156,7 +156,7 @@ class FirmSwitchIT extends AbstractIntegrationTest {
 
   @Test
   void aSwitchSurvivesARefreshAndFallsBackHomeWhenTheAccessIsWithdrawn() {
-    Setup s = firmWithAccountant("USER");
+    Setup s = firmWithAccountant("ACCOUNTANT");
     Resp login = api.post("/api/v1/auth/login", null, Map.of("email", s.accountant().email(), "password", TestApi.PASSWORD));
     String refresh = login.cookie("refresh_token");
     assertThat(login.json().at("/user/organizationId").asText()).isEqualTo(s.clientA().toString());   // login lands in the home company
@@ -168,7 +168,7 @@ class FirmSwitchIT extends AbstractIntegrationTest {
     Resp refreshed = api.call(HttpMethod.POST, "/api/v1/auth/refresh", null, null, AuthIT.cookieHeader(refresh));
     assertThat(refreshed.status()).isEqualTo(200);
     assertThat(refreshed.json().at("/user/organizationId").asText()).isEqualTo(s.clientB().toString());
-    assertThat(refreshed.json().at("/user/role").asText()).isEqualTo("USER");
+    assertThat(refreshed.json().at("/user/role").asText()).isEqualTo("ACCOUNTANT");
     String next = refreshed.cookie("refresh_token");
 
     // the choice is carried over by the rotation, so it survives the next refresh too
@@ -187,7 +187,7 @@ class FirmSwitchIT extends AbstractIntegrationTest {
 
   @Test
   void aDeactivatedClientCannotBeEnteredAndDoesNotRestoreOnRefresh() {
-    Setup s = firmWithAccountant("USER");
+    Setup s = firmWithAccountant("ACCOUNTANT");
     Resp login = api.post("/api/v1/auth/login", null, Map.of("email", s.accountant().email(), "password", TestApi.PASSWORD));
     String refresh = login.cookie("refresh_token");
     api.call(HttpMethod.POST, "/api/v1/auth/switch-organization", login.json().get("accessToken").asText(),
@@ -246,7 +246,7 @@ class FirmSwitchIT extends AbstractIntegrationTest {
 
   @Test
   void notificationsBelongToTheCompanyTheSessionIsWorkingIn() {
-    Setup s = firmWithAccountant("USER");
+    Setup s = firmWithAccountant("ACCOUNTANT");
     UUID invoice = upload(s.accountant(), scenario());                    // uploaded in the home company A
     awaitStatus(s.accountant(), invoice, "VALIDATED");
     assertThat(api.get("/api/v1/notifications", s.accountant().token()).json().get("unreadCount").asInt()).isEqualTo(1);
@@ -263,7 +263,7 @@ class FirmSwitchIT extends AbstractIntegrationTest {
   @Test
   void rowsFromBeforeFirmsStillWorkWithoutAnyFirmData() {
     Session admin = api.registerOrg("Legacy " + UUID.randomUUID().toString().substring(0, 6));
-    Session user = api.createUser(admin, "USER");
+    Session user = api.createUser(admin, "ACCOUNTANT");
     // make the data look like it did before V8 created anything for it
     jdbc.update("delete from firm_members where firm_id = ?", firmOf(admin.organizationId()));
     jdbc.update("delete from user_org_access where organization_id = ?", admin.organizationId());
@@ -271,7 +271,7 @@ class FirmSwitchIT extends AbstractIntegrationTest {
 
     Resp login = api.post("/api/v1/auth/login", null, Map.of("email", user.email(), "password", TestApi.PASSWORD));
     assertThat(login.status()).isEqualTo(200);
-    assertThat(login.json().at("/user/role").asText()).isEqualTo("USER");
+    assertThat(login.json().at("/user/role").asText()).isEqualTo("ACCOUNTANT");
     assertThat(login.json().at("/user/firmId").isNull() || login.json().at("/user/firmId").isMissingNode()).isTrue();
     String token = login.json().get("accessToken").asText();
     assertThat(api.get("/api/v1/auth/me", token).status()).isEqualTo(200);

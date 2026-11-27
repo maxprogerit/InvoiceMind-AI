@@ -9,6 +9,7 @@ import com.invoicemind.ai.ai.AiDtos.Extraction;
 import com.invoicemind.ai.ai.AiDtos.OcrResponse;
 import com.invoicemind.ai.audit.AuditService;
 import com.invoicemind.ai.invoice.DocumentType;
+import com.invoicemind.ai.invoice.InvoiceDecisions;
 import com.invoicemind.ai.invoice.InvoiceEntity;
 import com.invoicemind.ai.invoice.InvoiceRepository;
 import com.invoicemind.ai.invoice.InvoiceStatus;
@@ -68,6 +69,7 @@ public class ProcessingService {
   private final InvoiceRepository invoices;
   private final VendorService vendors;
   private final VendorMemoryService memory;
+  private final InvoiceDecisions decisions;
   private final UserOrgAccessRepository access;
   private final FileStorage storage;
   private final AiClient ai;
@@ -81,6 +83,7 @@ public class ProcessingService {
   private final TransactionTemplate tx;
 
   public ProcessingService(InvoiceRepository invoices, VendorService vendors, VendorMemoryService memory,
+                           InvoiceDecisions decisions,
                            UserOrgAccessRepository access,
                            FileStorage storage, AiClient ai, ValidationService validation, AuditService audit,
                            StatusPublisher status, NotificationService notifications, WebhookOutbox webhooks,
@@ -88,6 +91,7 @@ public class ProcessingService {
     this.invoices = invoices;
     this.vendors = vendors;
     this.memory = memory;
+    this.decisions = decisions;
     this.access = access;
     this.storage = storage;
     this.ai = ai;
@@ -290,6 +294,7 @@ public class ProcessingService {
       notifyAfterProcessing(inv, next);
       status.publish(inv);
       validation.recheckNewerOfSameVendor(inv).forEach(status::publish);
+      decisions.autoApproveIfEligible(inv);
     });
   }
 

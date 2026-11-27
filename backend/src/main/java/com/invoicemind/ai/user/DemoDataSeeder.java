@@ -39,7 +39,7 @@ public class DemoDataSeeder implements ApplicationRunner {
     UserEntity admin = authService.newUser(org.getId(), "admin@" + DOMAIN, "Demo Admin", password, Role.ADMIN);
     firmService.addMember(org.getFirmId(), admin.getId(), FirmRole.FIRM_ADMIN);
     authService.newUser(org.getId(), "approver@" + DOMAIN, "Demo Approver", password, Role.APPROVER);
-    authService.newUser(org.getId(), "user@" + DOMAIN, "Demo User", password, Role.USER);
+    authService.newUser(org.getId(), "user@" + DOMAIN, "Demo User", password, Role.ACCOUNTANT);
     log.info("Seeded demo organisation: admin@{}, approver@{}, user@{}", DOMAIN, DOMAIN, DOMAIN);
   }
 }

@@ -47,7 +47,7 @@ class AnalyticsExportIT extends AbstractIntegrationTest {
   void analyticsAreComputedFromRealInvoicesAndTrackChanges() {
     Session admin = api.registerOrg("Analytics Inc");
     Session approver = api.createUser(admin, "APPROVER");
-    Session user = api.createUser(admin, "USER");
+    Session user = api.createUser(admin, "ACCOUNTANT");
 
     UUID a1 = processed(user, "Alpha Corp", "2026-01-10", "1000.00");  // total 1190.00
     UUID a2 = processed(user, "Alpha Corp", "2026-02-10", "2000.00");  // total 2380.00
@@ -114,11 +114,10 @@ class AnalyticsExportIT extends AbstractIntegrationTest {
     assertThat(today.get("uploaded").asInt()).isEqualTo(4);
     assertThat(today.get("flagged").asInt()).isEqualTo(1);
 
-    // a USER only sees their own slice of the same organisation (they uploaded everything here) and a
-    // fresh USER sees nothing
-    Session other = api.createUser(admin, "USER");
-    assertThat(api.get("/api/v1/analytics/summary", other.token()).json().get("totalInvoices").asInt()).isZero();
-    assertThat(api.get("/api/v1/analytics/spend-by-vendor", other.token()).json().get("items")).isEmpty();
+    // every role sees the analytics of the whole organisation
+    Session other = api.createUser(admin, "ACCOUNTANT");
+    assertThat(api.get("/api/v1/analytics/summary", other.token()).json().get("totalInvoices").asInt())
+        .isEqualTo(api.get("/api/v1/analytics/summary", admin.token()).json().get("totalInvoices").asInt());
   }
 
   @Test

@@ -100,7 +100,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/webhooks": {
+    "/api/v1/approval-rules": {
         parameters: {
             query?: never;
             header?: never;
@@ -108,6 +108,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["list"];
+        put: operations["replace"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/webhooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_1"];
         put?: never;
         post: operations["create"];
         delete?: never;
@@ -187,7 +203,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_1"];
+        get: operations["list_2"];
         put?: never;
         post: operations["create_1"];
         delete?: never;
@@ -235,7 +251,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_2"];
+        get: operations["list_3"];
         put?: never;
         post: operations["addText"];
         delete?: never;
@@ -283,7 +299,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_3"];
+        get: operations["list_4"];
         put?: never;
         post: operations["upload_1"];
         delete?: never;
@@ -603,7 +619,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_4"];
+        get: operations["list_5"];
         put?: never;
         post?: never;
         delete?: never;
@@ -619,7 +635,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_5"];
+        get: operations["list_6"];
         put?: never;
         post?: never;
         delete?: never;
@@ -859,7 +875,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_6"];
+        get: operations["list_7"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1036,6 +1052,8 @@ export interface components {
             name: string;
             taxId?: string;
             defaultCurrency?: string;
+            /** Format: int32 */
+            paymentTermsDays?: number;
         };
         AliasDto: {
             /** Format: int64 */
@@ -1113,6 +1131,13 @@ export interface components {
             /** Format: int64 */
             version?: number;
         };
+        ApprovalInfo: {
+            /** Format: int32 */
+            required: number;
+            rule: string;
+            given: components["schemas"]["GivenApproval"][];
+            autoApproved: boolean;
+        };
         DuplicateInfo: {
             /** @enum {string} */
             status: "NONE" | "DUPLICATE" | "POSSIBLE_DUPLICATE";
@@ -1132,6 +1157,12 @@ export interface components {
             errors: number;
             /** Format: int32 */
             warnings: number;
+        };
+        GivenApproval: {
+            name: string;
+            /** Format: date-time */
+            at: string;
+            comment?: string;
         };
         InvoiceDetail: {
             /** Format: uuid */
@@ -1159,6 +1190,7 @@ export interface components {
             duplicate: components["schemas"]["DuplicateInfo"];
             expenseCategory?: string;
             memoryApplied: components["schemas"]["MemoryAppliedDto"][];
+            approval: components["schemas"]["ApprovalInfo"];
             fieldConfidence?: {
                 [key: string]: number;
             };
@@ -1252,13 +1284,13 @@ export interface components {
         };
         GrantAccessRequest: {
             /** @enum {string} */
-            role: "USER" | "APPROVER" | "ADMIN";
+            role: "ACCOUNTANT" | "APPROVER" | "ADMIN";
         };
         ClientAccess: {
             /** Format: uuid */
             organizationId: string;
             /** @enum {string} */
-            role: "USER" | "APPROVER" | "ADMIN";
+            role: "ACCOUNTANT" | "APPROVER" | "ADMIN";
         };
         UpdateClientRequest: {
             name?: string;
@@ -1281,6 +1313,14 @@ export interface components {
             monthToDateTotal: number;
             /** Format: int64 */
             monthToDateOtherCurrency: number;
+        };
+        Rule: {
+            currency: string;
+            autoApproveBelow?: number;
+            twoApproversAbove?: number;
+        };
+        Rules: {
+            rules: components["schemas"]["Rule"][];
         };
         CreateEndpointRequest: {
             url: string;
@@ -1329,7 +1369,7 @@ export interface components {
             email: string;
             fullName: string;
             /** @enum {string} */
-            role: "USER" | "APPROVER" | "ADMIN";
+            role: "ACCOUNTANT" | "APPROVER" | "ADMIN";
             password: string;
         };
         TeamMember: {
@@ -1338,7 +1378,7 @@ export interface components {
             email: string;
             fullName: string;
             /** @enum {string} */
-            role: "USER" | "APPROVER" | "ADMIN";
+            role: "ACCOUNTANT" | "APPROVER" | "ADMIN";
             enabled: boolean;
             /** Format: date-time */
             createdAt: string;
@@ -1476,7 +1516,7 @@ export interface components {
             email: string;
             fullName: string;
             /** @enum {string} */
-            role: "USER" | "APPROVER" | "ADMIN";
+            role: "ACCOUNTANT" | "APPROVER" | "ADMIN";
             /** Format: uuid */
             organizationId: string;
             organizationName: string;
@@ -1503,7 +1543,7 @@ export interface components {
         };
         UpdateUserRequest: {
             /** @enum {string} */
-            role?: "USER" | "APPROVER" | "ADMIN";
+            role?: "ACCOUNTANT" | "APPROVER" | "ADMIN";
             enabled?: boolean;
             fullName?: string;
         };
@@ -1619,7 +1659,7 @@ export interface components {
             id: string;
             name: string;
             /** @enum {string} */
-            role: "USER" | "APPROVER" | "ADMIN";
+            role: "ACCOUNTANT" | "APPROVER" | "ADMIN";
             home: boolean;
             active: boolean;
         };
@@ -1991,6 +2031,50 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    "*/*": components["schemas"]["Rules"];
+                };
+            };
+        };
+    };
+    replace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Rules"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["Rules"];
+                };
+            };
+        };
+    };
+    list_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
                     "*/*": components["schemas"]["EndpointDto"][];
                 };
             };
@@ -2113,7 +2197,7 @@ export interface operations {
             };
         };
     };
-    list_1: {
+    list_2: {
         parameters: {
             query?: never;
             header?: never;
@@ -2195,7 +2279,7 @@ export interface operations {
             };
         };
     };
-    list_2: {
+    list_3: {
         parameters: {
             query?: never;
             header?: never;
@@ -2292,7 +2376,7 @@ export interface operations {
             };
         };
     };
-    list_3: {
+    list_4: {
         parameters: {
             query?: {
                 status?: ("UPLOADED" | "PROCESSING" | "EXTRACTED" | "NEEDS_REVIEW" | "VALIDATED" | "APPROVED" | "REJECTED" | "FAILED")[];
@@ -2865,7 +2949,7 @@ export interface operations {
             };
         };
     };
-    list_4: {
+    list_5: {
         parameters: {
             query?: {
                 status?: "UNVERIFIED" | "VERIFIED";
@@ -2887,7 +2971,7 @@ export interface operations {
             };
         };
     };
-    list_5: {
+    list_6: {
         parameters: {
             query?: never;
             header?: never;
@@ -3210,7 +3294,7 @@ export interface operations {
             };
         };
     };
-    list_6: {
+    list_7: {
         parameters: {
             query?: {
                 action?: string;

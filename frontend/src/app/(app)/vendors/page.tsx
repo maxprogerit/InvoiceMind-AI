@@ -26,11 +26,12 @@ function EditVendor({ vendor, onClose }: { vendor: Vendor; onClose: () => void }
   const [name, setName] = useState(vendor.name);
   const [taxId, setTaxId] = useState(vendor.taxId ?? "");
   const [currency, setCurrency] = useState(vendor.defaultCurrency ?? "");
+  const [terms, setTerms] = useState(vendor.paymentTermsDays == null ? "" : String(vendor.paymentTermsDays));
   const [alias, setAlias] = useState("");
 
   const save = () =>
     update.mutate(
-      { id: vendor.id, name: name.trim(), taxId: taxId.trim(), defaultCurrency: currency.trim() },
+      { id: vendor.id, name: name.trim(), taxId: taxId.trim(), defaultCurrency: currency.trim(), paymentTermsDays: terms.trim() === "" ? undefined : Number(terms) },
       { onSuccess: () => (toast.success("Vendor saved"), onClose()), onError: (e) => toast.error(e.message) },
     );
   const add = () =>
@@ -60,6 +61,11 @@ function EditVendor({ vendor, onClose }: { vendor: Vendor; onClose: () => void }
               <Label htmlFor="v-cur">Currency</Label>
               <Input id="v-cur" value={currency} maxLength={3} onChange={(e) => setCurrency(e.target.value.toUpperCase())} placeholder="EUR" />
             </div>
+          </div>
+          <div>
+            <Label htmlFor="v-terms">Payment terms (days)</Label>
+            <Input id="v-terms" className="w-32 font-mono" inputMode="numeric" value={terms} onChange={(e) => setTerms(e.target.value.replace(/\D/g, "").slice(0, 3))} placeholder="none" />
+            <p className="mt-1 text-xs text-dim">When an invoice prints no due date: due date = invoice date + these days.</p>
           </div>
           <div>
             <Label htmlFor="v-alias">Aliases</Label>

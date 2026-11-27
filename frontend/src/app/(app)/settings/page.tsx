@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { PageHeader } from "@/components/layout/page-header";
+import { ApprovalRulesCard } from "@/components/settings/approval-rules-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardLabel } from "@/components/ui/card";
@@ -281,8 +282,11 @@ export default function SettingsPage() {
 
   return (
     <>
-      <PageHeader title="Settings" subtitle="Organisation-wide preferences for money and reporting." />
+      <PageHeader title="Settings" subtitle="Organisation-wide rules for approvals, money and reporting." />
       <div className="grid gap-6">{data ? <BaseCurrency current={data.baseCurrency} /> : <Skeleton className="h-40" />}</div>
+      <div className="mt-6">
+        <ApprovalRulesCard />
+      </div>
       <div className="mt-6">
         <EmailIngestCard />
       </div>

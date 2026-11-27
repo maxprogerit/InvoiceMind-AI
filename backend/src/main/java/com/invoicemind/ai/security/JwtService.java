@@ -52,7 +52,7 @@ public class JwtService {
           UUID.fromString(c.getSubject()),
           UUID.fromString(c.get("org", String.class)),
           c.get("email", String.class),
-          Role.valueOf(c.get("role", String.class)),
+          Role.parse(c.get("role", String.class)),
           c.get("firm", String.class) == null ? null : UUID.fromString(c.get("firm", String.class)),
           c.get("firmRole", String.class) == null ? null : FirmRole.valueOf(c.get("firmRole", String.class))));
     } catch (JwtException | IllegalArgumentException | NullPointerException e) {

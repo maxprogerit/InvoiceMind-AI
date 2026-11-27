@@ -223,7 +223,7 @@ erDiagram
 ```
 
 - `user_org_access(user, organization, role)` is the per-client grant; the role in *that* client comes from this row (a person
-  can be APPROVER in one client and USER in another). A `FIRM_ADMIN` reaches every client of the firm as ADMIN without a row.
+  can be APPROVER in one client and ACCOUNTANT in another). A `FIRM_ADMIN` reaches every client of the firm as ADMIN without a row.
   `users.organization_id` stays as the home client: sign-in lands there. Rows that predate V8 are backfilled (a firm of one per
   company, one access row per user, ADMINs become FIRM_ADMIN) and, for a user without any row, the home client still falls back
   to `users.role`.
@@ -305,10 +305,11 @@ rules always do.
   Refresh tokens are stored hashed, **rotate on every use**, and presenting an already-used token revokes
   every session of that user (theft detection). `/auth/refresh` and `/auth/logout` additionally require a
   custom header cross-site forms cannot send.
-- **Authorisation**: roles `USER`, `APPROVER`, `ADMIN`. A `USER` only ever sees invoices they uploaded;
-  reviewers see the organisation. Foreign and unknown ids are indistinguishable (404). The permission flags
-  (`canEdit`, `canApprove`...) are computed on the server and the UI only renders them.
-  Approvers cannot approve their own uploads (four-eyes); admins can (documented break-glass).
+- **Authorisation**: roles `ACCOUNTANT`, `APPROVER`, `ADMIN` (V13 renamed `USER`; old tokens are still read).
+  Everyone sees the organisation's invoices; accountants review and correct, approvers and admins decide.
+  Foreign and unknown ids are indistinguishable (404). The permission flags (`canEdit`, `canApprove`,
+  `approvalBlockedReason`...) are computed on the server (`ApprovalRules`) and the UI only renders them.
+  Nobody approves their own upload, admins included; the two-approver rule needs two different people.
 - **Tenancy**: tenant = organisation (a client company), resolved from the JWT. A registration creates a firm of one,
   its single client organisation and the first admin (who is also FIRM_ADMIN). Isolation is in the application layer
   (every query filters by the token's organisation); there is no row-level security in PostgreSQL. See

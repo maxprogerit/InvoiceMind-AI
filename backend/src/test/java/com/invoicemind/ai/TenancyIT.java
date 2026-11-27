@@ -11,7 +11,7 @@ import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
-/** Authorisation tests: organisations are isolated, and USERs only see their own uploads. */
+/** Authorisation tests: organisations are isolated; inside one, accountants review and only reviewers decide. */
 class TenancyIT extends AbstractIntegrationTest {
 
   /** A consistent invoice from its own vendor, so two uploads are never possible duplicates of each other. */
@@ -56,10 +56,10 @@ class TenancyIT extends AbstractIntegrationTest {
   }
 
   @Test
-  void usersOnlySeeTheirOwnUploadsWhileReviewersSeeTheOrganisation() {
+  void accountantsSeeTheWholeOrganisationButOnlyReviewersDecide() {
     Session admin = api.registerOrg("Scope Inc");
-    Session alice = api.createUser(admin, "USER");
-    Session bob = api.createUser(admin, "USER");
+    Session alice = api.createUser(admin, "ACCOUNTANT");
+    Session bob = api.createUser(admin, "ACCOUNTANT");
     Session approver = api.createUser(admin, "APPROVER");
 
     UUID aliceInvoice = upload(alice, scenario());
@@ -67,23 +67,20 @@ class TenancyIT extends AbstractIntegrationTest {
     awaitStatus(alice, aliceInvoice, "VALIDATED");
     awaitStatus(bob, bobInvoice, "VALIDATED");
 
-    assertThat(api.get("/api/v1/invoices/" + bobInvoice, alice.token()).status()).isEqualTo(404);
-    assertThat(api.get("/api/v1/invoices/" + bobInvoice + "/file", alice.token()).status()).isEqualTo(404);
-    assertThat(api.get("/api/v1/invoices/" + aliceInvoice, alice.token()).status()).isEqualTo(200);
+    // accountants review whatever comes in (e-mail intake included), so they see each other's uploads
+    assertThat(api.get("/api/v1/invoices/" + bobInvoice, alice.token()).status()).isEqualTo(200);
+    assertThat(api.get("/api/v1/invoices/" + bobInvoice + "/file", alice.token()).status()).isEqualTo(200);
+    assertThat(api.get("/api/v1/invoices/" + bobInvoice, alice.token()).json().at("/permissions/canEdit").asBoolean()).isTrue();
+    for (Session s : List.of(alice, bob, approver, admin)) {
+      assertThat(api.get("/api/v1/invoices", s.token()).json().get("totalItems").asInt()).isEqualTo(2);
+      assertThat(api.get("/api/v1/analytics/summary", s.token()).json().get("totalInvoices").asInt()).isEqualTo(2);
+      assertThat(api.get("/api/v1/export/invoices?format=json", s.token()).json()).hasSize(2);
+    }
 
-    assertThat(api.get("/api/v1/invoices", alice.token()).json().get("totalItems").asInt()).isEqualTo(1);
-    assertThat(api.get("/api/v1/invoices", bob.token()).json().get("totalItems").asInt()).isEqualTo(1);
-    assertThat(api.get("/api/v1/invoices", approver.token()).json().get("totalItems").asInt()).isEqualTo(2);
-    assertThat(api.get("/api/v1/invoices", admin.token()).json().get("totalItems").asInt()).isEqualTo(2);
-
-    // scoped analytics and export follow the same rule
-    assertThat(api.get("/api/v1/analytics/summary", alice.token()).json().get("totalInvoices").asInt()).isEqualTo(1);
-    assertThat(api.get("/api/v1/analytics/summary", approver.token()).json().get("totalInvoices").asInt()).isEqualTo(2);
-    assertThat(api.get("/api/v1/export/invoices?format=json", alice.token()).json()).hasSize(1);
-    assertThat(api.get("/api/v1/export/invoices?format=json", approver.token()).json()).hasSize(2);
-
-    // a USER cannot decide on their own or anyone else's invoice
+    // but an accountant decides on nothing, their own uploads or anyone else's
     assertThat(api.post("/api/v1/invoices/" + aliceInvoice + "/approve", alice.token(), Map.of()).status()).isEqualTo(403);
+    assertThat(api.post("/api/v1/invoices/" + bobInvoice + "/approve", alice.token(), Map.of()).status()).isEqualTo(403);
+    assertThat(api.post("/api/v1/invoices/" + bobInvoice + "/reject", alice.token(), Map.of("comment", "no")).status()).isEqualTo(403);
   }
 
   @Test

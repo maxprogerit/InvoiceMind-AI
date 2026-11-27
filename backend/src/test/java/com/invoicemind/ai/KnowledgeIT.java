@@ -37,7 +37,7 @@ class KnowledgeIT extends AbstractIntegrationTest {
   void adminAddsDocumentsReviewersListThemUsersCannot() {
     Session admin = api.registerOrg("Rules Inc");
     Session approver = api.createUser(admin, "APPROVER");
-    Session user = api.createUser(admin, "USER");
+    Session user = api.createUser(admin, "ACCOUNTANT");
 
     Resp created = addText(admin, "Totals policy", TOTALS_RULE);
     assertThat(created.status()).isEqualTo(201);
@@ -58,7 +58,7 @@ class KnowledgeIT extends AbstractIntegrationTest {
   @Test
   void explainRetrievesTheRelevantRuleAndGroundsTheQuestionInTheInvoicesFindings() {
     Session admin = api.registerOrg("Explain Inc");
-    Session user = api.createUser(admin, "USER");
+    Session user = api.createUser(admin, "ACCOUNTANT");
     addText(admin, "Office kitchen", KITCHEN_RULE);
     addText(admin, "Totals policy", TOTALS_RULE);
     UUID invoice = flaggedInvoice(user);
@@ -101,14 +101,15 @@ class KnowledgeIT extends AbstractIntegrationTest {
   }
 
   @Test
-  void usersCanOnlyExplainTheirOwnInvoicesAndCannotAskFreeQuestions() {
+  void accountantsExplainAnyInvoiceOfTheirOrganisationButCannotAskFreeQuestions() {
     Session admin = api.registerOrg("Scope rules");
-    Session alice = api.createUser(admin, "USER");
-    Session bob = api.createUser(admin, "USER");
+    Session alice = api.createUser(admin, "ACCOUNTANT");
+    Session bob = api.createUser(admin, "ACCOUNTANT");
     addText(admin, "Totals policy", TOTALS_RULE);
     UUID bobs = flaggedInvoice(bob);
 
-    assertThat(api.post("/api/v1/invoices/" + bobs + "/explain", alice.token(), null).status()).isEqualTo(404);
+    assertThat(api.post("/api/v1/invoices/" + bobs + "/explain", alice.token(), null).status()).isEqualTo(200); // same organisation
+    assertThat(api.post("/api/v1/invoices/" + bobs + "/explain", api.registerOrg("Elsewhere").token(), null).status()).isEqualTo(404);
     assertThat(api.post("/api/v1/invoices/" + bobs + "/explain", bob.token(), Map.of("question", "What should I do now?")).status()).isEqualTo(200);
     assertThat(FakeAiServiceForTests.lastExplainRequest()).contains("What should I do now?");
     assertThat(api.post("/api/v1/knowledge/ask", alice.token(), Map.of("question", "anything")).status()).isEqualTo(403);
@@ -147,7 +148,7 @@ class KnowledgeIT extends AbstractIntegrationTest {
     assertThat(api.delete("/api/v1/knowledge/documents/" + id, admin.token()).status()).isEqualTo(404);
 
     // after deletion the rule can no longer be retrieved
-    Session user = api.createUser(admin, "USER");
+    Session user = api.createUser(admin, "ACCOUNTANT");
     UUID invoice = flaggedInvoice(user);
     assertThat(api.post("/api/v1/invoices/" + invoice + "/explain", user.token(), null).json().get("sources")).isEmpty();
   }

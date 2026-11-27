@@ -92,7 +92,7 @@ class DuplicatesIT extends AbstractIntegrationTest {
   @Test
   void sameVendorAndTotalAFewDaysApartWithADifferentNumberIsAPossibleDuplicate() {
     Session admin = api.registerOrg("Possible Inc");
-    Session accountant = api.createUser(admin, "USER");
+    Session accountant = api.createUser(admin, "ACCOUNTANT");
     Session approver = api.createUser(admin, "APPROVER");
     String a = id("pos-a"), b = id("pos-b"), far = id("pos-far"), other = id("pos-other");
     JsonNode first = process(accountant, a, FakeAiServiceForTests.okOcr(a), invoice("Brightwave Analytics Inc.", "BW-1001", "2026-05-04", "1428.00"));

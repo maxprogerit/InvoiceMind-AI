@@ -36,6 +36,8 @@ public abstract class AbstractIntegrationTest {
     registry.add("app.fx.base-url", FakeFrankfurterForTests::baseUrl);
     registry.add("app.mail.host", () -> "127.0.0.1");
     registry.add("app.mail.port", MailServerForTests::imapPort);
+    registry.add("spring.mail.host", () -> "127.0.0.1");
+    registry.add("spring.mail.port", MailServerForTests::smtpPort);
   }
 
   @BeforeEach

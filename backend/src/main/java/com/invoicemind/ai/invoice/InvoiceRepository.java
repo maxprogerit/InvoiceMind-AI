@@ -17,6 +17,10 @@ public interface InvoiceRepository extends JpaRepository<InvoiceEntity, UUID>, J
 
   long countByVendorId(UUID vendorId);
 
+  List<InvoiceEntity> findByOrganizationIdAndStatusInAndDueDateBefore(UUID organizationId,
+                                                                    Collection<InvoiceStatus> statuses,
+                                                                    java.time.LocalDate before);
+
   List<InvoiceEntity> findByOrganizationIdAndVendorIdAndStatusIn(UUID organizationId, UUID vendorId,
                                                                  Collection<InvoiceStatus> statuses);
 

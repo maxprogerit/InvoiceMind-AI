@@ -42,6 +42,7 @@ public class VendorAdminService {
   private final StatusPublisher status;
   private final AuditService audit;
   private final VendorMemoryRepository memory;
+  private final com.invoicemind.ai.invoice.InvoiceDecisions decisions;
   private final Clock clock;
 
   @Transactional(readOnly = true)
@@ -99,6 +100,10 @@ public class VendorAdminService {
     if (!req.name().trim().equals(v.getName())) changes.put("name", v.getName() + " -> " + req.name().trim());
     if (!Objects.equals(taxId, v.getTaxId())) changes.put("taxId", v.getTaxId() + " -> " + taxId);
     if (!Objects.equals(currency, v.getDefaultCurrency())) changes.put("defaultCurrency", v.getDefaultCurrency() + " -> " + currency);
+    if (!Objects.equals(req.paymentTermsDays(), v.getPaymentTermsDays())) {
+      changes.put("paymentTermsDays", v.getPaymentTermsDays() + " -> " + req.paymentTermsDays());
+    }
+    v.setPaymentTermsDays(req.paymentTermsDays());
     v.rename(req.name());
     v.setTaxId(taxId);
     v.setDefaultCurrency(currency);
@@ -158,6 +163,7 @@ public class VendorAdminService {
       inv.setStatus(validation.revalidate(inv));
       invoices.saveAndFlush(inv);
       status.publish(inv);
+      decisions.autoApproveIfEligible(inv);
     }
   }
 

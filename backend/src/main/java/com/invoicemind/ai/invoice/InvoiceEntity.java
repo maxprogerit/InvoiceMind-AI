@@ -74,6 +74,8 @@ public class InvoiceEntity {
   /** Extraction copied from this earlier invoice with the identical file: the model was not called again. */
   private UUID reusedFrom;
 
+  /** Approved by the system under the approval rules (small amount, every check passed). */
+  private boolean autoApproved;
   /** Expense category for the accounting export; may be pre-filled from vendor memory. */
   private String expenseCategory;
   /** What vendor memory filled in: [{field, value, extracted, memoryId}]. */

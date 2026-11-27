@@ -201,7 +201,7 @@ public class OidcService {
       throw new SsoException("not_configured", "Single sign-on is misconfigured");
     }
     if (!organizations.existsById(orgId)) throw new SsoException("not_configured", "Single sign-on is misconfigured");
-    Role role = Role.valueOf(props.defaultRole().trim().toUpperCase(Locale.ROOT));
+    Role role = Role.parse(props.defaultRole());
     String name = jwt.getClaimAsString("name");
     UserEntity user = authService.newUser(orgId, email, name == null || name.isBlank() ? email.substring(0, email.indexOf('@')) : name,
         random() + random() + "aA1", role); // a random password nobody knows: this account signs in through the provider

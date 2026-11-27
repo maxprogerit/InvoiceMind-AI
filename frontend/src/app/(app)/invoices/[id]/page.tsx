@@ -6,6 +6,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { ApprovalProgress } from "@/components/invoices/approval-progress";
 import { AuditTimeline } from "@/components/invoices/audit-timeline";
 import { CorrectionsCard } from "@/components/invoices/corrections-card";
 import { DecisionDialog } from "@/components/invoices/decision-dialog";
@@ -158,6 +159,7 @@ export default function InvoiceDetailPage() {
       )}
       <DuplicateBanner invoice={inv} />
       <VendorBanner invoice={inv} />
+      <ApprovalProgress invoice={inv} />
       <ApprovalBlocked invoice={inv} />
       {inv.status === "VALIDATED" && !p.canApprove && !p.approvalBlockedReason && p.canEdit && (
         <p className="mb-6 text-sm text-muted">This invoice passed all checks and is waiting for an approver.</p>

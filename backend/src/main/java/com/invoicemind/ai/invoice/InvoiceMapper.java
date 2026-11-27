@@ -1,6 +1,8 @@
 package com.invoicemind.ai.invoice;
 
+import com.invoicemind.ai.invoice.InvoiceDtos.ApprovalInfo;
 import com.invoicemind.ai.invoice.InvoiceDtos.DuplicateInfo;
+import com.invoicemind.ai.invoice.InvoiceDtos.GivenApproval;
 import com.invoicemind.ai.invoice.InvoiceDtos.ExtractCheck;
 import com.invoicemind.ai.invoice.InvoiceDtos.InvoiceDetail;
 import com.invoicemind.ai.invoice.InvoiceDtos.InvoiceSummary;
@@ -34,6 +36,7 @@ public class InvoiceMapper {
   private final UserRepository users;
   private final VendorRepository vendors;
   private final InvoiceRepository invoices;
+  private final InvoiceDecisions decisions;
 
   public List<InvoiceSummary> toSummaries(Collection<InvoiceEntity> invoices) {
     Map<UUID, String> names = names(invoices.stream().map(InvoiceEntity::getUploadedBy).toList());
@@ -65,7 +68,15 @@ public class InvoiceMapper {
   }
 
   public InvoiceDetail toDetail(InvoiceEntity i, AuthPrincipal viewer) {
-    Map<UUID, String> names = names(java.util.Arrays.asList(i.getUploadedBy(), i.getDecidedBy(), i.getDuplicateClearedBy()));
+    var given = decisions.approvalsOf(i.getId());
+    List<UUID> people = new java.util.ArrayList<>(java.util.Arrays.asList(i.getUploadedBy(), i.getDecidedBy(), i.getDuplicateClearedBy()));
+    given.forEach(a -> people.add(a.getUserId()));
+    Map<UUID, String> names = names(people);
+    var need = decisions.requirement(i);
+    ApprovalInfo approval = new ApprovalInfo(need.approvals(), need.reason(), given.stream()
+        .map(a -> new GivenApproval(names.getOrDefault(a.getUserId(), "Unknown"), a.getCreatedAt(), a.getComment())).toList(),
+        i.isAutoApproved());
+    Set<UUID> approvedBy = given.stream().map(a -> a.getUserId()).collect(Collectors.toSet());
     VendorEntity vendor = i.getVendorId() == null ? null : vendors.findById(i.getVendorId()).orElse(null);
     boolean vendorVerified = vendor == null || vendor.isVerified();
     InvoiceEntity original = i.getDuplicateOf() == null ? null
@@ -81,7 +92,7 @@ public class InvoiceMapper {
         i.getVendorTaxId(),
         vendor == null ? null : new VendorRef(vendor.getId(), vendor.getName(), vendor.getTaxId(), vendor.getStatus().name()),
         duplicate,
-        i.getExpenseCategory(), memoryApplied(i),
+        i.getExpenseCategory(), memoryApplied(i), approval,
         i.getFieldConfidence(), i.getModelReviewReasons(), i.isInjectionSuspected(), i.isHumanReviewed(),
         new OcrInfo(i.getOcrEngine(), i.getOcrConfidence(), i.getOcrPageCount(), i.getTextSource()), extractCheck(i),
         new UsageInfo(i.getLlmModel(), i.getInputTokens(), i.getOutputTokens(), i.getCostUsd()),
@@ -93,7 +104,7 @@ public class InvoiceMapper {
             l.getUnitPrice(), l.getTotal())).toList(),
         i.getIssues().stream().map(x -> new IssueDto(x.getCode(), x.getSeverity(), x.getField(), x.getMessage(),
             x.getRelatedInvoiceId())).toList(),
-        permissions(i, viewer, vendorVerified), i.getCreatedAt(), i.getUpdatedAt(), i.getVersion());
+        permissions(i, viewer, vendorVerified, approvedBy), i.getCreatedAt(), i.getUpdatedAt(), i.getVersion());
   }
 
   static List<MemoryAppliedDto> memoryApplied(InvoiceEntity i) {
@@ -118,14 +129,13 @@ public class InvoiceMapper {
     return new ExtractCheck(status, errors, warnings);
   }
 
-  public static Permissions permissions(InvoiceEntity i, AuthPrincipal p, boolean vendorVerified) {
+  public static Permissions permissions(InvoiceEntity i, AuthPrincipal p, boolean vendorVerified, Set<UUID> approvedBy) {
     boolean reviewer = p.role().isReviewer();
-    boolean own = i.getUploadedBy().equals(p.userId());
-    boolean canEdit = i.getStatus().isEditable() && (reviewer || own);
-    String blocked = ApprovalRules.blockedReason(i, vendorVerified, p);
+    boolean canEdit = i.getStatus().isEditable(); // every role reviews; decisions are separate (below)
+    String blocked = ApprovalRules.blockedReason(i, vendorVerified, p, approvedBy);
     boolean canApprove = blocked == null;
     boolean canReject = reviewer && InvoiceStatus.REJECTABLE.contains(i.getStatus());
-    boolean canRetry = i.getStatus() == InvoiceStatus.FAILED && (reviewer || own);
+    boolean canRetry = i.getStatus() == InvoiceStatus.FAILED;
     boolean canDelete = p.role() == Role.ADMIN && i.getStatus() != InvoiceStatus.APPROVED;
     boolean canDecideDuplicate = canEdit && i.getDuplicateStatus() == DuplicateStatus.POSSIBLE_DUPLICATE;
     return new Permissions(canEdit, canApprove, canReject, canRetry, canDelete, canDecideDuplicate,

@@ -116,7 +116,7 @@ class AuthIT extends AbstractIntegrationTest {
   @Test
   void rolesAreEnforcedOnEndpoints() {
     Session admin = api.registerOrg("Roles Inc");
-    Session user = api.createUser(admin, "USER");
+    Session user = api.createUser(admin, "ACCOUNTANT");
     Session approver = api.createUser(admin, "APPROVER");
 
     // admin-only
@@ -136,9 +136,9 @@ class AuthIT extends AbstractIntegrationTest {
   @Test
   void adminCannotLockTheOrganisationOut() {
     Session admin = api.registerOrg("Lock Inc");
-    Session user = api.createUser(admin, "USER");
+    Session user = api.createUser(admin, "ACCOUNTANT");
 
-    Resp self = api.patch("/api/v1/users/" + admin.userId(), admin.token(), Map.of("role", "USER"));
+    Resp self = api.patch("/api/v1/users/" + admin.userId(), admin.token(), Map.of("role", "ACCOUNTANT"));
     assertThat(self.status()).isEqualTo(400);
     assertThat(self.json().get("code").asText()).isEqualTo("self_change");
 
@@ -159,7 +159,7 @@ class AuthIT extends AbstractIntegrationTest {
   void lastAdminCannotBeDemotedByAnotherAdminLeavingNone() {
     Session admin = api.registerOrg("Last Inc");
     Session second = api.createUser(admin, "ADMIN");
-    assertThat(api.patch("/api/v1/users/" + second.userId(), admin.token(), Map.of("role", "USER")).status()).isEqualTo(200);
+    assertThat(api.patch("/api/v1/users/" + second.userId(), admin.token(), Map.of("role", "ACCOUNTANT")).status()).isEqualTo(200);
     // now only one admin remains; a demoted user cannot touch it anyway, and the sole admin cannot demote itself
     assertThat(api.patch("/api/v1/users/" + admin.userId(), admin.token(), Map.of("enabled", false)).status()).isEqualTo(400);
   }

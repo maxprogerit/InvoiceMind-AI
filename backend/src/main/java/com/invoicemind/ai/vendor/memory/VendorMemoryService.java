@@ -85,11 +85,13 @@ public class VendorMemoryService {
           applied.add(use(m, "currency", extractedCurrency));
         });
 
-    if (inv.getDueDate() == null && inv.getInvoiceDate() != null) {
-      memory.find(vendor.getId(), MemoryField.PAYMENT_TERMS, null).ifPresent(m -> {
-        inv.setDueDate(inv.getInvoiceDate().plusDays(Integer.parseInt(m.getValue())));
-        applied.add(use(m, "dueDate", null));
-      });
+    // due date: printed on the invoice, else invoice date + the vendor's payment terms (set by a person on the
+    // Vendors page or learned from a correction)
+    if (inv.getDueDate() == null && inv.getInvoiceDate() != null && vendor.getPaymentTermsDays() != null) {
+      inv.setDueDate(inv.getInvoiceDate().plusDays(vendor.getPaymentTermsDays()));
+      applied.add(memory.find(vendor.getId(), MemoryField.PAYMENT_TERMS, null)
+          .map(m -> use(m, "dueDate", null))
+          .orElse(new Applied("dueDate", vendor.getPaymentTermsDays() + " days", null, null)));
     }
 
     if (inv.getExpenseCategory() == null) {

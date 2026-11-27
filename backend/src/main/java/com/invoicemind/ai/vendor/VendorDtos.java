@@ -26,7 +26,10 @@ public final class VendorDtos {
 
   public record UpdateVendorRequest(@NotBlank @Size(max = 300) String name, @Size(max = 60) String taxId,
                                     @Pattern(regexp = "^$|^[A-Za-z]{3}$", message = "must be a 3-letter currency code")
-                                    String defaultCurrency) {}
+                                    String defaultCurrency,
+                                    /** Days from invoice date to due date when the invoice prints none; null: none. */
+                                    @jakarta.validation.constraints.Min(0) @jakarta.validation.constraints.Max(365)
+                                    Integer paymentTermsDays) {}
 
   public record AddAliasRequest(@NotBlank @Size(max = 300) String alias) {}
 }

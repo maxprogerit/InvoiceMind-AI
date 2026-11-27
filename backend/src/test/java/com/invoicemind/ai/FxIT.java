@@ -46,7 +46,7 @@ class FxIT extends AbstractIntegrationTest {
   void spendIsConvertedAtTheRateOfEachInvoiceDate() {
     Session admin = api.registerOrg("Fx Inc");
     Session approver = api.createUser(admin, "APPROVER");
-    Session user = api.createUser(admin, "USER");
+    Session user = api.createUser(admin, "ACCOUNTANT");
 
     approved(user, approver, "Usd Vendor", "USD", "2026-03-13", "1100.00"); // Friday, 1.2 USD per EUR -> 916.67
     approved(user, approver, "Gbp Vendor", "GBP", "2026-02-14", "800.00");  // Saturday: Friday's 0.8 applies -> 1000.00

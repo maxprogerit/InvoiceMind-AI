@@ -54,7 +54,7 @@ Sign in with a seeded demo account (password is `DEMO_PASSWORD` from `.env`, def
 |---|---|
 | `admin@demo.invoicemind.local` | ADMIN: everything, plus team and knowledge management |
 | `approver@demo.invoicemind.local` | APPROVER: sees the whole organisation, approves and rejects |
-| `user@demo.invoicemind.local` | USER: uploads, sees only their own invoices |
+| `user@demo.invoicemind.local` | ACCOUNTANT: uploads, reviews and corrects, confirms vendors; does not approve |
 
 Or register your own organisation: you become its admin and can add your team. Set `DEMO_PASSWORD=` (empty) to disable seeding.
 
@@ -148,16 +148,25 @@ Details, the lifecycle diagram, the job-queue decision and the trust boundaries 
 | `extract-service/` | Python 3.11, FastAPI, Pydantic v2 (money as `Decimal`), Tesseract + pdfplumber + Poppler, OpenAI Python SDK (Responses API). Imported from InvoiceExtract with `git subtree` (its history is kept) and merged with the former `ai-service` |
 | infrastructure | PostgreSQL 16 with pgvector (also the job queue and rate-limit counters), Nginx, Docker Compose |
 
-## Roles
+## Roles and approvals
 
-| | USER | APPROVER | ADMIN |
+| | ACCOUNTANT | APPROVER | ADMIN |
 |---|:-:|:-:|:-:|
-| Upload, correct own invoices | ✓ | ✓ | ✓ |
-| See other people's invoices, analytics for the organisation | – | ✓ | ✓ |
-| Approve / reject | – | ✓ (not own uploads) | ✓ |
+| See every invoice of the organisation, upload, review and correct, confirm vendors | ✓ | ✓ | ✓ |
+| Approve / reject (never their own uploads) | – | ✓ | ✓ |
 | Audit log, ask the knowledge base | – | ✓ | ✓ |
-| Manage team, knowledge documents, delete invoices | – | – | ✓ |
-| Settings (reporting currency, exchange rates, e-mail address), integrations (webhooks) | – | – | ✓ |
+| Team, approval rules, settings, integrations, delete invoices | – | – | ✓ |
+
+**Approval rules** (*Settings*, per currency): below the first amount an invoice is approved automatically once it
+passed every check and its vendor is confirmed; up to the second amount one approver decides; above it two different
+approvers. Nobody approves their own upload, admins included. A correction after the first approval resets the
+approvals. A currency without a rule needs one approver. Credit notes count by their amount.
+
+**Due dates and reminders.** The due date is the one printed on the invoice, otherwise invoice date + the vendor's
+payment terms (set on *Vendors* or learned from a correction). Every morning (05:37 UTC, `REMINDERS_CRON`) each
+accountant, approver and admin gets one e-mail listing the open invoices that are overdue or due within
+`REMINDERS_DAYS_AHEAD` (3) days; one digest per organisation and day. Locally the mails land in Mailpit
+(http://127.0.0.1:8025); set `SMTP_*` for a real mail server.
 
 ## Multi-client firms
 

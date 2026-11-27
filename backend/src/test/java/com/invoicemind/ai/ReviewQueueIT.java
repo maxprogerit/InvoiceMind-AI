@@ -33,7 +33,7 @@ class ReviewQueueIT extends AbstractIntegrationTest {
   @Test
   void eachQueueListsExactlyItsInvoicesAndCountsThem() {
     Session admin = api.registerOrg("Queues Inc");
-    Session accountant = api.createUser(admin, "USER");
+    Session accountant = api.createUser(admin, "ACCOUNTANT");
     String past = LocalDate.now().minusDays(40).toString(), pastDue = LocalDate.now().minusDays(10).toString();
     String recent = LocalDate.now().minusDays(2).toString(), soon = LocalDate.now().plusDays(28).toString();
 
@@ -66,8 +66,8 @@ class ReviewQueueIT extends AbstractIntegrationTest {
     api.post("/api/v1/invoices/" + overdue + "/reject", admin.token(), Map.of("comment", "Not ours"));
     assertThat(queue(accountant, "OVERDUE")).isEmpty();
 
-    // a USER sees only their own uploads in the queues too
-    Session other = api.createUser(admin, "USER");
-    assertThat(api.get("/api/v1/invoices/queues", other.token()).json().get("unverifiedVendor").asLong()).isZero();
+    // another accountant works the same queues
+    Session other = api.createUser(admin, "ACCOUNTANT");
+    assertThat(api.get("/api/v1/invoices/queues", other.token()).json().get("unverifiedVendor").asLong()).isEqualTo(2); // A and D
   }
 }

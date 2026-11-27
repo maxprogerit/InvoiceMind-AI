@@ -65,7 +65,7 @@ class PipelineIT extends AbstractIntegrationTest {
   void consistentInvoiceFlowsFromUploadToValidated() {
     Session admin = api.registerOrg("Happy Inc");
     Session approver = api.createUser(admin, "APPROVER");
-    Session user = api.createUser(admin, "USER");
+    Session user = api.createUser(admin, "ACCOUNTANT");
     String sc = scenario("ACME GmbH", "INV-" + id("n"), "1000.00", "190.00", "1190.00");
 
     UUID invoice = upload(user, sc);
@@ -138,7 +138,7 @@ class PipelineIT extends AbstractIntegrationTest {
   @Test
   void inconsistentTotalsRequireReviewAndCanBeCorrectedByAHuman() {
     Session admin = api.registerOrg("Mismatch Inc");
-    Session user = api.createUser(admin, "USER");
+    Session user = api.createUser(admin, "ACCOUNTANT");
     String sc = scenario("ACME GmbH", "INV-" + id("n"), "1000.00", "190.00", "1500.00"); // 1000 + 190 != 1500
 
     UUID invoice = upload(user, sc);
@@ -174,7 +174,7 @@ class PipelineIT extends AbstractIntegrationTest {
   void promptInjectionInTheDocumentCannotSlipThroughToApproval() {
     Session admin = api.registerOrg("Injection Inc");
     Session approver = api.createUser(admin, "APPROVER");
-    Session user = api.createUser(admin, "USER");
+    Session user = api.createUser(admin, "ACCOUNTANT");
     String sc = id("inject");
     // the "model" obeyed text hidden in the invoice and reported a tiny total; ai-service also flagged it
     FakeAiServiceForTests.scenario(sc, FakeAiServiceForTests.okOcr(sc), FakeAiServiceForTests.okExtraction(
@@ -352,7 +352,7 @@ class PipelineIT extends AbstractIntegrationTest {
   @Test
   void creditNotesAreStoredNegativeWhicheverSignWasPrinted() {
     Session admin = api.registerOrg("Credit Inc");
-    Session user = api.createUser(admin, "USER");
+    Session user = api.createUser(admin, "ACCOUNTANT");
     for (String printed : List.of("", "-")) {
       // a month apart: two credit notes with the same amount on the same day would be possible duplicates
       UUID invoice = upload(user, creditScenario("CN-" + id("n"), printed, printed.isEmpty() ? "2026-03-20" : "2026-04-20"));

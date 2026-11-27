@@ -24,12 +24,16 @@ test.describe.serial("invoice lifecycle in the browser", () => {
   let page: Page;
   const adminEmail = `admin-${suffix}@e2e.example.com`;
   const userEmail = `user-${suffix}@e2e.example.com`;
+  const approverEmail = `approver-${suffix}@e2e.example.com`;
+  // nobody approves their own upload: the admin uploads, an approver (in a second browser context) approves
+  let approverPage: Page;
 
   test.beforeAll(async ({ browser }) => {
     page = await browser.newPage();
   });
   test.afterAll(async () => {
     await page.close();
+    await approverPage?.close();
   });
 
   test("registers a new organisation and lands on an empty invoice list", async () => {
@@ -42,6 +46,25 @@ test.describe.serial("invoice lifecycle in the browser", () => {
     await page.waitForURL("**/invoices");
     await expect(page.getByText("Upload your first invoice")).toBeVisible();
     await expect(page.getByRole("link", { name: /Approvals/ })).toBeVisible(); // first user is the admin
+  });
+
+  test("the admin adds an approver, who signs in in another browser", async ({ browser }) => {
+    await page.goto("/team");
+    await page.getByRole("button", { name: /Add member/ }).first().click();
+    await page.fill("#m-name", "Ada Approver");
+    await page.fill("#m-email", approverEmail);
+    await page.getByRole("dialog").getByRole("combobox").click();
+    await page.getByRole("option", { name: "Approver" }).click();
+    await page.fill("#m-pass", PASSWORD);
+    await page.getByRole("dialog").getByRole("button", { name: "Add member" }).click();
+    await expect(page.getByText(approverEmail)).toBeVisible();
+
+    approverPage = await (await browser.newContext()).newPage();
+    await approverPage.goto("/login");
+    await approverPage.fill("#email", approverEmail);
+    await approverPage.fill("#password", PASSWORD);
+    await approverPage.click("button[type=submit]");
+    await approverPage.waitForURL("**/invoices");
   });
 
   test("uploading shows live pipeline progress and the right outcome per document", async () => {
@@ -91,12 +114,16 @@ test.describe.serial("invoice lifecycle in the browser", () => {
 
     await page.goto(detail);
     await confirmVendorIfNeeded(page);
-    await page.getByRole("button", { name: "Approve" }).click();
-    await page.getByRole("dialog").locator("textarea").fill("Checked against the contract");
-    await page.getByRole("dialog").getByRole("button", { name: "Approve" }).click();
-    await expect(page.getByText("Invoice approved")).toBeVisible();
-    await expect(page.getByText("Checked against the contract").first()).toBeVisible(); // shown in the processing card and the history
-    await expect(page.getByText("Fields corrected")).toBeVisible(); // audit history
+    await expect(page.getByText("Approval: You cannot approve an invoice you uploaded yourself.")).toBeVisible();
+
+    await approverPage.goto(detail);
+    await expect(approverPage.getByText(/Approvals 0 of 1/)).toBeVisible();
+    await approverPage.getByRole("button", { name: "Approve" }).click();
+    await approverPage.getByRole("dialog").locator("textarea").fill("Checked against the contract");
+    await approverPage.getByRole("dialog").getByRole("button", { name: "Approve" }).click();
+    await expect(approverPage.getByText("Invoice approved")).toBeVisible();
+    await expect(approverPage.getByText("Checked against the contract").first()).toBeVisible(); // processing card and history
+    await expect(approverPage.getByText("Fields corrected")).toBeVisible(); // audit history
   });
 
   test("approvals queue, analytics and exports reflect what happened", async () => {
@@ -171,9 +198,10 @@ test.describe.serial("invoice lifecycle in the browser", () => {
     await expect(page.getByText("Credit note number")).toBeVisible();
 
     await confirmVendorIfNeeded(page);
-    await page.getByRole("button", { name: "Approve" }).click();
-    await page.getByRole("dialog").getByRole("button", { name: "Approve" }).click();
-    await expect(page.getByText("Invoice approved")).toBeVisible();
+    await approverPage.goto(page.url());
+    await approverPage.getByRole("button", { name: "Approve" }).click();
+    await approverPage.getByRole("dialog").getByRole("button", { name: "Approve" }).click();
+    await expect(approverPage.getByText("Invoice approved")).toBeVisible();
 
     await page.goto("/invoices");
     const row = page.locator("tbody tr", { hasText: "NL-CN-0031" });
@@ -233,7 +261,7 @@ test.describe.serial("invoice lifecycle in the browser", () => {
     await expect(page.getByText(/No webhooks yet/)).toBeVisible();
   });
 
-  test("an admin adds a plain user, who sees a restricted application", async () => {
+  test("an admin adds an accountant, who reviews everything but approves nothing", async () => {
     await page.goto("/team");
     await page.getByRole("button", { name: /Add member/ }).first().click();
     await page.fill("#m-name", "Una User");
@@ -251,7 +279,11 @@ test.describe.serial("invoice lifecycle in the browser", () => {
 
     await expect(page.getByRole("link", { name: "Team" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: /Approvals/ })).toHaveCount(0);
-    await expect(page.getByText("Nothing here yet")).toBeVisible(); // sees none of the admin's invoices
+    await expect(page.locator("tbody tr", { hasText: "E2E-1001" })).toBeVisible(); // the organisation's invoices
+    await page.locator("tbody tr", { hasText: "E2E-1001" }).click();
+    await page.getByRole("link", { name: /Review & edit/ }).click();
+    await expect(page.getByRole("button", { name: /Save & revalidate/ })).toBeVisible(); // can review and correct
+    await expect(page.getByRole("button", { name: "Approve" })).toHaveCount(0); // cannot decide
     await page.goto("/team");
     await page.waitForURL("**/invoices"); // route guard
   });

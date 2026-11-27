@@ -187,7 +187,7 @@ class OidcSsoIT extends AbstractIntegrationTest {
   @Test
   void aStolenOrStaleSignInAttemptIsRefused() throws Exception {
     Session admin = api.registerOrg("Sso Guard Inc");
-    Session member = api.createUser(admin, "USER");
+    Session member = api.createUser(admin, "ACCOUNTANT");
     Authorized auth = authorize(null);
 
     Hop wrongState = get("http://localhost:" + port + "/api/v1/auth/oidc/callback?code=" + auth.code() + "&state=tampered", auth.cookies());
@@ -214,8 +214,8 @@ class OidcSsoIT extends AbstractIntegrationTest {
   @Test
   void accountsAreNeverGuessed() throws Exception {
     Session admin = api.registerOrg("Sso Accounts Inc");
-    Session member = api.createUser(admin, "USER");
-    Session disabled = api.createUser(admin, "USER");
+    Session member = api.createUser(admin, "ACCOUNTANT");
+    Session disabled = api.createUser(admin, "ACCOUNTANT");
     api.patch("/api/v1/users/" + disabled.userId(), admin.token(), Map.of("enabled", false));
 
     // an e-mail address the provider has not verified is worthless as proof of identity
@@ -258,7 +258,7 @@ class OidcSsoIT extends AbstractIntegrationTest {
   @Test
   void withoutProvisioningAnUnknownPersonGetsNoAccount() throws Exception {
     OidcProperties strict = new OidcProperties(true, oidcProps.issuerUri(), oidcProps.clientId(), oidcProps.clientSecret(),
-        "openid email profile", "SSO", "", true, "", "USER", List.of());
+        "openid email profile", "SSO", "", true, "", "ACCOUNTANT", List.of());
     OidcService noProvision = new OidcService(strict, appProps, users, organizations, authService, audit, mapper,
         org.springframework.web.client.RestClient.builder());
     Authorized auth = authorize(null);
@@ -273,7 +273,7 @@ class OidcSsoIT extends AbstractIntegrationTest {
   @Test
   void theRedirectTargetCanOnlyBeASamePath() throws Exception {
     Session admin = api.registerOrg("Sso Redirect Inc");
-    Session member = api.createUser(admin, "USER");
+    Session member = api.createUser(admin, "ACCOUNTANT");
     List<String> locations = new ArrayList<>();
     for (String next : List.of("https://evil.example/phish", "//evil.example", "/ok/path", "javascript:alert(1)")) {
       Hop done = signIn(sub(), claims(member.email(), true, "x"), java.net.URLEncoder.encode(next, StandardCharsets.UTF_8));

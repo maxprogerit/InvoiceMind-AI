@@ -73,6 +73,7 @@ public class InvoiceService {
   private final WebhookOutbox webhooks;
   private final RateLimiter rateLimiter;
   private final ProcessingJobQueue jobs;
+  private final InvoiceDecisions decisions;
   private final InvoiceCorrectionRepository corrections;
   private final VendorMemoryService vendorMemory;
   private final TraceContextCodec traces;
@@ -233,11 +234,13 @@ public class InvoiceService {
     if (next != before) webhooks.invoiceEvent(next == InvoiceStatus.VALIDATED ? "invoice.validated" : "invoice.needs_review", inv);
 
     for (String[] r : rows) corrections.save(new InvoiceCorrectionEntity(inv, r[0], r[1], r[2], me.userId()));
+    if (!rows.isEmpty()) decisions.resetApprovals(inv, me.userId());
     List<String> learned = vendorMemory.learn(inv, snapshot, me.userId());
     if (!learned.isEmpty()) changes.put("vendorMemoryLearned", learned);
     audit.log(me.organizationId(), me.userId(), "INVOICE_CORRECTED", AuditService.INVOICE, inv.getId(), changes);
     status.publish(inv);
     validation.recheckNewerOfSameVendor(inv).forEach(status::publish);
+    decisions.autoApproveIfEligible(inv);
     return mapper.toDetail(inv, me);
   }
 
@@ -246,12 +249,8 @@ public class InvoiceService {
   public InvoiceDetail approve(UUID id, DecisionRequest req, AuthPrincipal me) {
     InvoiceEntity inv = load(id, me);
     requireReviewer(me);
-    String blocked = ApprovalRules.blockedReason(inv, mapper.isVendorVerified(inv), me);
-    if (blocked != null) {
-      if (blocked.startsWith("You cannot approve")) throw ApiException.forbidden(blocked);
-      throw ApiException.conflict("invoice_not_approvable", blocked);
-    }
-    return decide(inv, InvoiceStatus.APPROVED, "INVOICE_APPROVED", req, me);
+    decisions.approve(inv, req == null ? null : blankToNull(req.comment()), me);
+    return mapper.toDetail(inv, me);
   }
 
   @Transactional
@@ -265,34 +264,7 @@ public class InvoiceService {
     if (req == null || req.comment() == null || req.comment().trim().length() < 3) {
       throw ApiException.badRequest("comment_required", "A comment explaining the rejection is required");
     }
-    return decide(inv, InvoiceStatus.REJECTED, "INVOICE_REJECTED", req, me);
-  }
-
-  private InvoiceDetail decide(InvoiceEntity inv, InvoiceStatus target, String action, DecisionRequest req,
-                               AuthPrincipal me) {
-    String comment = req == null ? null : blankToNull(req.comment());
-    InvoiceStatus from = inv.getStatus();
-    inv.setStatus(target);
-    inv.setDecidedBy(me.userId());
-    inv.setDecidedAt(Instant.now(clock));
-    inv.setDecisionComment(comment);
-    invoices.saveAndFlush(inv);
-
-    Map<String, Object> details = new LinkedHashMap<>();
-    details.put("from", from.name());
-    details.put("to", target.name());
-    if (comment != null) details.put("comment", comment);
-    audit.log(me.organizationId(), me.userId(), action, AuditService.INVOICE, inv.getId(), details);
-    webhooks.invoiceEvent(target == InvoiceStatus.APPROVED ? "invoice.approved" : "invoice.rejected", inv);
-
-    String label = inv.displayLabel();
-    if (!inv.getUploadedBy().equals(me.userId())) {
-      boolean approved = target == InvoiceStatus.APPROVED;
-      notifications.notify(inv.getOrganizationId(), inv.getUploadedBy(), approved ? "APPROVED" : "REJECTED",
-          approved ? "Invoice approved" : "Invoice rejected",
-          label + (approved ? " was approved." : " was rejected" + (comment == null ? "." : ": " + comment)), inv.getId());
-    }
-    status.publish(inv);
+    decisions.reject(inv, blankToNull(req.comment()), me.userId());
     return mapper.toDetail(inv, me);
   }
 
@@ -304,7 +276,7 @@ public class InvoiceService {
   @Transactional
   public InvoiceDetail decideDuplicate(UUID id, DuplicateDecisionRequest req, AuthPrincipal me) {
     InvoiceEntity inv = load(id, me);
-    if (!InvoiceMapper.permissions(inv, me, true).canDecideDuplicate()) {
+    if (!InvoiceMapper.permissions(inv, me, true, java.util.Set.of()).canDecideDuplicate()) {
       throw inv.getDuplicateStatus() == DuplicateStatus.DUPLICATE
           ? ApiException.conflict("exact_duplicate", "An exact duplicate cannot be marked as a separate invoice")
           : inv.getDuplicateStatus() != DuplicateStatus.POSSIBLE_DUPLICATE
@@ -326,6 +298,7 @@ public class InvoiceService {
       invoices.saveAndFlush(inv);
       audit.log(me.organizationId(), me.userId(), "DUPLICATE_CLEARED", AuditService.INVOICE, inv.getId(), details);
       status.publish(inv);
+      decisions.autoApproveIfEligible(inv);
       return mapper.toDetail(inv, me);
     }
     String reason = "Duplicate of " + (original == null ? "an earlier invoice"
@@ -333,7 +306,8 @@ public class InvoiceService {
         + (comment == null ? "" : ": " + comment);
     audit.log(me.organizationId(), me.userId(), "DUPLICATE_CONFIRMED", AuditService.INVOICE, inv.getId(), details);
     inv.setDuplicateStatus(DuplicateStatus.DUPLICATE);
-    return decide(inv, InvoiceStatus.REJECTED, "INVOICE_REJECTED", new DecisionRequest(reason), me);
+    decisions.reject(inv, reason, me.userId());
+    return mapper.toDetail(inv, me);
   }
 
   @Transactional
@@ -372,13 +346,15 @@ public class InvoiceService {
   /** Tenant isolation + ownership in one place. Unknown and foreign ids are indistinguishable (404). */
   InvoiceEntity load(UUID id, AuthPrincipal me) {
     return invoices.findByIdAndOrganizationId(id, me.organizationId())
-        .filter(i -> me.role().isReviewer() || i.getUploadedBy().equals(me.userId()))
         .orElseThrow(() -> ApiException.notFound("Invoice"));
   }
 
-  /** USER sees only own uploads; reviewers see the whole organisation. */
+  /**
+   * Every role sees the whole organisation (accountants review everything that comes in, including invoices that
+   * arrived by e-mail). Kept as the single place a narrower scope would be introduced; null means "no narrowing".
+   */
   public static UUID scopeOf(AuthPrincipal me) {
-    return me.role().isReviewer() ? null : me.userId();
+    return null;
   }
 
   private static void requireReviewer(AuthPrincipal me) {

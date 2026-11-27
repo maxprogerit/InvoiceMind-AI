@@ -80,7 +80,7 @@ class WebhookIT extends AbstractIntegrationTest {
   void approvalDeliversASignedEventWithTheInvoice() throws Exception {
     Session admin = api.registerOrg("Hook Inc");
     Session approver = api.createUser(admin, "APPROVER");
-    Session user = api.createUser(admin, "USER");
+    Session user = api.createUser(admin, "ACCOUNTANT");
     String receiver = name();
     JsonNode created = register(admin, receiver, List.of("invoice.approved", "invoice.rejected"));
     String secret = created.get("secret").asText();
