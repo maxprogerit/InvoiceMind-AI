@@ -1,0 +1,97 @@
+"""Markdown for docs/evaluation.md, written only after a run with the real model."""
+from __future__ import annotations
+
+from .metrics import EXTRA_FIELDS, FIELDS
+
+
+def pct(x: float) -> str:
+    return f"{x * 100:.1f}%"
+
+
+def render(summary: dict, docs: list[dict], run: dict) -> str:
+    s = summary
+    n = s["documents"]
+    out = [
+        "# Evaluation",
+        "",
+        f"**Run:** {run['date']} · **model:** `{run['model']}` (reasoning effort `{run['reasoning_effort']}`) · "
+        f"**OCR:** {run['ocr']} · **documents:** {n} ({run['origin']})",
+        "",
+        "Measured by `eval/run_eval.py` through the same code path as `POST /invoices` (`app/pipeline.py`: text layer or "
+        "Tesseract OCR, the model with grounding, then the deterministic validation). Re-run with "
+        "`docker compose --profile eval run --rm eval`; the spend cap is `EVAL_MAX_COST_USD` "
+        f"(this run: ${run['cap']}).",
+        "",
+    ]
+    if run.get("stopped_early"):
+        out += [f"> **The spend cap stopped this run early:** {run['not_run']} document(s) were not processed and are not "
+                "counted below.", ""]
+    out += [
+        "## Headline",
+        "",
+        "| Metric | Value |",
+        "|---|---|",
+        f"| Auto-validated (no person needed) | **{s['auto_validated']} / {n}** ({pct(s['auto_validated_share'])}) |",
+        f"| Sent to review | {s['needs_review']} / {n} ({pct(s['needs_review_share'])}) |",
+        f"| **False \"valid\"**: auto-validated with at least one wrong value | **{s['false_valid']}**"
+        + (f" ({', '.join(s['false_valid_ids'])})" if s["false_valid_ids"] else "") + " |",
+        f"| Documents with every value right (all fields and every line item) | {s['all_correct']} / {n} |",
+        f"| Wrong documents caught by review | {s['wrong_documents_caught']} / {s['wrong_documents']} |",
+        f"| Correct documents sent to review anyway | {s['correct_documents_sent_to_review']} |",
+        f"| Pipeline errors | {s['errors']} |",
+        f"| Average latency per invoice (OCR + model + validation) | {s['avg_seconds']:.1f} s (model alone {s['avg_model_seconds']:.1f} s, slowest {s['max_seconds']:.1f} s) |",
+        f"| Average cost per invoice | ${s['avg_cost_usd']} (total ${s['total_cost_usd']}; prices: input {run['price_in']} / output {run['price_out']} USD per 1M tokens) |",
+        "",
+        "## Per-field accuracy",
+        "",
+        "Share of documents where the value equals the ground truth. Text fields ignore case, spaces and punctuation; "
+        "money must match to the cent; a pipeline error counts as wrong. *Line items* is exact when every printed row "
+        "was found (same total, similar description) and nothing extra was invented.",
+        "",
+        "| Field | Accuracy |",
+        "|---|---|",
+    ]
+    for f in FIELDS + ["line_items"]:
+        out.append(f"| `{f}` | {pct(s['field_accuracy'][f])} |")
+    li = s["line_item_rows"]
+    out += [
+        "",
+        f"Line item rows: precision {pct(li['precision'])}, recall {pct(li['recall'])} ({li['tp']} of {li['expected_rows']} rows found, "
+        f"{li['fp']} extra). Also scored: " + ", ".join(f"`{f}` {pct(s['extra_field_accuracy'][f])}" for f in EXTRA_FIELDS) + ".",
+        "",
+        "## By document type",
+        "",
+        "| Tag | Documents | All correct | Auto-validated | False valid |",
+        "|---|---|---|---|---|",
+    ]
+    for t, g in s["by_tag"].items():
+        out.append(f"| {t} | {g['documents']} | {g['all_correct']} | {g['auto_validated']} | {g['false_valid']} |")
+    for origin, g in s["by_origin"].items():
+        out.append(f"| *{origin} documents* | {g['documents']} | {g['all_correct']} | {g['auto_validated']} | {g['false_valid']} |")
+    out += ["", "## Per document", "",
+            "| Document | Tags | Text from | Wrong | Review triggers | Time | Cost |",
+            "|---|---|---|---|---|---|---|"]
+    for d in docs:
+        if "error" in d:
+            out.append(f"| {d['id']} | {', '.join(d['tags'])} | - | ERROR: {d['error']} | - | {d['seconds']}s | - |")
+            continue
+        out.append(f"| {d['id']} | {', '.join(d['tags'])} | {d['source']} | {', '.join(d['wrong']) or '-'} | "
+                   f"{'; '.join(d['review_triggers']) or 'none (auto-validated)'} | {d['seconds']}s | ${d['cost_usd']} |")
+    out += [
+        "",
+        "## How to read this",
+        "",
+        "- *Auto-validated* uses the triggers the backend applies to a fresh extraction (deterministic validation, the model's "
+        "own review request, suspected prompt injection, confidence below 0.6 on vendor, number, date or total). The backend "
+        "also holds invoices of unverified vendors and possible duplicates; those depend on history, not on the document, "
+        "and are not part of this measurement. In the product every first invoice of a new vendor waits for a person anyway.",
+        "- The synthetic documents are generated by `samples/generate.py` (labelled `synthetic` in their ground truth). "
+        "They cover layouts, languages, scans, multi-page, multi-rate tax and discounts, but they are cleaner than real "
+        "mail. Real (redacted) invoices in `samples/real/` are reported separately above when present.",
+        "- A discount printed only in the totals block (`24-discount-totals`) makes the line items not add up to the "
+        "subtotal, so the deterministic check sends it to review even when every value was read correctly. That is "
+        "intended: the schema has no discount field, so the arithmetic cannot be confirmed.",
+        "- The full per-document output, including predicted values, is in `eval/results/latest.json`.",
+        "",
+    ]
+    return "\n".join(out)

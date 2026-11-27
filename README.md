@@ -8,7 +8,7 @@ re-validated by plain Java code, and anything doubtful goes to a person.
 
 > **Honest status.** Everything below runs and is tested. The extraction and the knowledge base were run against the real
 > OpenAI API (`gpt-5.5`): 18 of 18 synthetic documents were extracted completely correctly (see
-> [docs/EVALUATION.md](docs/EVALUATION.md)), but the set is small and synthetic, so read that as a smoke test of the whole
+> [docs/evaluation.md](docs/evaluation.md)), but the set is small and synthetic, so read that as a smoke test of the whole
 > pipeline, not as a production accuracy figure. The integrations (single sign-on, e-mail ingestion, S3 storage) were verified
 > against real *protocol implementations* (an OIDC server, an IMAP server, an S3-compatible store), not against Entra ID, Gmail
 > or AWS themselves. The full, itemised picture is in [docs/STATUS.md](docs/STATUS.md).
@@ -283,11 +283,12 @@ It exists only for tests and is never part of the normal stack.
 
 ### Measuring extraction quality
 
-[`samples/`](samples) holds 16 synthetic invoices with ground truth: text PDFs and scans (rotation, noise, blur), EUR/USD/GBP/CHF/RUB,
-English/German/Russian, decimal point and comma, a multi-page invoice, look-alike identifiers and a hidden prompt injection.
+[`samples/`](samples) holds 32 synthetic invoices (labelled as such) with ground truth: text PDFs, scans and scanned PDFs, multi-page,
+multi-rate VAT, discounts, credit notes, EUR/USD/GBP/CHF/RUB/SEK, English/German/Russian, decimal point and comma, look-alike
+identifiers and a hidden prompt injection. Real redacted invoices go to `samples/real/`.
 
 ```bash
-docker compose --profile eval run --rm eval       # real OCR + real model; writes docs/EVALUATION.md
+EVAL_MAX_COST_USD=1 docker compose --profile eval run --rm eval   # real pipeline + model; writes docs/evaluation.md
 node scripts/capture-screenshots.cjs              # seeds the demo org with the samples and captures screenshots
 ```
 
@@ -324,6 +325,6 @@ samples/      synthetic invoices, ground truth, generator
 eval/         accuracy evaluation harness
 e2e/          offline AI test double for browser tests
 docker/       Nginx configuration
-docs/         ARCHITECTURE, STATUS, EVALUATION and OCR-COMPARISON (generated), AUDIT-PHASE0 (history)
+docs/         ARCHITECTURE, STATUS, evaluation and OCR-COMPARISON (generated), AUDIT-PHASE0 (history)
 scripts/      screenshot capture
 ```

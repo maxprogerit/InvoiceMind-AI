@@ -3,7 +3,12 @@
     "file": "13-noisy-ids.pdf",
     "layout": "classic",
     "kind": "text-pdf",
-    "adversarial": false
+    "adversarial": false,
+    "synthetic": true,
+    "pages": 1,
+    "tags": [
+      "text-pdf"
+    ]
   },
   "expected": {
     "document_type": "invoice",
@@ -12,27 +17,27 @@
     "invoice_date": "2026-01-09",
     "due_date": "2026-02-23",
     "currency": "USD",
-    "subtotal": 7205.0,
-    "tax": 0.0,
-    "total": 7205.0,
+    "subtotal": "7205.00",
+    "tax": "0.00",
+    "total": "7205.00",
     "line_items": [
       {
         "description": "Ocean freight (40ft container)",
         "quantity": 2,
-        "unit_price": 3150.0,
-        "total": 6300.0
+        "unit_price": "3150.00",
+        "total": "6300.00"
       },
       {
         "description": "Terminal handling",
         "quantity": 2,
-        "unit_price": 415.0,
-        "total": 830.0
+        "unit_price": "415.00",
+        "total": "830.00"
       },
       {
         "description": "Documentation fee",
         "quantity": 1,
-        "unit_price": 75.0,
-        "total": 75.0
+        "unit_price": "75.00",
+        "total": "75.00"
       }
     ]
   }

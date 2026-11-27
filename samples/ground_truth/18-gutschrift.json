@@ -3,7 +3,14 @@
     "file": "18-gutschrift.pdf",
     "layout": "german",
     "kind": "text-pdf",
-    "adversarial": false
+    "adversarial": false,
+    "synthetic": true,
+    "pages": 1,
+    "tags": [
+      "text-pdf",
+      "credit-note",
+      "decimal-comma"
+    ]
   },
   "expected": {
     "document_type": "credit_note",
@@ -12,21 +19,21 @@
     "invoice_date": "2026-03-01",
     "due_date": null,
     "currency": "EUR",
-    "subtotal": 93.0,
-    "tax": 6.51,
-    "total": 99.51,
+    "subtotal": "93.00",
+    "tax": "6.51",
+    "total": "99.51",
     "line_items": [
       {
         "description": "Brötchen gemischt (Reklamation)",
         "quantity": 2,
-        "unit_price": 38.5,
-        "total": 77.0
+        "unit_price": "38.50",
+        "total": "77.00"
       },
       {
         "description": "Vollkornbrot (Rückgabe)",
         "quantity": 5,
-        "unit_price": 3.2,
-        "total": 16.0
+        "unit_price": "3.20",
+        "total": "16.00"
       }
     ]
   }

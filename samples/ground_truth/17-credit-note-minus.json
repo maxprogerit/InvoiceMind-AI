@@ -3,7 +3,13 @@
     "file": "17-credit-note-minus.pdf",
     "layout": "classic",
     "kind": "text-pdf",
-    "adversarial": false
+    "adversarial": false,
+    "synthetic": true,
+    "pages": 1,
+    "tags": [
+      "text-pdf",
+      "credit-note"
+    ]
   },
   "expected": {
     "document_type": "credit_note",
@@ -12,21 +18,21 @@
     "invoice_date": "2026-04-02",
     "due_date": null,
     "currency": "EUR",
-    "subtotal": -440.0,
-    "tax": -83.6,
-    "total": -523.6,
+    "subtotal": "-440.00",
+    "tax": "-83.60",
+    "total": "-523.60",
     "line_items": [
       {
         "description": "Consulting services March (returned hours)",
         "quantity": 4,
-        "unit_price": -95.0,
-        "total": -380.0
+        "unit_price": "-95.00",
+        "total": "-380.00"
       },
       {
         "description": "Hosting (credit for outage)",
         "quantity": 1,
-        "unit_price": -60.0,
-        "total": -60.0
+        "unit_price": "-60.00",
+        "total": "-60.00"
       }
     ]
   }

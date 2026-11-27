@@ -1,0 +1,53 @@
+{
+  "meta": {
+    "file": "30-multitax-rabatt.pdf",
+    "layout": "german",
+    "kind": "text-pdf",
+    "adversarial": false,
+    "synthetic": true,
+    "pages": 1,
+    "tags": [
+      "text-pdf",
+      "multi-tax",
+      "discount",
+      "decimal-comma"
+    ]
+  },
+  "expected": {
+    "document_type": "invoice",
+    "vendor": "Bioland Hof Wiesner",
+    "invoice_number": "BW-2026-061",
+    "invoice_date": "2026-09-30",
+    "due_date": "2026-10-14",
+    "currency": "EUR",
+    "subtotal": "336.00",
+    "tax": "32.16",
+    "total": "368.16",
+    "line_items": [
+      {
+        "description": "Gemüsekisten Abo (Woche)",
+        "quantity": 4,
+        "unit_price": "32.50",
+        "total": "130.00"
+      },
+      {
+        "description": "Eier Bio (10 Stk.)",
+        "quantity": 30,
+        "unit_price": "4.90",
+        "total": "147.00"
+      },
+      {
+        "description": "Kühltransport",
+        "quantity": 4,
+        "unit_price": "18.00",
+        "total": "72.00"
+      },
+      {
+        "description": "Treuerabatt Gemüsekisten",
+        "quantity": 1,
+        "unit_price": "-13.00",
+        "total": "-13.00"
+      }
+    ]
+  }
+}

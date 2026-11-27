@@ -1,0 +1,46 @@
+{
+  "meta": {
+    "file": "21-multitax-scan.png",
+    "layout": "german",
+    "kind": "scan",
+    "adversarial": false,
+    "synthetic": true,
+    "pages": 1,
+    "tags": [
+      "scan",
+      "multi-tax",
+      "decimal-comma"
+    ]
+  },
+  "expected": {
+    "document_type": "invoice",
+    "vendor": "Hofladen Brenner",
+    "invoice_number": "HB-0457",
+    "invoice_date": "2026-08-12",
+    "due_date": "2026-08-22",
+    "currency": "EUR",
+    "subtotal": "169.40",
+    "tax": "21.99",
+    "total": "191.39",
+    "line_items": [
+      {
+        "description": "Bio-Äpfel (kg)",
+        "quantity": 25,
+        "unit_price": "3.40",
+        "total": "85.00"
+      },
+      {
+        "description": "Apfelsaft naturtrüb (Kiste)",
+        "quantity": 4,
+        "unit_price": "17.80",
+        "total": "71.20"
+      },
+      {
+        "description": "Pfand Kiste",
+        "quantity": 4,
+        "unit_price": "3.30",
+        "total": "13.20"
+      }
+    ]
+  }
+}

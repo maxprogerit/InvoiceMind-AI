@@ -1,0 +1,303 @@
+{
+  "meta": {
+    "file": "25-multipage-long.pdf",
+    "layout": "classic",
+    "kind": "text-pdf",
+    "adversarial": false,
+    "synthetic": true,
+    "pages": 2,
+    "tags": [
+      "text-pdf",
+      "multi-page"
+    ]
+  },
+  "expected": {
+    "document_type": "invoice",
+    "vendor": "Bürobedarf Zentrale GmbH",
+    "invoice_number": "BZ-2026-10456",
+    "invoice_date": "2026-10-02",
+    "due_date": "2026-11-01",
+    "currency": "EUR",
+    "subtotal": "15004.78",
+    "tax": "2850.91",
+    "total": "17855.69",
+    "line_items": [
+      {
+        "description": "Copy paper A4 80g",
+        "quantity": 8,
+        "unit_price": "64.79",
+        "total": "518.32"
+      },
+      {
+        "description": "Whiteboard markers",
+        "quantity": 12,
+        "unit_price": "14.58",
+        "total": "174.96"
+      },
+      {
+        "description": "Paper cups (100)",
+        "quantity": 6,
+        "unit_price": "55.08",
+        "total": "330.48"
+      },
+      {
+        "description": "Notebook A5 dotted",
+        "quantity": 5,
+        "unit_price": "5.39",
+        "total": "26.95"
+      },
+      {
+        "description": "Shredder bags",
+        "quantity": 1,
+        "unit_price": "60.01",
+        "total": "60.01"
+      },
+      {
+        "description": "HDMI adapter",
+        "quantity": 12,
+        "unit_price": "10.07",
+        "total": "120.84"
+      },
+      {
+        "description": "Wireless mouse",
+        "quantity": 8,
+        "unit_price": "15.16",
+        "total": "121.28"
+      },
+      {
+        "description": "Clipboard A4",
+        "quantity": 8,
+        "unit_price": "58.90",
+        "total": "471.20"
+      },
+      {
+        "description": "Stapler heavy duty",
+        "quantity": 5,
+        "unit_price": "75.45",
+        "total": "377.25"
+      },
+      {
+        "description": "Rubber bands",
+        "quantity": 3,
+        "unit_price": "31.99",
+        "total": "95.97"
+      },
+      {
+        "description": "Drawing pins",
+        "quantity": 4,
+        "unit_price": "26.79",
+        "total": "107.16"
+      },
+      {
+        "description": "Correction tape",
+        "quantity": 2,
+        "unit_price": "75.99",
+        "total": "151.98"
+      },
+      {
+        "description": "Tape dispenser",
+        "quantity": 12,
+        "unit_price": "68.63",
+        "total": "823.56"
+      },
+      {
+        "description": "Keyboard (DE layout)",
+        "quantity": 12,
+        "unit_price": "59.92",
+        "total": "719.04"
+      },
+      {
+        "description": "Ruler 30 cm",
+        "quantity": 3,
+        "unit_price": "65.92",
+        "total": "197.76"
+      },
+      {
+        "description": "Monitor arm",
+        "quantity": 6,
+        "unit_price": "77.79",
+        "total": "466.74"
+      },
+      {
+        "description": "Ring binder A4",
+        "quantity": 9,
+        "unit_price": "28.10",
+        "total": "252.90"
+      },
+      {
+        "description": "Calculator",
+        "quantity": 6,
+        "unit_price": "70.63",
+        "total": "423.78"
+      },
+      {
+        "description": "Laminating pouches",
+        "quantity": 9,
+        "unit_price": "35.10",
+        "total": "315.90"
+      },
+      {
+        "description": "Highlighters (set)",
+        "quantity": 5,
+        "unit_price": "73.88",
+        "total": "369.40"
+      },
+      {
+        "description": "Glue stick",
+        "quantity": 10,
+        "unit_price": "53.99",
+        "total": "539.90"
+      },
+      {
+        "description": "Letter tray",
+        "quantity": 6,
+        "unit_price": "27.85",
+        "total": "167.10"
+      },
+      {
+        "description": "Hanging folders",
+        "quantity": 2,
+        "unit_price": "84.53",
+        "total": "169.06"
+      },
+      {
+        "description": "Ethernet cable 5 m",
+        "quantity": 10,
+        "unit_price": "69.31",
+        "total": "693.10"
+      },
+      {
+        "description": "USB-C cable 2 m",
+        "quantity": 7,
+        "unit_price": "64.65",
+        "total": "452.55"
+      },
+      {
+        "description": "Cable ties (pack)",
+        "quantity": 6,
+        "unit_price": "25.62",
+        "total": "153.72"
+      },
+      {
+        "description": "Power strip 6-way",
+        "quantity": 9,
+        "unit_price": "75.82",
+        "total": "682.38"
+      },
+      {
+        "description": "Envelopes C4 (pack)",
+        "quantity": 12,
+        "unit_price": "78.63",
+        "total": "943.56"
+      },
+      {
+        "description": "Index tabs",
+        "quantity": 4,
+        "unit_price": "59.22",
+        "total": "236.88"
+      },
+      {
+        "description": "Scissors",
+        "quantity": 6,
+        "unit_price": "27.30",
+        "total": "163.80"
+      },
+      {
+        "description": "Hole punch",
+        "quantity": 4,
+        "unit_price": "81.84",
+        "total": "327.36"
+      },
+      {
+        "description": "Webcam HD",
+        "quantity": 11,
+        "unit_price": "6.03",
+        "total": "66.33"
+      },
+      {
+        "description": "Headset USB",
+        "quantity": 3,
+        "unit_price": "76.26",
+        "total": "228.78"
+      },
+      {
+        "description": "Toner cartridge cyan",
+        "quantity": 1,
+        "unit_price": "57.76",
+        "total": "57.76"
+      },
+      {
+        "description": "Name badges (50)",
+        "quantity": 4,
+        "unit_price": "45.45",
+        "total": "181.80"
+      },
+      {
+        "description": "Coffee beans 1 kg",
+        "quantity": 12,
+        "unit_price": "84.98",
+        "total": "1019.76"
+      },
+      {
+        "description": "Desk organiser",
+        "quantity": 5,
+        "unit_price": "82.92",
+        "total": "414.60"
+      },
+      {
+        "description": "Ballpoint pens (box)",
+        "quantity": 9,
+        "unit_price": "23.60",
+        "total": "212.40"
+      },
+      {
+        "description": "Sticky notes 76x76",
+        "quantity": 3,
+        "unit_price": "5.60",
+        "total": "16.80"
+      },
+      {
+        "description": "Document wallet",
+        "quantity": 1,
+        "unit_price": "8.68",
+        "total": "8.68"
+      },
+      {
+        "description": "Batteries AA (pack)",
+        "quantity": 4,
+        "unit_price": "41.00",
+        "total": "164.00"
+      },
+      {
+        "description": "Archive box",
+        "quantity": 5,
+        "unit_price": "62.46",
+        "total": "312.30"
+      },
+      {
+        "description": "Label printer tape",
+        "quantity": 8,
+        "unit_price": "53.78",
+        "total": "430.24"
+      },
+      {
+        "description": "Toner cartridge magenta",
+        "quantity": 12,
+        "unit_price": "60.42",
+        "total": "725.04"
+      },
+      {
+        "description": "Cleaning wipes",
+        "quantity": 10,
+        "unit_price": "30.26",
+        "total": "302.60"
+      },
+      {
+        "description": "Pencil sharpener",
+        "quantity": 10,
+        "unit_price": "20.88",
+        "total": "208.80"
+      }
+    ]
+  }
+}

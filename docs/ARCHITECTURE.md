@@ -371,7 +371,7 @@ aggregated on the analytics page. With `TRACING_ENABLED=true` a trace spans back
 | Firms | V8 migration applied to V1-V7 data (`FirmMigrationIT`, Flyway on a throw-away Postgres); switching, role from the access row, refresh keeping the client, isolation between clients and between firms (`FirmSwitchIT`); firm API, summary, team, limit (`FirmApiIT`) | `backend/src/test` |
 | Frontend unit | formatting, live arithmetic, token refresh single-flight, API errors, components, the client switcher and the switch hook | `frontend/src/**/*.test.ts(x)` |
 | End to end | a real browser against the whole stack | `frontend/e2e` |
-| Quality | field-level accuracy of the real pipeline on 16 documents with ground truth | `eval/` → `docs/EVALUATION.md` |
+| Quality | per-field accuracy, auto-validated vs review, false "valid", latency and cost of `POST /invoices` on 32+ documents with ground truth; metric code tested in `tests/test_eval_metrics.py` | `eval/run_eval.py` → `docs/evaluation.md` |
 
 The only test doubles are named as such (`FakeAiServiceForTests`, `FakeOpenAIClientForTests`,
 `e2e/fake-ai`) and live in test code or the e2e overlay. Nothing in the production code path is simulated.

@@ -154,7 +154,8 @@ services:
       timeout: 3s
       retries: 10
 
-  # Accuracy evaluation on samples/ with the real model:  docker compose --profile eval run --rm eval
+  # Accuracy, review rate, latency and cost on samples/ with the real model (spend cap EVAL_MAX_COST_USD):
+  #   docker compose --profile eval run --rm eval
   eval:
     profiles: ["eval"]
     build:
@@ -174,6 +175,7 @@ services:
     networks: [egress]
     volumes:
       - ./eval:/eval
+      - ./extract-service/evaluation:/srv/evaluation:ro
       - ./samples:/samples:ro
       - ./docs:/out
       - ./e2e/fake-ai:/e2e:ro

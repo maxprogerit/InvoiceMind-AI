@@ -32,8 +32,8 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build the test image
         run: docker build --target test -t invoicemind-extract-test extract-service
-      - name: Run pytest (the model is a fake; the live smoke test is opt-in)
-        run: docker run --rm invoicemind-extract-test pytest -q -rs
+      - name: Run pytest (the model is a fake; the live smoke test is opt-in; samples/ for the evaluation-set checks)
+        run: docker run --rm -v "$PWD/samples:/samples:ro" -e SAMPLES_DIR=/samples invoicemind-extract-test pytest -q -rs
 
   frontend:
     name: Frontend (lint, typecheck, unit tests, build)

@@ -3,7 +3,13 @@
     "file": "03-german-eur.pdf",
     "layout": "german",
     "kind": "text-pdf",
-    "adversarial": false
+    "adversarial": false,
+    "synthetic": true,
+    "pages": 1,
+    "tags": [
+      "text-pdf",
+      "decimal-comma"
+    ]
   },
   "expected": {
     "document_type": "invoice",
@@ -12,27 +18,27 @@
     "invoice_date": "2026-02-03",
     "due_date": "2026-02-17",
     "currency": "EUR",
-    "subtotal": 398.0,
-    "tax": 27.86,
-    "total": 425.86,
+    "subtotal": "398.00",
+    "tax": "27.86",
+    "total": "425.86",
     "line_items": [
       {
         "description": "Brötchen gemischt (100 Stk.)",
         "quantity": 4,
-        "unit_price": 38.5,
-        "total": 154.0
+        "unit_price": "38.50",
+        "total": "154.00"
       },
       {
         "description": "Vollkornbrot",
         "quantity": 20,
-        "unit_price": 3.2,
-        "total": 64.0
+        "unit_price": "3.20",
+        "total": "64.00"
       },
       {
         "description": "Catering Pauschale",
         "quantity": 1,
-        "unit_price": 180.0,
-        "total": 180.0
+        "unit_price": "180.00",
+        "total": "180.00"
       }
     ]
   }

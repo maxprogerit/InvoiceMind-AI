@@ -1,0 +1,52 @@
+{
+  "meta": {
+    "file": "19-multitax-de.pdf",
+    "layout": "german",
+    "kind": "text-pdf",
+    "adversarial": false,
+    "synthetic": true,
+    "pages": 1,
+    "tags": [
+      "text-pdf",
+      "multi-tax",
+      "decimal-comma"
+    ]
+  },
+  "expected": {
+    "document_type": "invoice",
+    "vendor": "Feinkost Albrecht GmbH",
+    "invoice_number": "FA-2026-3318",
+    "invoice_date": "2026-07-06",
+    "due_date": "2026-07-20",
+    "currency": "EUR",
+    "subtotal": "551.80",
+    "tax": "53.51",
+    "total": "605.31",
+    "line_items": [
+      {
+        "description": "Feinkostkorb Premium",
+        "quantity": 6,
+        "unit_price": "48.90",
+        "total": "293.40"
+      },
+      {
+        "description": "Präsentkarton mit Druck",
+        "quantity": 6,
+        "unit_price": "6.50",
+        "total": "39.00"
+      },
+      {
+        "description": "Lieferung und Aufbau",
+        "quantity": 1,
+        "unit_price": "85.00",
+        "total": "85.00"
+      },
+      {
+        "description": "Olivenöl extra vergine 0,5 l",
+        "quantity": 12,
+        "unit_price": "11.20",
+        "total": "134.40"
+      }
+    ]
+  }
+}

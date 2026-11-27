@@ -3,7 +3,13 @@
     "file": "10-german-scan.png",
     "layout": "german",
     "kind": "scan",
-    "adversarial": false
+    "adversarial": false,
+    "synthetic": true,
+    "pages": 1,
+    "tags": [
+      "scan",
+      "decimal-comma"
+    ]
   },
   "expected": {
     "document_type": "invoice",
@@ -12,27 +18,27 @@
     "invoice_date": "2026-04-22",
     "due_date": "2026-05-06",
     "currency": "EUR",
-    "subtotal": 529.2,
-    "tax": 100.55,
-    "total": 629.75,
+    "subtotal": "529.20",
+    "tax": "100.55",
+    "total": "629.75",
     "line_items": [
       {
         "description": "Gartenpflege April",
         "quantity": 1,
-        "unit_price": 320.0,
-        "total": 320.0
+        "unit_price": "320.00",
+        "total": "320.00"
       },
       {
         "description": "Rindenmulch (Sack)",
         "quantity": 18,
-        "unit_price": 6.9,
-        "total": 124.2
+        "unit_price": "6.90",
+        "total": "124.20"
       },
       {
         "description": "Entsorgung Grünschnitt",
         "quantity": 1,
-        "unit_price": 85.0,
-        "total": 85.0
+        "unit_price": "85.00",
+        "total": "85.00"
       }
     ]
   }

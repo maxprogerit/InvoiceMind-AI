@@ -1,0 +1,233 @@
+{
+  "meta": {
+    "file": "26-multipage-multitax.pdf",
+    "layout": "german",
+    "kind": "text-pdf",
+    "adversarial": false,
+    "synthetic": true,
+    "pages": 2,
+    "tags": [
+      "text-pdf",
+      "multi-page",
+      "multi-tax",
+      "decimal-comma"
+    ]
+  },
+  "expected": {
+    "document_type": "invoice",
+    "vendor": "Gastro-Großhandel Petersen KG",
+    "invoice_number": "GP-88123",
+    "invoice_date": "2026-09-18",
+    "due_date": "2026-10-02",
+    "currency": "EUR",
+    "subtotal": "10566.81",
+    "tax": "1296.36",
+    "total": "11863.17",
+    "line_items": [
+      {
+        "description": "Ethernet cable 5 m",
+        "quantity": 2,
+        "unit_price": "4.57",
+        "total": "9.14"
+      },
+      {
+        "description": "Mouse pad",
+        "quantity": 11,
+        "unit_price": "48.10",
+        "total": "529.10"
+      },
+      {
+        "description": "Monitor arm",
+        "quantity": 3,
+        "unit_price": "8.07",
+        "total": "24.21"
+      },
+      {
+        "description": "Sticky notes 76x76",
+        "quantity": 5,
+        "unit_price": "7.31",
+        "total": "36.55"
+      },
+      {
+        "description": "Desk lamp LED",
+        "quantity": 2,
+        "unit_price": "9.07",
+        "total": "18.14"
+      },
+      {
+        "description": "Ballpoint pens (box)",
+        "quantity": 2,
+        "unit_price": "8.22",
+        "total": "16.44"
+      },
+      {
+        "description": "Archive box",
+        "quantity": 9,
+        "unit_price": "40.99",
+        "total": "368.91"
+      },
+      {
+        "description": "Tape dispenser",
+        "quantity": 7,
+        "unit_price": "88.34",
+        "total": "618.38"
+      },
+      {
+        "description": "Shredder bags",
+        "quantity": 9,
+        "unit_price": "77.74",
+        "total": "699.66"
+      },
+      {
+        "description": "HDMI adapter",
+        "quantity": 6,
+        "unit_price": "75.96",
+        "total": "455.76"
+      },
+      {
+        "description": "Toner cartridge magenta",
+        "quantity": 3,
+        "unit_price": "88.22",
+        "total": "264.66"
+      },
+      {
+        "description": "Stapler heavy duty",
+        "quantity": 2,
+        "unit_price": "62.70",
+        "total": "125.40"
+      },
+      {
+        "description": "Calculator",
+        "quantity": 6,
+        "unit_price": "80.13",
+        "total": "480.78"
+      },
+      {
+        "description": "Pencil sharpener",
+        "quantity": 3,
+        "unit_price": "40.53",
+        "total": "121.59"
+      },
+      {
+        "description": "Letter tray",
+        "quantity": 9,
+        "unit_price": "76.08",
+        "total": "684.72"
+      },
+      {
+        "description": "Coffee beans 1 kg",
+        "quantity": 10,
+        "unit_price": "15.20",
+        "total": "152.00"
+      },
+      {
+        "description": "Document wallet",
+        "quantity": 3,
+        "unit_price": "17.59",
+        "total": "52.77"
+      },
+      {
+        "description": "Copy paper A4 80g",
+        "quantity": 7,
+        "unit_price": "59.24",
+        "total": "414.68"
+      },
+      {
+        "description": "Correction tape",
+        "quantity": 11,
+        "unit_price": "88.31",
+        "total": "971.41"
+      },
+      {
+        "description": "Rubber bands",
+        "quantity": 8,
+        "unit_price": "80.29",
+        "total": "642.32"
+      },
+      {
+        "description": "Scissors",
+        "quantity": 3,
+        "unit_price": "79.73",
+        "total": "239.19"
+      },
+      {
+        "description": "Highlighters (set)",
+        "quantity": 9,
+        "unit_price": "16.53",
+        "total": "148.77"
+      },
+      {
+        "description": "Label printer tape",
+        "quantity": 11,
+        "unit_price": "44.80",
+        "total": "492.80"
+      },
+      {
+        "description": "Laminating pouches",
+        "quantity": 6,
+        "unit_price": "19.37",
+        "total": "116.22"
+      },
+      {
+        "description": "Hanging folders",
+        "quantity": 10,
+        "unit_price": "49.69",
+        "total": "496.90"
+      },
+      {
+        "description": "Drawing pins",
+        "quantity": 8,
+        "unit_price": "58.63",
+        "total": "469.04"
+      },
+      {
+        "description": "Cleaning wipes",
+        "quantity": 10,
+        "unit_price": "54.73",
+        "total": "547.30"
+      },
+      {
+        "description": "Clipboard A4",
+        "quantity": 6,
+        "unit_price": "65.83",
+        "total": "394.98"
+      },
+      {
+        "description": "Cable ties (pack)",
+        "quantity": 3,
+        "unit_price": "38.86",
+        "total": "116.58"
+      },
+      {
+        "description": "Ring binder A4",
+        "quantity": 8,
+        "unit_price": "14.29",
+        "total": "114.32"
+      },
+      {
+        "description": "Glue stick",
+        "quantity": 11,
+        "unit_price": "3.29",
+        "total": "36.19"
+      },
+      {
+        "description": "Hole punch",
+        "quantity": 3,
+        "unit_price": "3.22",
+        "total": "9.66"
+      },
+      {
+        "description": "Envelopes C4 (pack)",
+        "quantity": 6,
+        "unit_price": "70.74",
+        "total": "424.44"
+      },
+      {
+        "description": "Headset USB",
+        "quantity": 10,
+        "unit_price": "27.38",
+        "total": "273.80"
+      }
+    ]
+  }
+}

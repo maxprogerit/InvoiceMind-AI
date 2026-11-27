@@ -27,7 +27,7 @@ from .schemas import (
     InvoiceResult,
     OcrResponse,
 )
-from .validation import validate_invoice
+from .pipeline import process_document
 
 logger = logging.getLogger("extract-service")
 
@@ -152,15 +152,6 @@ async def extract(body: ExtractRequest, request: Request):
     return await run_in_threadpool(extractor.extract, body.text)
 
 
-def text_source(ocr: OcrResponse) -> str:
-    methods = {p.method for p in ocr.pages}
-    if methods == {"text-layer"}:
-        return "text_layer"
-    if methods == {"ocr"}:
-        return "ocr"
-    return "mixed"
-
-
 @app.post("/invoices", response_model=InvoiceResult, dependencies=[Depends(require_internal_token)])
 async def process_invoice(request: Request, file: UploadFile = File(...), settings: Settings = Depends(get_settings)):
     """The one call the backend makes per document: file -> text -> model -> deterministic validation.
@@ -171,28 +162,17 @@ async def process_invoice(request: Request, file: UploadFile = File(...), settin
     if extractor is None:
         raise ApiError(503, "llm_not_configured", "OPENAI_API_KEY is not configured")
     data = await file.read(settings.max_upload_bytes + 1)
-    ocr_result = await run_in_threadpool(request.app.state.ocr.process, data)
-    if not ocr_result.text.strip():
-        raise ApiError(422, "no_text", "No text could be read from the document")
-    extracted = await run_in_threadpool(extractor.extract, ocr_result.text)
-    validation = validate_invoice(extracted.extraction)
+    result = await run_in_threadpool(process_document, data, request.app.state.ocr, extractor)
     log(
         logger,
         "invoice processed",
         bytes=len(data),
-        pages=ocr_result.page_count,
-        source=text_source(ocr_result),
-        validation=validation.status.value,
-        issues=len(validation.issues),
+        pages=result.ocr.page_count,
+        source=result.source,
+        validation=result.validation.status.value,
+        issues=len(result.validation.issues),
     )
-    return InvoiceResult(
-        source=text_source(ocr_result),
-        ocr=ocr_result,
-        extraction=extracted.extraction,
-        validation=validation,
-        injection_suspected=extracted.injection_suspected,
-        usage=extracted.usage,
-    )
+    return result
 
 
 def _knowledge(request: Request) -> KnowledgeService:

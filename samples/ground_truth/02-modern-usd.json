@@ -3,7 +3,12 @@
     "file": "02-modern-usd.pdf",
     "layout": "modern",
     "kind": "text-pdf",
-    "adversarial": false
+    "adversarial": false,
+    "synthetic": true,
+    "pages": 1,
+    "tags": [
+      "text-pdf"
+    ]
   },
   "expected": {
     "document_type": "invoice",
@@ -12,27 +17,27 @@
     "invoice_date": "2026-01-28",
     "due_date": "2026-02-12",
     "currency": "USD",
-    "subtotal": 7470.0,
-    "tax": 653.63,
-    "total": 8123.63,
+    "subtotal": "7470.00",
+    "tax": "653.63",
+    "total": "8123.63",
     "line_items": [
       {
         "description": "Data pipeline setup",
         "quantity": 1,
-        "unit_price": 4200.0,
-        "total": 4200.0
+        "unit_price": "4200.00",
+        "total": "4200.00"
       },
       {
         "description": "Dashboard licence (annual)",
         "quantity": 3,
-        "unit_price": 590.0,
-        "total": 1770.0
+        "unit_price": "590.00",
+        "total": "1770.00"
       },
       {
         "description": "Onboarding workshop",
         "quantity": 2,
-        "unit_price": 750.0,
-        "total": 1500.0
+        "unit_price": "750.00",
+        "total": "1500.00"
       }
     ]
   }

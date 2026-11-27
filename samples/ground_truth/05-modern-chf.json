@@ -3,7 +3,12 @@
     "file": "05-modern-chf.pdf",
     "layout": "modern",
     "kind": "text-pdf",
-    "adversarial": false
+    "adversarial": false,
+    "synthetic": true,
+    "pages": 1,
+    "tags": [
+      "text-pdf"
+    ]
   },
   "expected": {
     "document_type": "invoice",
@@ -12,21 +17,21 @@
     "invoice_date": "2026-05-21",
     "due_date": null,
     "currency": "CHF",
-    "subtotal": 4126.5,
-    "tax": 334.25,
-    "total": 4460.75,
+    "subtotal": "4126.50",
+    "tax": "334.25",
+    "total": "4460.75",
     "line_items": [
       {
         "description": "Freight Zürich - Milan",
         "quantity": 3,
-        "unit_price": 1280.0,
-        "total": 3840.0
+        "unit_price": "1280.00",
+        "total": "3840.00"
       },
       {
         "description": "Customs handling",
         "quantity": 3,
-        "unit_price": 95.5,
-        "total": 286.5
+        "unit_price": "95.50",
+        "total": "286.50"
       }
     ]
   }

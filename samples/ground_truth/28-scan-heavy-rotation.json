@@ -1,0 +1,44 @@
+{
+  "meta": {
+    "file": "28-scan-heavy-rotation.jpg",
+    "layout": "modern",
+    "kind": "scan",
+    "adversarial": false,
+    "synthetic": true,
+    "pages": 1,
+    "tags": [
+      "scan"
+    ]
+  },
+  "expected": {
+    "document_type": "invoice",
+    "vendor": "Redwood Equipment Rentals",
+    "invoice_number": "RER-40981",
+    "invoice_date": "2026-07-21",
+    "due_date": "2026-08-05",
+    "currency": "USD",
+    "subtotal": "1670.00",
+    "tax": "146.13",
+    "total": "1816.13",
+    "line_items": [
+      {
+        "description": "Scissor lift rental (week)",
+        "quantity": 2,
+        "unit_price": "690.00",
+        "total": "1380.00"
+      },
+      {
+        "description": "Delivery and pickup",
+        "quantity": 1,
+        "unit_price": "180.00",
+        "total": "180.00"
+      },
+      {
+        "description": "Damage waiver",
+        "quantity": 2,
+        "unit_price": "55.00",
+        "total": "110.00"
+      }
+    ]
+  }
+}
