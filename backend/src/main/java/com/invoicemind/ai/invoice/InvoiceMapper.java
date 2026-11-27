@@ -1,5 +1,6 @@
 package com.invoicemind.ai.invoice;
 
+import com.invoicemind.ai.invoice.InvoiceDtos.ExtractCheck;
 import com.invoicemind.ai.invoice.InvoiceDtos.InvoiceDetail;
 import com.invoicemind.ai.invoice.InvoiceDtos.InvoiceSummary;
 import com.invoicemind.ai.invoice.InvoiceDtos.IssueDto;
@@ -45,7 +46,7 @@ public class InvoiceMapper {
         i.getVendorName(), i.getInvoiceNumber(), i.getInvoiceDate(), i.getDueDate(), i.getCurrency(),
         i.getSubtotal(), i.getTax(), i.getTotal(),
         i.getFieldConfidence(), i.getModelReviewReasons(), i.isInjectionSuspected(), i.isHumanReviewed(),
-        new OcrInfo(i.getOcrEngine(), i.getOcrConfidence(), i.getOcrPageCount()),
+        new OcrInfo(i.getOcrEngine(), i.getOcrConfidence(), i.getOcrPageCount(), i.getTextSource()), extractCheck(i),
         new UsageInfo(i.getLlmModel(), i.getInputTokens(), i.getOutputTokens(), i.getCostUsd()),
         i.getProcessingMs(), i.getFailureReason(),
         i.getUploadedBy(), names.getOrDefault(i.getUploadedBy(), "Unknown"),
@@ -55,6 +56,21 @@ public class InvoiceMapper {
             l.getUnitPrice(), l.getTotal())).toList(),
         i.getIssues().stream().map(x -> new IssueDto(x.getCode(), x.getSeverity(), x.getField(), x.getMessage())).toList(),
         permissions(i, viewer), i.getCreatedAt(), i.getUpdatedAt(), i.getVersion());
+  }
+
+  static ExtractCheck extractCheck(InvoiceEntity i) {
+    Map<String, Object> v = i.getExtractValidation();
+    if (v == null || !(v.get("status") instanceof String status)) return null;
+    int errors = 0, warnings = 0;
+    if (v.get("issues") instanceof List<?> issues) {
+      for (Object o : issues) {
+        if (o instanceof Map<?, ?> m) {
+          if ("error".equals(m.get("severity"))) errors++;
+          else warnings++;
+        }
+      }
+    }
+    return new ExtractCheck(status, errors, warnings);
   }
 
   public static Permissions permissions(InvoiceEntity i, AuthPrincipal p) {

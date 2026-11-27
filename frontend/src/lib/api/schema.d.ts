@@ -922,6 +922,13 @@ export interface components {
             /** Format: int64 */
             version?: number;
         };
+        ExtractCheck: {
+            status: string;
+            /** Format: int32 */
+            errors: number;
+            /** Format: int32 */
+            warnings: number;
+        };
         InvoiceDetail: {
             /** Format: uuid */
             id: string;
@@ -950,6 +957,7 @@ export interface components {
             injectionSuspected: boolean;
             humanReviewed: boolean;
             ocr: components["schemas"]["OcrInfo"];
+            extractCheck?: components["schemas"]["ExtractCheck"];
             usage: components["schemas"]["UsageInfo"];
             /** Format: int64 */
             processingMs?: number;
@@ -982,6 +990,7 @@ export interface components {
             confidence?: number;
             /** Format: int32 */
             pageCount?: number;
+            source?: string;
         };
         Permissions: {
             canEdit: boolean;

@@ -80,3 +80,27 @@ export function initials(name: string): string {
     .map((p) => p[0]?.toUpperCase() ?? "")
     .join("");
 }
+
+/** How the extract-service obtained the text: the PDF's own text layer, OCR of an image, or both. */
+export function textSourceLabel(source: string | null | undefined): string {
+  switch (source) {
+    case "text_layer":
+      return "PDF text layer";
+    case "ocr":
+      return "OCR (scan or photo)";
+    case "mixed":
+      return "Text layer + OCR";
+    default:
+      return "—";
+  }
+}
+
+/** One line for the extract-service's own first-pass check, e.g. "needs review · 1 error, 2 warnings". */
+export function extractCheckLabel(check: { status: string; errors: number; warnings: number } | null | undefined): string {
+  if (!check) return "—";
+  const status = check.status.replace("_", " ");
+  const parts: string[] = [];
+  if (check.errors) parts.push(`${check.errors} error${check.errors === 1 ? "" : "s"}`);
+  if (check.warnings) parts.push(`${check.warnings} warning${check.warnings === 1 ? "" : "s"}`);
+  return parts.length ? `${status} · ${parts.join(", ")}` : status;
+}

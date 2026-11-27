@@ -29,9 +29,8 @@ public record AppProperties(
 
   public record Storage(String root, long maxFileBytes) {}
 
-  public record Ai(@NotBlank String baseUrl, @NotBlank String token, int connectTimeoutMs, int ocrTimeoutMs,
-                   int extractTimeoutMs, int retryAttempts, long retryInitialBackoffMs,
-                   int circuitFailureRate, int circuitOpenSeconds) {}
+  /** The internal extract-service. One attempt per call; retries are the job queue's (see Processing). */
+  public record Ai(@NotBlank String baseUrl, @NotBlank String token, int connectTimeoutMs, int readTimeoutMs) {}
 
   /**
    * The Postgres job queue: {@code concurrency} jobs per backend instance, polled every {@code pollInterval};

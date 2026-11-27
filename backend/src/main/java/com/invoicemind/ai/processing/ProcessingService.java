@@ -4,7 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.invoicemind.ai.ai.AiClient;
 import com.invoicemind.ai.ai.AiClientException;
-import com.invoicemind.ai.ai.AiDtos.ExtractResponse;
+import com.invoicemind.ai.ai.AiDtos.InvoiceResult;
 import com.invoicemind.ai.ai.AiDtos.Extraction;
 import com.invoicemind.ai.ai.AiDtos.OcrResponse;
 import com.invoicemind.ai.audit.AuditService;
@@ -116,13 +116,12 @@ public class ProcessingService {
 
     try {
       byte[] file = storage.read(handle.storageKey());
-      OcrResponse ocr = ai.ocr(file, handle.filename());
-      if (ocr.text() == null || ocr.text().isBlank()) {
+      InvoiceResult result = ai.processInvoice(file, handle.filename());
+      if (result.ocr() == null || result.ocr().text() == null || result.ocr().text().isBlank()) {
         throw new ProcessingException("No text could be read from the document");
       }
-      ExtractResponse extraction = ai.extract(ocr.text());
-      if (extraction.extraction() == null) throw new ProcessingException("The AI service returned no extraction");
-      storeExtraction(invoiceId, ocr, extraction);
+      if (result.extraction() == null) throw new ProcessingException("The extraction service returned no extraction");
+      storeExtraction(invoiceId, result);
       finishValidation(invoiceId);
       return Outcome.done();
     } catch (AiClientException e) {
@@ -157,7 +156,8 @@ public class ProcessingService {
   private record InvoiceHandle(String storageKey, String filename) {}
 
   // ------------------------------------------------------------- stage 1
-  private void storeExtraction(UUID id, OcrResponse ocr, ExtractResponse response) {
+  private void storeExtraction(UUID id, InvoiceResult response) {
+    OcrResponse ocr = response.ocr();
     runWithVendorRetry(() -> tx.executeWithoutResult(s -> {
       InvoiceEntity inv = invoices.findById(id).orElseThrow(() -> new ProcessingException("Invoice was deleted"));
       Extraction e = response.extraction();
@@ -166,6 +166,9 @@ public class ProcessingService {
       inv.setOcrEngine(ocr.engine());
       inv.setOcrConfidence(BigDecimal.valueOf(clamp01(ocr.confidence())).setScale(4, RoundingMode.HALF_UP));
       inv.setOcrPageCount(ocr.pageCount());
+      inv.setTextSource(textSource(response.source()));
+      inv.setExtractValidation(response.validation() == null ? null
+          : mapper.convertValue(response.validation(), new TypeReference<Map<String, Object>>() {}));
 
       DocumentType type = DocumentType.parse(e.documentType());
       inv.setDocumentType(type);
@@ -191,7 +194,7 @@ public class ProcessingService {
         inv.setLlmModel(truncate(response.usage().model(), 100));
         inv.setInputTokens(response.usage().inputTokens());
         inv.setOutputTokens(response.usage().outputTokens());
-        inv.setCostUsd(BigDecimal.valueOf(response.usage().costUsd()).setScale(6, RoundingMode.HALF_UP));
+        inv.setCostUsd(response.usage().costUsd() == null ? null : response.usage().costUsd().setScale(6, RoundingMode.HALF_UP));
       }
       inv.setStatus(InvoiceStatus.EXTRACTED);
       invoices.saveAndFlush(inv);
@@ -266,6 +269,11 @@ public class ProcessingService {
   }
 
   // ------------------------------------------------------------- helpers
+  /** Only the three documented values are stored; anything else from the service is dropped. */
+  static String textSource(String source) {
+    return source != null && java.util.Set.of("text_layer", "ocr", "mixed").contains(source) ? source : null;
+  }
+
   /** Two invoices for a brand-new vendor processed concurrently race on the unique index; retry once. */
   private void runWithVendorRetry(Runnable work) {
     try {

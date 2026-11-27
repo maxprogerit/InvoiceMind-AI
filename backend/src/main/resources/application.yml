@@ -82,16 +82,11 @@ app:
       secret-key: ${S3_SECRET_KEY:}
       path-style: ${S3_PATH_STYLE:false} # true for MinIO
       create-bucket: ${S3_CREATE_BUCKET:false}
-  ai:
+  ai:                                      # the internal extract-service
     base-url: ${APP_AI_BASE_URL:http://localhost:8000}
     token: ${APP_AI_TOKEN}
     connect-timeout-ms: 5000
-    ocr-timeout-ms: 120000
-    extract-timeout-ms: 120000
-    retry-attempts: 3
-    retry-initial-backoff-ms: 1000
-    circuit-failure-rate: 50
-    circuit-open-seconds: 30
+    read-timeout-ms: 240000                # OCR of a multi-page scan plus the model call
   processing:                              # Postgres job queue (processing_jobs), see ProcessingWorker
     worker-enabled: ${APP_PROCESSING_WORKER_ENABLED:true}
     concurrency: ${APP_PROCESSING_CONCURRENCY:3}

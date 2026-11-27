@@ -22,7 +22,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ApiError } from "@/lib/api/client";
 import { useDeleteInvoice, useInvoice, useOcrText, useRetry } from "@/lib/api/hooks";
 import type { InvoiceDetail } from "@/lib/api/types";
-import { formatBytes, formatDateTime, formatDuration, formatPercent } from "@/lib/format";
+import { extractCheckLabel, formatBytes, formatDateTime, formatDuration, formatPercent, textSourceLabel } from "@/lib/format";
 
 function Meta({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -45,6 +45,8 @@ function ProcessingCard({ inv }: { inv: InvoiceDetail }) {
         <Meta label="Read with">
           {inv.ocr.engine ? `${inv.ocr.engine} · ${inv.ocr.pageCount ?? "?"} p · ${formatPercent(Number(inv.ocr.confidence ?? 0))}` : "—"}
         </Meta>
+        <Meta label="Text from">{textSourceLabel(inv.ocr.source)}</Meta>
+        <Meta label="Service pre-check">{extractCheckLabel(inv.extractCheck)}</Meta>
         <Meta label="AI model">{inv.usage.model ?? "—"}</Meta>
         <Meta label="Tokens">{inv.usage.inputTokens != null ? `${inv.usage.inputTokens} in · ${inv.usage.outputTokens} out` : "—"}</Meta>
         <Meta label="AI cost">{inv.usage.costUsd != null ? `$${Number(inv.usage.costUsd).toFixed(5)}` : "—"}</Meta>

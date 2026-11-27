@@ -13,9 +13,7 @@ app:
     root: ${java.io.tmpdir}/invoicemind-it-storage
   ai:
     token: test-token
-    retry-attempts: 2
-    retry-initial-backoff-ms: 20
-    circuit-failure-rate: 100
+    read-timeout-ms: 10000
   processing:
     poll-interval: PT0.1S
     retry-base: PT0.2S

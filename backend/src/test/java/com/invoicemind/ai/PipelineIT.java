@@ -234,9 +234,69 @@ class PipelineIT extends AbstractIntegrationTest {
     JsonNode failed = awaitStatus(s, invoice, "FAILED", "VALIDATED");
     assertThat(failed.get("status").asText()).isEqualTo("FAILED");
     assertThat(failed.get("failureReason").asText()).contains("rate limited");
-    // the job queue retried the job with backoff (max-attempts=5), each attempt with app.ai.retry-attempts=2
-    assertThat(FakeAiServiceForTests.extractCalls(sc)).isEqualTo(5 * 2);
+    // one call per job attempt: the job queue retried with backoff up to max-attempts (5), the client never retries
+    assertThat(FakeAiServiceForTests.extractCalls(sc)).isEqualTo(5);
     assertThat(jobs.statuses(invoice)).containsExactly("FAILED");
+  }
+
+  @Test
+  void aTransientOutageIsRetriedWithBackoffUntilItRecovers() {
+    Session s = api.registerOrg("Flaky Inc");
+    String sc = id("flaky");
+    Reply outage = Reply.json(504, Map.of("error", Map.of("code", "llm_timeout", "message", "The language model timed out")));
+    FakeAiServiceForTests.scenarioSequence(sc, FakeAiServiceForTests.okOcr(sc),
+        List.of(outage, outage, extraction("ACME GmbH", "INV-" + sc, "1000.00", "190.00", "1190.00")));
+
+    long started = System.nanoTime();
+    UUID invoice = upload(s, sc);
+    JsonNode done = awaitStatus(s, invoice, "VALIDATED", "NEEDS_REVIEW", "FAILED");
+    long elapsedMs = (System.nanoTime() - started) / 1_000_000;
+
+    assertThat(done.get("status").asText()).isEqualTo("VALIDATED");
+    assertThat(done.hasNonNull("failureReason")).isFalse();
+    assertThat(FakeAiServiceForTests.extractCalls(sc)).isEqualTo(3);
+    assertThat(jobs.statuses(invoice)).containsExactly("DONE");
+    // retry-base 0.2 s in the test profile: waits of 0.2 s and 0.4 s before attempts 2 and 3
+    assertThat(elapsedMs).isGreaterThanOrEqualTo(600);
+  }
+
+  @Test
+  void aClientErrorFromTheExtractServiceIsNotRetried() {
+    Session s = api.registerOrg("Broken File Inc");
+    String sc = id("broken");
+    FakeAiServiceForTests.scenario(sc,
+        Reply.json(422, Map.of("error", Map.of("code", "unreadable_file", "message", "File could not be decoded"))),
+        extraction("ACME GmbH", "INV-" + sc, "1000.00", "190.00", "1190.00"));
+
+    UUID invoice = upload(s, sc);
+    JsonNode failed = awaitStatus(s, invoice, "FAILED", "VALIDATED");
+    assertThat(failed.get("failureReason").asText()).isEqualTo("File could not be decoded");
+    assertThat(FakeAiServiceForTests.ocrCalls(sc)).isEqualTo(1);
+    assertThat(FakeAiServiceForTests.extractCalls(sc)).isZero();
+    assertThat(jobs.statuses(invoice)).containsExactly("FAILED");
+  }
+
+  @Test
+  void theExtractServiceResultIsMappedSourceChecksAndExactMoney() {
+    Session s = api.registerOrg("Mapping Inc");
+    String sc = id("mapping");
+    FakeAiServiceForTests.scenario(sc, FakeAiServiceForTests.okOcr(sc),
+        FakeAiServiceForTests.okExtraction("ACME GmbH", "INV-" + sc, "2026-03-14", "2026-04-13", "EUR",
+            "0.30", "0.06", "0.36", List.of(line("Bolt", "3", "0.10", "0.30")), false, false));
+    FakeAiServiceForTests.validation(sc, "needs_review", List.of(Map.of("code", "missing_optional_field",
+        "severity", "warning", "field", "tax", "message", "x"), Map.of("code", "total_mismatch", "severity", "error",
+        "field", "total", "message", "y")));
+
+    UUID invoice = upload(s, sc);
+    JsonNode inv = awaitStatus(s, invoice, "VALIDATED", "NEEDS_REVIEW", "FAILED");
+    assertThat(inv.path("ocr").path("source").asText()).isEqualTo("text_layer");
+    assertThat(inv.path("extractCheck").path("status").asText()).isEqualTo("needs_review");
+    assertThat(inv.path("extractCheck").path("errors").asInt()).isEqualTo(1);
+    assertThat(inv.path("extractCheck").path("warnings").asInt()).isEqualTo(1);
+    // Java re-validates on its own: 0.30 + 0.06 = 0.36 is consistent, so the invoice is VALIDATED
+    assertThat(inv.get("status").asText()).isEqualTo("VALIDATED");
+    assertThat(new BigDecimal(inv.get("total").asText())).isEqualByComparingTo("0.36");
+    assertThat(new BigDecimal(inv.path("lineItems").get(0).get("unitPrice").asText())).isEqualByComparingTo("0.10");
   }
 
   @Test

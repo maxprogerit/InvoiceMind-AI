@@ -74,6 +74,20 @@ stateDiagram-v2
   REJECTED --> [*]
 ```
 
+Status names and the processing stages they stand for:
+
+| Status | Stage | Set by |
+|---|---|---|
+| `UPLOADED` | received: file stored, SHA-256 computed, job queued (same transaction) | upload / e-mail intake |
+| `PROCESSING` | extracting: a worker claimed the job and called `POST /invoices` on the extract-service | `ProcessingWorker` |
+| `EXTRACTED` | fields stored, Java validation running | `ProcessingService` |
+| `VALIDATED` | valid: every deterministic check passed | Java validator |
+| `NEEDS_REVIEW` | at least one ERROR (sums, missing key field, duplicate, model or injection flag, low confidence) | Java validator |
+| `FAILED` | permanent error (4xx, no text, model not configured) or transient errors on every attempt | worker |
+
+A transient failure (timeout, 502/503/504) puts the invoice back to `UPLOADED` and the job back in the queue with
+exponential backoff; it does not show up as `FAILED` unless all attempts are used.
+
 Status changes are pushed to the browser over STOMP and also invalidate the TanStack Query cache, so
 lists, the detail page and the analytics update without polling. If the socket is down the UI falls back
 to polling while an invoice is in flight.
@@ -93,19 +107,18 @@ sequenceDiagram
 
   U->>API: POST /api/v1/invoices (multipart)
   API->>API: size, magic bytes, PDF active content, filename
-  API->>PG: INSERT invoice (UPLOADED) + file to storage
-  API-->>K: after commit: invoice.uploaded
+  API->>PG: INSERT invoice (UPLOADED) + processing_jobs row, file to storage (one transaction)
   API-->>U: 202 Accepted
-  K->>C: invoice.uploaded
-  C->>PG: UPDATE ... SET PROCESSING WHERE status = UPLOADED (claim)
+  C->>K: claim due jobs (FOR UPDATE SKIP LOCKED)
+  C->>PG: UPDATE ... SET PROCESSING WHERE status = UPLOADED (claim the invoice)
   C->>WS: status PROCESSING
-  C->>AI: POST /ocr (file)
-  AI-->>C: text, per-page confidence, method
-  C->>AI: POST /extract (text)
-  AI->>O: responses.parse (strict schema, no tools)
+  C->>AI: POST /invoices (file, X-Internal-Token)
+  AI->>AI: text layer or Tesseract per page
+  AI->>O: responses.parse (strict schema, money as strings, no tools)
   O-->>AI: structured extraction
-  AI->>AI: date/currency cleanup, grounding against OCR text, injection check
-  AI-->>C: extraction, usage, cost
+  AI->>AI: date/currency cleanup, grounding against the text, injection check, Decimal validation
+  AI-->>C: source, text, extraction, first-pass validation, usage, cost
+  Note over C,AI: timeout / 5xx: job back in the queue with backoff; 4xx: FAILED at once
   C->>PG: store fields, line items, tokens, cost (EXTRACTED)
   C->>C: deterministic validation
   C->>PG: VALIDATED or NEEDS_REVIEW + issues, audit, notifications
@@ -142,8 +155,8 @@ absorb; neither is the case here.
 ### Why a separate `extract-service`
 
 OCR (Tesseract, Poppler) and the OpenAI client are Python-native, need system binaries, and change at a
-different pace than the business backend. Keeping them behind two small HTTP contracts (`/ocr`, `/extract`,
-plus `/embed`, `/explain`) means the backend can be tested with a stub, the OCR engine can be swapped
+different pace than the business backend. Keeping them behind small HTTP contracts (`POST /invoices` for documents, `/ocr` for
+knowledge-base PDFs, `/embed`, `/explain`) means the backend can be tested with a stub, the OCR engine can be swapped
 (`app/ocr/base.py` is the interface; Tesseract implements it) and all LLM spending is metered in one place. The backend
 authenticates to it with a shared internal token; the service is not published to the network.
 

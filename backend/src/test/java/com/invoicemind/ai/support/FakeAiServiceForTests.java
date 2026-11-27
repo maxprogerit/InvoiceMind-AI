@@ -15,9 +15,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * TEST DOUBLE of the ai-service (never used outside tests). Behaviour is selected per request by a
- * marker embedded in the uploaded "document": {@code SCENARIO:<id>}. /ocr echoes the marker back in
- * its text and /extract finds it again, so scenarios are independent and safe to run in parallel.
+ * TEST DOUBLE of the extract-service (never used outside tests). Behaviour is selected per request by a
+ * marker embedded in the uploaded "document": {@code SCENARIO:<id>}. A scenario has an OCR reply and an
+ * extraction reply; POST /invoices plays them in order like the real service (text first, then the model),
+ * so scenarios are independent and safe to run in parallel.
  */
 public final class FakeAiServiceForTests {
   public record Reply(int status, String body) {
@@ -34,6 +35,8 @@ public final class FakeAiServiceForTests {
   private static final ObjectMapper MAPPER = new ObjectMapper();
   private static final Map<String, Reply> OCR = new ConcurrentHashMap<>();
   private static final Map<String, Reply> EXTRACT = new ConcurrentHashMap<>();
+  private static final Map<String, Object> VALIDATION = new ConcurrentHashMap<>();
+  private static final Map<String, List<Reply>> EXTRACT_SEQUENCE = new ConcurrentHashMap<>();
   private static final Map<String, AtomicInteger> OCR_CALLS = new ConcurrentHashMap<>();
   private static final Map<String, AtomicInteger> EXTRACT_CALLS = new ConcurrentHashMap<>();
   private static final Map<String, String> EXTRACT_REQUEST_TEXT = new ConcurrentHashMap<>();
@@ -48,6 +51,17 @@ public final class FakeAiServiceForTests {
   public static void scenario(String id, Reply ocr, Reply extract) {
     OCR.put(id, ocr);
     EXTRACT.put(id, extract);
+  }
+
+  /** Extraction replies in order, one per call; the last one repeats (e.g. 503, 503, 200). */
+  public static void scenarioSequence(String id, Reply ocr, List<Reply> extracts) {
+    OCR.put(id, ocr);
+    EXTRACT_SEQUENCE.put(id, List.copyOf(extracts));
+  }
+
+  /** The extract-service's own validation result for a scenario (default: valid, no issues). */
+  public static void validation(String id, String status, List<Map<String, Object>> issues) {
+    VALIDATION.put(id, Map.of("status", status, "issues", issues));
   }
 
   public static int ocrCalls(String id) { return OCR_CALLS.computeIfAbsent(id, k -> new AtomicInteger()).get(); }
@@ -90,23 +104,24 @@ public final class FakeAiServiceForTests {
     extraction.put("due_date", due);
     extraction.put("currency", currency);
     extraction.put("line_items", lines);
-    extraction.put("subtotal", subtotal == null ? null : new java.math.BigDecimal(subtotal));
-    extraction.put("tax", tax == null ? null : new java.math.BigDecimal(tax));
-    extraction.put("total", total == null ? null : new java.math.BigDecimal(total));
+    // money travels as decimal strings, exactly like the real service
+    extraction.put("subtotal", subtotal);
+    extraction.put("tax", tax);
+    extraction.put("total", total);
     extraction.put("confidence", confidence);
     extraction.put("needs_review", needsReview);
     extraction.put("review_reasons", needsReview ? List.of("flagged by the model") : List.of());
     return Reply.json(200, Map.of("extraction", extraction, "injection_suspected", injection,
-        "usage", Map.of("model", "test-model", "input_tokens", 1200, "output_tokens", 300, "cost_usd", 0.00027,
+        "usage", Map.of("model", "test-model", "input_tokens", 1200, "output_tokens", 300, "cost_usd", "0.000270",
             "latency_ms", 5)));
   }
 
   public static Map<String, Object> line(String description, String qty, String unit, String total) {
     Map<String, Object> m = new LinkedHashMap<>();
     m.put("description", description);
-    m.put("quantity", new java.math.BigDecimal(qty));
-    m.put("unit_price", new java.math.BigDecimal(unit));
-    m.put("total", new java.math.BigDecimal(total));
+    m.put("quantity", qty);
+    m.put("unit_price", unit);
+    m.put("total", total);
     return m;
   }
 
@@ -115,7 +130,7 @@ public final class FakeAiServiceForTests {
     try {
       HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
       server.createContext("/ocr", ex -> handle(ex, true));
-      server.createContext("/extract", ex -> handle(ex, false));
+      server.createContext("/invoices", FakeAiServiceForTests::invoices);
       server.createContext("/embed", ex -> knowledge(ex, true));
       server.createContext("/explain", ex -> knowledge(ex, false));
       server.setExecutor(java.util.concurrent.Executors.newFixedThreadPool(8));
@@ -154,6 +169,61 @@ public final class FakeAiServiceForTests {
     }
   }
 
+  /** POST /invoices: the OCR reply, then (if there is text) the extraction reply, merged like the real service. */
+  private static void invoices(HttpExchange ex) throws IOException {
+    try (ex) {
+      String body = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.ISO_8859_1);
+      Reply reply;
+      if (!"test-token".equals(ex.getRequestHeaders().getFirst("X-Internal-Token"))) {
+        reply = Reply.json(401, Map.of("error", Map.of("code", "unauthorized", "message", "Missing or invalid internal token")));
+      } else {
+        Matcher m = MARKER.matcher(body);
+        String id = m.find() ? m.group(1) : "none";
+        String traceparent = ex.getRequestHeaders().getFirst("traceparent");
+        if (traceparent != null) {
+          TRACEPARENTS.put("ocr:" + id, traceparent);
+          TRACEPARENTS.put("extract:" + id, traceparent);
+        }
+        reply = merged(id);
+      }
+      byte[] out = reply.body().getBytes(StandardCharsets.UTF_8);
+      ex.getResponseHeaders().add("Content-Type", "application/json");
+      ex.sendResponseHeaders(reply.status(), out.length);
+      ex.getResponseBody().write(out);
+    }
+  }
+
+  private static Reply merged(String id) throws IOException {
+    OCR_CALLS.computeIfAbsent(id, k -> new AtomicInteger()).incrementAndGet();
+    Reply ocr = OCR.getOrDefault(id, Reply.json(404, Map.of("error", Map.of("code", "no_scenario", "message", id))));
+    if (ocr.status() != 200) return ocr;
+    var ocrJson = MAPPER.readTree(ocr.body());
+    String text = ocrJson.path("text").asText("");
+    if (text.isBlank()) {
+      return Reply.json(422, Map.of("error", Map.of("code", "no_text", "message", "No text could be read from the document")));
+    }
+    int call = EXTRACT_CALLS.computeIfAbsent(id, k -> new AtomicInteger()).incrementAndGet();
+    EXTRACT_REQUEST_TEXT.put(id, text);
+    List<Reply> sequence = EXTRACT_SEQUENCE.get(id);
+    Reply extract = sequence != null ? sequence.get(Math.min(call, sequence.size()) - 1)
+        : EXTRACT.getOrDefault(id, Reply.json(404, Map.of("error", Map.of("code", "no_scenario", "message", id))));
+    if (extract.status() != 200) return extract;
+    var extractJson = MAPPER.readTree(extract.body());
+    boolean allText = true, allOcr = true;
+    for (var page : ocrJson.path("pages")) {
+      allText &= "text-layer".equals(page.path("method").asText());
+      allOcr &= "ocr".equals(page.path("method").asText());
+    }
+    Map<String, Object> result = new LinkedHashMap<>();
+    result.put("source", allText ? "text_layer" : allOcr ? "ocr" : "mixed");
+    result.put("ocr", ocrJson);
+    result.put("extraction", extractJson.path("extraction"));
+    result.put("validation", VALIDATION.getOrDefault(id, Map.of("status", "valid", "issues", List.of())));
+    result.put("injection_suspected", extractJson.path("injection_suspected").asBoolean(false));
+    result.put("usage", extractJson.path("usage"));
+    return Reply.json(200, result);
+  }
+
   /** Deterministic bag-of-words embedding (feature hashing, 1536 dims, L2-normalised): similar wording -> similar vectors. */
   static List<Double> hashEmbedding(String text) {
     double[] v = new double[1536];
@@ -177,7 +247,7 @@ public final class FakeAiServiceForTests {
         List<List<Double>> vectors = new java.util.ArrayList<>();
         texts.forEach(t -> vectors.add(hashEmbedding(t.asText())));
         reply = Reply.json(200, Map.of("vectors", vectors, "model", "test-embedding", "dimensions", 1536,
-            "input_tokens", 5 * vectors.size(), "cost_usd", 0.0));
+            "input_tokens", 5 * vectors.size(), "cost_usd", "0"));
       } else {
         LAST_EXPLAIN.set(new String(raw, StandardCharsets.UTF_8));
         var passages = MAPPER.readTree(raw).path("passages");
@@ -186,7 +256,7 @@ public final class FakeAiServiceForTests {
             : "Per rule [" + passages.get(0).path("id").asInt() + "]: " + passages.get(0).path("text").asText().substring(0, Math.min(100, passages.get(0).path("text").asText().length()));
         reply = Reply.json(200, Map.of("answer", answer, "citations", none ? List.of() : List.of(passages.get(0).path("id").asInt()),
             "insufficient_context", none, "injection_suspected", false,
-            "usage", Map.of("model", "test-model", "input_tokens", 300, "output_tokens", 60, "cost_usd", 0.0, "latency_ms", 3)));
+            "usage", Map.of("model", "test-model", "input_tokens", 300, "output_tokens", 60, "cost_usd", "0", "latency_ms", 3)));
       }
       byte[] out = reply.body().getBytes(StandardCharsets.UTF_8);
       ex.getResponseHeaders().add("Content-Type", "application/json");

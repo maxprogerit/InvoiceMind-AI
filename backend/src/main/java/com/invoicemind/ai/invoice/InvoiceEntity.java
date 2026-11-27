@@ -63,6 +63,11 @@ public class InvoiceEntity {
   private Integer ocrPageCount;
   @JdbcTypeCode(SqlTypes.JSON)
   private Map<String, Object> extractionJson;
+  /** How the text was obtained: text_layer, ocr or mixed (per page). */
+  private String textSource;
+  /** The extract-service's own first-pass validation ({status, issues}); the Java validator decides the status. */
+  @JdbcTypeCode(SqlTypes.JSON)
+  private Map<String, Object> extractValidation;
   private String llmModel;
   private Integer inputTokens;
   private Integer outputTokens;

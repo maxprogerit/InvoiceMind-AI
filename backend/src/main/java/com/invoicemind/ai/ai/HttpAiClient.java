@@ -5,22 +5,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.invoicemind.ai.ai.AiDtos.EmbedResponse;
 import com.invoicemind.ai.ai.AiDtos.ExplainRequest;
 import com.invoicemind.ai.ai.AiDtos.ExplainResponse;
-import com.invoicemind.ai.ai.AiDtos.ExtractResponse;
+import com.invoicemind.ai.ai.AiDtos.InvoiceResult;
 import com.invoicemind.ai.ai.AiDtos.OcrResponse;
 import com.invoicemind.ai.common.RequestIdFilter;
 import com.invoicemind.ai.config.AppProperties;
-import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
-import io.github.resilience4j.circuitbreaker.CircuitBreaker;
-import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
-import io.github.resilience4j.core.IntervalFunction;
-import io.github.resilience4j.retry.Retry;
-import io.github.resilience4j.retry.RetryConfig;
 import java.net.http.HttpClient;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Supplier;
-import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpStatusCode;
@@ -32,18 +26,22 @@ import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 
 /**
- * HTTP client for the ai-service with timeouts, exponential-backoff retries on transient failures
- * and a circuit breaker: when the service is down, calls fail fast and the invoice becomes FAILED
- * (retryable by the user) instead of tying up consumer threads.
+ * HTTP client for the internal extract-service. One attempt per call: retries belong to the job queue, which
+ * persists them with backoff across restarts (see {@code ProcessingWorker}). Each failure is classified here:
+ * <ul>
+ *   <li>timeouts, connection errors, 5xx and 429: {@link AiClientException#retryable() retryable};</li>
+ *   <li>4xx (bad file, unreadable document, too many pages ...): permanent, retrying cannot help;</li>
+ *   <li>5xx that signal misconfiguration ({@link #PERMANENT_CODES}): permanent as well.</li>
+ * </ul>
  */
-@Slf4j
 @Component
 public class HttpAiClient implements AiClient {
+  /** 5xx responses that retrying cannot fix: they need a person to change the configuration. */
+  static final Set<String> PERMANENT_CODES = Set.of("llm_not_configured", "llm_misconfigured", "model_refused", "unauthorized");
+
   private final RestClient http;
   private final ObjectMapper mapper;
   private final String token;
-  private final Retry retry;
-  private final CircuitBreaker breaker;
 
   /** The builder must be the injected one: it carries the observation (tracing) customizer, so calls propagate the trace. */
   public HttpAiClient(AppProperties props, ObjectMapper mapper, RestClient.Builder restClientBuilder) {
@@ -55,61 +53,36 @@ public class HttpAiClient implements AiClient {
         .connectTimeout(Duration.ofMillis(ai.connectTimeoutMs()))
         .build();
     var factory = new JdkClientHttpRequestFactory(client);
-    factory.setReadTimeout(Duration.ofMillis(Math.max(ai.ocrTimeoutMs(), ai.extractTimeoutMs())));
+    factory.setReadTimeout(Duration.ofMillis(ai.readTimeoutMs()));
     this.http = restClientBuilder.baseUrl(ai.baseUrl()).requestFactory(factory).build();
+  }
 
-    this.breaker = CircuitBreaker.of("ai-service", CircuitBreakerConfig.custom()
-        .failureRateThreshold(ai.circuitFailureRate())
-        .slidingWindowSize(10)
-        .minimumNumberOfCalls(5)
-        .waitDurationInOpenState(Duration.ofSeconds(ai.circuitOpenSeconds()))
-        .recordException(HttpAiClient::isTransient)
-        .build());
-    this.retry = Retry.of("ai-service", RetryConfig.custom()
-        .maxAttempts(ai.retryAttempts())
-        .intervalFunction(IntervalFunction.ofExponentialBackoff(ai.retryInitialBackoffMs(), 2.0))
-        .retryOnException(HttpAiClient::isTransient)
-        .build());
-    this.retry.getEventPublisher().onRetry(e -> log.warn("Retrying ai-service call (attempt {}): {}",
-        e.getNumberOfRetryAttempts(), e.getLastThrowable().getMessage()));
+  @Override
+  public InvoiceResult processInvoice(byte[] data, String filename) {
+    return call(() -> http.post().uri("/invoices")
+        .headers(h -> { h.set("X-Internal-Token", token); h.set(RequestIdFilter.HEADER, requestId()); })
+        .contentType(MediaType.MULTIPART_FORM_DATA)
+        .body(file(data, filename))
+        .retrieve()
+        .onStatus(HttpStatusCode::isError, (req, res) -> { throw toException(res.getStatusCode().value(), res.getBody().readAllBytes()); })
+        .body(InvoiceResult.class));
   }
 
   @Override
   public OcrResponse ocr(byte[] data, String filename) {
-    return call(() -> {
-      MultipartBodyBuilder body = new MultipartBodyBuilder();
-      body.part("file", new ByteArrayResource(data) {
-        @Override
-        public String getFilename() { return filename; }
-      }).contentType(MediaType.APPLICATION_OCTET_STREAM);
-      return http.post().uri("/ocr")
-          .header("X-Internal-Token", token)
-          .header(RequestIdFilter.HEADER, requestId())
-          .contentType(MediaType.MULTIPART_FORM_DATA)
-          .body(body.build())
-          .retrieve()
-          .onStatus(HttpStatusCode::isError, (req, res) -> { throw toException(res.getStatusCode().value(), res.getBody().readAllBytes()); })
-          .body(OcrResponse.class);
-    });
-  }
-
-  @Override
-  public ExtractResponse extract(String text) {
-    return call(() -> http.post().uri("/extract")
-        .header("X-Internal-Token", token)
-        .header(RequestIdFilter.HEADER, requestId())
-        .contentType(MediaType.APPLICATION_JSON)
-        .body(Map.of("text", text))
+    return call(() -> http.post().uri("/ocr")
+        .headers(h -> { h.set("X-Internal-Token", token); h.set(RequestIdFilter.HEADER, requestId()); })
+        .contentType(MediaType.MULTIPART_FORM_DATA)
+        .body(file(data, filename))
         .retrieve()
         .onStatus(HttpStatusCode::isError, (req, res) -> { throw toException(res.getStatusCode().value(), res.getBody().readAllBytes()); })
-        .body(ExtractResponse.class));
+        .body(OcrResponse.class));
   }
 
   @Override
   public EmbedResponse embed(List<String> texts) {
     return call(() -> http.post().uri("/embed")
-        .header("X-Internal-Token", token)
-        .header(RequestIdFilter.HEADER, requestId())
+        .headers(h -> { h.set("X-Internal-Token", token); h.set(RequestIdFilter.HEADER, requestId()); })
         .contentType(MediaType.APPLICATION_JSON)
         .body(Map.of("texts", texts))
         .retrieve()
@@ -120,8 +93,7 @@ public class HttpAiClient implements AiClient {
   @Override
   public ExplainResponse explain(ExplainRequest request) {
     return call(() -> http.post().uri("/explain")
-        .header("X-Internal-Token", token)
-        .header(RequestIdFilter.HEADER, requestId())
+        .headers(h -> { h.set("X-Internal-Token", token); h.set(RequestIdFilter.HEADER, requestId()); })
         .contentType(MediaType.APPLICATION_JSON)
         .body(request)
         .retrieve()
@@ -129,27 +101,31 @@ public class HttpAiClient implements AiClient {
         .body(ExplainResponse.class));
   }
 
-  private <T> T call(Supplier<T> supplier) {
-    Supplier<T> guarded = Retry.decorateSupplier(retry, CircuitBreaker.decorateSupplier(breaker, () -> {
-      try {
-        return supplier.get();
-      } catch (ResourceAccessException e) { // connect/read timeouts, connection refused
-        throw new AiClientException(0, "ai_unreachable", "The AI service could not be reached", true, e);
-      }
-    }));
-    try {
-      T result = guarded.get();
-      if (result == null) throw new AiClientException(502, "empty_response", "The AI service returned an empty response", false, null);
-      return result;
-    } catch (CallNotPermittedException e) {
-      throw new AiClientException(503, "ai_circuit_open",
-          "The AI service is temporarily unavailable, please retry in a minute", false, e);
-    }
+  private static Object file(byte[] data, String filename) {
+    MultipartBodyBuilder body = new MultipartBodyBuilder();
+    body.part("file", new ByteArrayResource(data) {
+      @Override
+      public String getFilename() { return filename; }
+    }).contentType(MediaType.APPLICATION_OCTET_STREAM);
+    return body.build();
   }
 
-  private AiClientException toException(int status, byte[] body) {
+  private <T> T call(Supplier<T> supplier) {
+    T result;
+    try {
+      result = supplier.get();
+    } catch (ResourceAccessException e) { // connect/read timeouts, connection refused
+      throw new AiClientException(0, "ai_unreachable", "The extraction service could not be reached", true, e);
+    }
+    if (result == null) {
+      throw new AiClientException(502, "empty_response", "The extraction service returned an empty response", true, null);
+    }
+    return result;
+  }
+
+  AiClientException toException(int status, byte[] body) {
     String code = "ai_error";
-    String message = "The AI service returned HTTP " + status;
+    String message = "The extraction service returned HTTP " + status;
     try {
       JsonNode error = mapper.readTree(body).path("error");
       if (error.hasNonNull("code")) code = error.get("code").asText();
@@ -157,16 +133,8 @@ public class HttpAiClient implements AiClient {
     } catch (Exception ignored) {
       // body was not our JSON error envelope; keep the generic message
     }
-    boolean serverSide = status == 502 || status == 503 || status == 504;
-    return new AiClientException(status, code, message, serverSide && !PERMANENT_CODES.contains(code), null);
-  }
-
-  /** 5xx responses that retrying cannot fix (misconfiguration): they must neither be retried nor trip the breaker. */
-  private static final java.util.Set<String> PERMANENT_CODES =
-      java.util.Set.of("llm_not_configured", "llm_misconfigured", "model_refused", "unauthorized");
-
-  private static boolean isTransient(Throwable t) {
-    return t instanceof AiClientException a && a.retryable();
+    boolean transientStatus = status >= 500 || status == 429;
+    return new AiClientException(status, code, message, transientStatus && !PERMANENT_CODES.contains(code), null);
   }
 
   private static String requestId() {

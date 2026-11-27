@@ -1,6 +1,16 @@
 import { describe, expect, it } from "vitest";
 
-import { formatAmount, formatBytes, formatDate, formatDuration, formatMoney, formatPercent, initials } from "./format";
+import {
+  extractCheckLabel,
+  formatAmount,
+  formatBytes,
+  formatDate,
+  formatDuration,
+  formatMoney,
+  formatPercent,
+  initials,
+  textSourceLabel,
+} from "./format";
 
 describe("formatting", () => {
   it("formats money with a currency symbol and falls back for unknown currencies", () => {
@@ -36,5 +46,20 @@ describe("formatting", () => {
     expect(initials("Demo Admin")).toBe("DA");
     expect(initials("  single  ")).toBe("S");
     expect(initials("a b c")).toBe("AB");
+  });
+});
+
+describe("extract-service labels", () => {
+  it("names the text source", () => {
+    expect(textSourceLabel("text_layer")).toBe("PDF text layer");
+    expect(textSourceLabel("ocr")).toBe("OCR (scan or photo)");
+    expect(textSourceLabel("mixed")).toBe("Text layer + OCR");
+    expect(textSourceLabel(null)).toBe("—");
+  });
+
+  it("summarises the first-pass check", () => {
+    expect(extractCheckLabel({ status: "valid", errors: 0, warnings: 0 })).toBe("valid");
+    expect(extractCheckLabel({ status: "needs_review", errors: 1, warnings: 2 })).toBe("needs review · 1 error, 2 warnings");
+    expect(extractCheckLabel(null)).toBe("—");
   });
 });

@@ -38,7 +38,11 @@ public final class InvoiceDtos {
       @NotNull UUID uploadedBy, @NotNull String uploadedByName, @NotNull int errorCount, @NotNull int warningCount,
       @NotNull Instant createdAt) {}
 
-  public record OcrInfo(String engine, BigDecimal confidence, Integer pageCount) {}
+  /** {@code source}: text_layer (PDF text read directly), ocr (Tesseract) or mixed (both, per page). */
+  public record OcrInfo(String engine, BigDecimal confidence, Integer pageCount, String source) {}
+
+  /** The extract-service's own first pass (valid / needs_review / failed); informational, Java decides the status. */
+  public record ExtractCheck(@NotNull String status, @NotNull int errors, @NotNull int warnings) {}
 
   public record UsageInfo(String model, Integer inputTokens, Integer outputTokens, BigDecimal costUsd) {}
 
@@ -48,7 +52,7 @@ public final class InvoiceDtos {
       String vendorName, String invoiceNumber, LocalDate invoiceDate, LocalDate dueDate, String currency,
       BigDecimal subtotal, BigDecimal tax, BigDecimal total,
       Map<String, Double> fieldConfidence, List<String> modelReviewReasons, @NotNull boolean injectionSuspected,
-      @NotNull boolean humanReviewed, @NotNull OcrInfo ocr, @NotNull UsageInfo usage, Long processingMs,
+      @NotNull boolean humanReviewed, @NotNull OcrInfo ocr, ExtractCheck extractCheck, @NotNull UsageInfo usage, Long processingMs,
       String failureReason,
       @NotNull UUID uploadedBy, @NotNull String uploadedByName, String decidedByName, Instant decidedAt,
       String decisionComment,
