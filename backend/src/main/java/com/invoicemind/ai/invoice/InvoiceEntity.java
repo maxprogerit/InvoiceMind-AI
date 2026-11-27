@@ -38,6 +38,8 @@ public class InvoiceEntity {
   @Enumerated(EnumType.STRING)
   private DocumentType documentType = DocumentType.INVOICE;
   private String vendorName;
+  /** The seller's tax / VAT id as extracted (normalised); used to match the vendor. */
+  private String vendorTaxId;
   private String invoiceNumber;
   private LocalDate invoiceDate;
   private LocalDate dueDate;
@@ -63,6 +65,15 @@ public class InvoiceEntity {
   private Integer ocrPageCount;
   @JdbcTypeCode(SqlTypes.JSON)
   private Map<String, Object> extractionJson;
+  // duplicate detection (see DuplicateStatus)
+  @Enumerated(EnumType.STRING)
+  private DuplicateStatus duplicateStatus = DuplicateStatus.NONE;
+  private UUID duplicateOf;
+  private UUID duplicateClearedBy;
+  private Instant duplicateClearedAt;
+  /** Extraction copied from this earlier invoice with the identical file: the model was not called again. */
+  private UUID reusedFrom;
+
   /** How the text was obtained: text_layer, ocr or mixed (per page). */
   private String textSource;
   /** The extract-service's own first-pass validation ({status, issues}); the Java validator decides the status. */

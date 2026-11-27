@@ -125,6 +125,29 @@ sequenceDiagram
   C->>WS: status + notification
 ```
 
+## Vendors and duplicates
+
+The point of the product is that nobody pays the same bill twice, so duplicates are recognised by meaning, with plain
+deterministic rules (`InvoiceValidator.duplicates`, `VendorService.match`); the model only supplies the fields.
+
+**Vendor matching**, in this order: (1) the seller's tax / VAT id, normalised (`"VAT: DE 811 234 567"` ->
+`DE811234567`), exact match; (2) the normalised name (case, accents and punctuation ignored) equals a vendor's name
+or one of its aliases, and that vendor's tax id is unknown or the same; (3) otherwise a new vendor is created as
+`UNVERIFIED`. The extract-service drops a tax id that is not printed in the document, because a made-up id would
+attach the invoice to the wrong vendor. A vendor stays `UNVERIFIED` until a person confirms it on *Vendors* or on the
+invoice; until then its invoices carry a `VENDOR_UNVERIFIED` warning and cannot be approved (fake-supplier fraud).
+
+**Duplicate rules**, strongest first; only *older* invoices count, so the original is never flagged because of its copy:
+
+| Rule | Result | What a person can do |
+|---|---|---|
+| same vendor + same invoice number (also a re-scan or a resend as a different file) | `DUPLICATE`, approval blocked | reject or delete |
+| byte-identical file (same SHA-256) | `DUPLICATE`; the stored extraction is reused, the model is **not** called again | reject or delete |
+| same vendor + same total and currency, invoice date within `app.duplicates.window-days` (7), different number | `POSSIBLE_DUPLICATE`, approval blocked until decided | "separate invoice" (clears it for good, audited) or "reject as duplicate" |
+
+Two identical files uploaded at the same moment: the later job waits (backoff) for the first one's result instead of
+calling the model a second time. Duplicate checks never cross organisations.
+
 ## Decisions
 
 ### Why a PostgreSQL job queue (and no Kafka or Redis)

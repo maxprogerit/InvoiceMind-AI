@@ -14,10 +14,11 @@ import org.junit.jupiter.api.Test;
 /** Authorisation tests: organisations are isolated, and USERs only see their own uploads. */
 class TenancyIT extends AbstractIntegrationTest {
 
+  /** A consistent invoice from its own vendor, so two uploads are never possible duplicates of each other. */
   private String scenario() {
     String id = "tenancy-" + UUID.randomUUID().toString().substring(0, 8);
     FakeAiServiceForTests.scenario(id, FakeAiServiceForTests.okOcr(id), FakeAiServiceForTests.okExtraction(
-        "ACME GmbH", "T-" + id, "2026-03-14", "2026-04-13", "EUR", "1000.00", "190.00", "1190.00",
+        "ACME GmbH " + id, "T-" + id, "2026-03-14", "2026-04-13", "EUR", "1000.00", "190.00", "1190.00",
         List.of(FakeAiServiceForTests.line("Consulting", "10", "100.00", "1000.00")), false, false));
     return id;
   }
@@ -51,7 +52,7 @@ class TenancyIT extends AbstractIntegrationTest {
     // the owner still sees it untouched
     Resp own = api.get(path, orgA.token());
     assertThat(own.json().get("status").asText()).isEqualTo("VALIDATED");
-    assertThat(own.json().get("vendorName").asText()).isEqualTo("ACME GmbH");
+    assertThat(own.json().get("vendorName").asText()).startsWith("ACME GmbH");
   }
 
   @Test

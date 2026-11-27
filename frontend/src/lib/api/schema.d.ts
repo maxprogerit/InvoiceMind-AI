@@ -4,6 +4,22 @@
  */
 
 export interface paths {
+    "/api/v1/vendors/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/organization": {
         parameters: {
             query?: never;
@@ -28,7 +44,7 @@ export interface paths {
             cookie?: never;
         };
         get: operations["get"];
-        put: operations["update"];
+        put: operations["update_1"];
         post?: never;
         delete: operations["delete"];
         options?: never;
@@ -126,6 +142,38 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["retry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vendors/{id}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["verify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vendors/{id}/aliases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["addAlias"];
         delete?: never;
         options?: never;
         head?: never;
@@ -286,6 +334,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["explain"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/invoices/{id}/duplicate-decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["decideDuplicate"];
         delete?: never;
         options?: never;
         head?: never;
@@ -481,7 +545,7 @@ export interface paths {
         delete: operations["delete_1"];
         options?: never;
         head?: never;
-        patch: operations["update_1"];
+        patch: operations["update_2"];
         trace?: never;
     };
     "/api/v1/users/{id}": {
@@ -497,7 +561,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch: operations["update_2"];
+        patch: operations["update_3"];
         trace?: never;
     };
     "/api/v1/webhooks/{id}/deliveries": {
@@ -532,7 +596,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/notifications": {
+    "/api/v1/vendors": {
         parameters: {
             query?: never;
             header?: never;
@@ -540,6 +604,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["list_4"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/notifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_5"];
         put?: never;
         post?: never;
         delete?: never;
@@ -747,7 +827,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_5"];
+        get: operations["list_6"];
         put?: never;
         post?: never;
         delete?: never;
@@ -836,6 +916,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/vendors/{id}/aliases/{aliasId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["removeAlias"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/knowledge/documents/{id}": {
         parameters: {
             query?: never;
@@ -888,6 +984,33 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        UpdateVendorRequest: {
+            name: string;
+            taxId?: string;
+            defaultCurrency?: string;
+        };
+        AliasDto: {
+            /** Format: int64 */
+            id: number;
+            alias: string;
+        };
+        VendorDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            taxId?: string;
+            defaultCurrency?: string;
+            /** @enum {string} */
+            status: "UNVERIFIED" | "VERIFIED";
+            verifiedByName?: string;
+            /** Format: date-time */
+            verifiedAt?: string;
+            aliases: components["schemas"]["AliasDto"][];
+            /** Format: int64 */
+            invoiceCount: number;
+            /** Format: date-time */
+            createdAt: string;
+        };
         UpdateOrganizationRequest: {
             baseCurrency: string;
         };
@@ -909,6 +1032,7 @@ export interface components {
             /** @enum {string} */
             documentType?: "INVOICE" | "CREDIT_NOTE";
             vendorName?: string;
+            vendorTaxId?: string;
             invoiceNumber?: string;
             /** Format: date */
             invoiceDate?: string;
@@ -921,6 +1045,19 @@ export interface components {
             lineItems?: components["schemas"]["LineItemDto"][];
             /** Format: int64 */
             version?: number;
+        };
+        DuplicateInfo: {
+            /** @enum {string} */
+            status: "NONE" | "DUPLICATE" | "POSSIBLE_DUPLICATE";
+            /** Format: uuid */
+            ofId?: string;
+            ofLabel?: string;
+            ofStatus?: string;
+            clearedByName?: string;
+            /** Format: date-time */
+            clearedAt?: string;
+            /** Format: uuid */
+            reusedFrom?: string;
         };
         ExtractCheck: {
             status: string;
@@ -950,6 +1087,9 @@ export interface components {
             subtotal?: number;
             tax?: number;
             total?: number;
+            vendorTaxId?: string;
+            vendor?: components["schemas"]["VendorRef"];
+            duplicate: components["schemas"]["DuplicateInfo"];
             fieldConfidence?: {
                 [key: string]: number;
             };
@@ -984,6 +1124,8 @@ export interface components {
             severity: string;
             field?: string;
             message: string;
+            /** Format: uuid */
+            relatedInvoiceId?: string;
         };
         OcrInfo: {
             engine?: string;
@@ -998,6 +1140,8 @@ export interface components {
             canReject: boolean;
             canRetry: boolean;
             canDelete: boolean;
+            canDecideDuplicate: boolean;
+            approvalBlockedReason?: string;
         };
         UsageInfo: {
             model?: string;
@@ -1006,6 +1150,13 @@ export interface components {
             /** Format: int32 */
             outputTokens?: number;
             costUsd?: number;
+        };
+        VendorRef: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            taxId?: string;
+            status: string;
         };
         ManualRateRequest: {
             currency: string;
@@ -1095,6 +1246,9 @@ export interface components {
             /** Format: date-time */
             nextAttemptAt?: string;
         };
+        AddAliasRequest: {
+            alias: string;
+        };
         CreateUserRequest: {
             email: string;
             fullName: string;
@@ -1176,8 +1330,16 @@ export interface components {
             warningCount: number;
             /** Format: date-time */
             createdAt: string;
+            /** @enum {string} */
+            duplicateStatus: "NONE" | "DUPLICATE" | "POSSIBLE_DUPLICATE";
+            vendorVerified: boolean;
         };
         DecisionRequest: {
+            comment?: string;
+        };
+        DuplicateDecisionRequest: {
+            /** @enum {string} */
+            decision: "NOT_DUPLICATE" | "DUPLICATE";
             comment?: string;
         };
         EmailIngestStatus: {
@@ -1482,6 +1644,32 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateVendorRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["VendorDto"];
+                };
+            };
+        };
+    };
     organization: {
         parameters: {
             query?: never;
@@ -1548,7 +1736,7 @@ export interface operations {
             };
         };
     };
-    update: {
+    update_1: {
         parameters: {
             query?: never;
             header?: never;
@@ -1777,6 +1965,54 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["DeliveryDto"];
+                };
+            };
+        };
+    };
+    verify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["VendorDto"];
+                };
+            };
+        };
+    };
+    addAlias: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddAliasRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["VendorDto"];
                 };
             };
         };
@@ -2090,6 +2326,32 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["AnswerDto"];
+                };
+            };
+        };
+    };
+    decideDuplicate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DuplicateDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["InvoiceDetail"];
                 };
             };
         };
@@ -2412,7 +2674,7 @@ export interface operations {
             };
         };
     };
-    update_1: {
+    update_2: {
         parameters: {
             query?: never;
             header?: never;
@@ -2438,7 +2700,7 @@ export interface operations {
             };
         };
     };
-    update_2: {
+    update_3: {
         parameters: {
             query?: never;
             header?: never;
@@ -2507,6 +2769,28 @@ export interface operations {
         };
     };
     list_4: {
+        parameters: {
+            query?: {
+                status?: "UNVERIFIED" | "VERIFIED";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["VendorDto"][];
+                };
+            };
+        };
+    };
+    list_5: {
         parameters: {
             query?: never;
             header?: never;
@@ -2787,7 +3071,7 @@ export interface operations {
             };
         };
     };
-    list_5: {
+    list_6: {
         parameters: {
             query?: {
                 action?: string;
@@ -2921,6 +3205,29 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ByStatus"];
+                };
+            };
+        };
+    };
+    removeAlias: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aliasId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["VendorDto"];
                 };
             };
         };

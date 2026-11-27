@@ -55,6 +55,17 @@ public final class TestApi {
 
   public Resp get(String path, String token) { return call(HttpMethod.GET, path, token, null, null); }
 
+  /**
+   * Confirms the vendor the invoice was matched to (vendors are created UNVERIFIED and block approval until a person
+   * confirms them). Does nothing when the invoice is not visible to {@code token} or has no vendor.
+   */
+  public void verifyVendorOf(String token, Object invoiceId) {
+    Resp inv = get("/api/v1/invoices/" + invoiceId, token);
+    if (inv.status() != 200 || !inv.json().path("vendor").hasNonNull("id")) return;
+    Resp r = post("/api/v1/vendors/" + inv.json().path("vendor").path("id").asText() + "/verify", token, null);
+    if (r.status() != 200) throw new AssertionError("verify vendor -> " + r.status() + " " + r.text());
+  }
+
   public Resp post(String path, String token, Object body) { return call(HttpMethod.POST, path, token, body, null); }
 
   public Resp put(String path, String token, Object body) { return call(HttpMethod.PUT, path, token, body, null); }

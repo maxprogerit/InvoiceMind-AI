@@ -37,6 +37,7 @@ def make_extraction(**overrides) -> InvoiceExtraction:
     base = dict(
         document_type="invoice",
         vendor="ACME GmbH",
+        vendor_tax_id="DE123456789",
         invoice_number="INV-0042",
         invoice_date="2026-03-14",
         due_date="2026-04-13",
@@ -65,7 +66,7 @@ def make_response(parsed, input_tokens=1000, output_tokens=200, status="complete
     )
 
 
-INVOICE_TEXT = """ACME GmbH
+INVOICE_TEXT = """ACME GmbH  VAT DE 123456789
 Rechnung / Invoice INV-0042
 Date: 2026-03-14   Due: 2026-04-13
 Consulting  10 x 100.00  1,000.00

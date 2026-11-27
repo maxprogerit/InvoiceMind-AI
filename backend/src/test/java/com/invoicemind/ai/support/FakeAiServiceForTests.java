@@ -116,6 +116,25 @@ public final class FakeAiServiceForTests {
             "latency_ms", 5)));
   }
 
+  /** The same extraction reply with the seller's tax id set (the field the real model fills from the document). */
+  public static Reply withTaxId(Reply extraction, String taxId) {
+    try {
+      var root = (com.fasterxml.jackson.databind.node.ObjectNode) MAPPER.readTree(extraction.body());
+      ((com.fasterxml.jackson.databind.node.ObjectNode) root.path("extraction")).put("vendor_tax_id", taxId);
+      return new Reply(extraction.status(), MAPPER.writeValueAsString(root));
+    } catch (IOException e) {
+      throw new IllegalStateException(e);
+    }
+  }
+
+  /** A scan: the text came from OCR, not from a PDF text layer, and reads slightly differently. */
+  public static Reply scannedOcr(String id, String text) {
+    String full = text + "\nSCENARIO:" + id;
+    return Reply.json(200, Map.of("text", full,
+        "pages", List.of(Map.of("page", 1, "text", full, "confidence", 0.81, "method", "ocr")),
+        "page_count", 1, "confidence", 0.81, "engine", "tesseract", "mime_type", "image/png"));
+  }
+
   public static Map<String, Object> line(String description, String qty, String unit, String total) {
     Map<String, Object> m = new LinkedHashMap<>();
     m.put("description", description);

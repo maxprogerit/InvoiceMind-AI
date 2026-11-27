@@ -12,6 +12,7 @@ import { DocumentViewer } from "@/components/invoices/document-viewer";
 import { IssuesPanel } from "@/components/invoices/issues-panel";
 import { ExplainPanel } from "@/components/knowledge/explain-panel";
 import { PipelineStepper } from "@/components/invoices/pipeline-stepper";
+import { ApprovalBlocked, DuplicateBanner, VendorBanner } from "@/components/invoices/trust-banners";
 import { ReviewForm } from "@/components/invoices/review-form";
 import { StatusBadge } from "@/components/invoices/status-badge";
 import { Button } from "@/components/ui/button";
@@ -154,7 +155,10 @@ export default function InvoiceDetailPage() {
           <strong>Processing failed.</strong> {inv.failureReason ?? "Unknown error."} {p.canRetry && "You can retry once the problem is resolved."}
         </div>
       )}
-      {inv.status === "VALIDATED" && !p.canApprove && p.canEdit && (
+      <DuplicateBanner invoice={inv} />
+      <VendorBanner invoice={inv} />
+      <ApprovalBlocked invoice={inv} />
+      {inv.status === "VALIDATED" && !p.canApprove && !p.approvalBlockedReason && p.canEdit && (
         <p className="mb-6 text-sm text-muted">This invoice passed all checks and is waiting for an approver.</p>
       )}
 

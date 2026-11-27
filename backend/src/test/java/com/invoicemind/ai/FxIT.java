@@ -31,6 +31,7 @@ class FxIT extends AbstractIntegrationTest {
         false, false));
     UUID invoice = upload(uploader, id);
     awaitStatus(uploader, invoice, "VALIDATED");
+    api.verifyVendorOf(approver.token(), invoice);
     assertThat(api.post("/api/v1/invoices/" + invoice + "/approve", approver.token(), Map.of()).status()).isEqualTo(200);
     return invoice;
   }

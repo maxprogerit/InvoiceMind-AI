@@ -88,6 +88,7 @@ class WebhookIT extends AbstractIntegrationTest {
 
     UUID invoice = validatedInvoice(user, "1190.00");
     assertThat(FakeWebhookReceiverForTests.received(receiver)).isEmpty(); // validated is not subscribed
+    api.verifyVendorOf(approver.token(), invoice);
     assertThat(api.post("/api/v1/invoices/" + invoice + "/approve", approver.token(), Map.of("comment", "ok")).status()).isEqualTo(200);
 
     Received hit = awaitReceived(receiver, 1).get(0);
@@ -143,6 +144,7 @@ class WebhookIT extends AbstractIntegrationTest {
     awaitReceived(validatedOnly, 1);
     assertThat(FakeWebhookReceiverForTests.received(validatedOnly).get(0).headers())
         .containsEntry("x-invoicemind-event", "invoice.validated");
+    api.verifyVendorOf(approver.token(), invoice);
     api.post("/api/v1/invoices/" + invoice + "/approve", approver.token(), Map.of());
 
     // give the dispatcher time to (wrongly) send anything else
@@ -171,6 +173,7 @@ class WebhookIT extends AbstractIntegrationTest {
     JsonNode redirectEndpoint = register(admin, redirecting, List.of("invoice.approved"));
 
     UUID invoice = validatedInvoice(admin, "20.00");
+    api.verifyVendorOf(approver.token(), invoice);
     api.post("/api/v1/invoices/" + invoice + "/approve", approver.token(), Map.of());
 
     JsonNode ok = awaitDelivery(admin, flakyEndpoint.at("/endpoint/id").asText(), "DELIVERED");

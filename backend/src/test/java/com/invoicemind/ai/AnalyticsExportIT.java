@@ -66,6 +66,7 @@ class AnalyticsExportIT extends AbstractIntegrationTest {
     assertThat(before.get("failureRate").asDouble()).isZero();
 
     for (UUID id : List.of(a1, a2, b1)) {
+      api.verifyVendorOf(approver.token(), id);
       assertThat(api.post("/api/v1/invoices/" + id + "/approve", approver.token(), Map.of()).status()).isEqualTo(200);
     }
 
@@ -138,6 +139,7 @@ class AnalyticsExportIT extends AbstractIntegrationTest {
     Session approver = api.createUser(admin, "APPROVER");
     UUID normal = processed(admin, "Müller & Söhne GmbH", "2026-03-01", "1000.00");
     UUID hostile = processed(admin, "=HYPERLINK(\"http://evil.example\",\"click\")", "2026-03-02", "200.00");
+    api.verifyVendorOf(approver.token(), normal);
     assertThat(api.post("/api/v1/invoices/" + normal + "/approve", approver.token(), Map.of("comment", "ok")).status()).isEqualTo(200);
 
     // ---- CSV

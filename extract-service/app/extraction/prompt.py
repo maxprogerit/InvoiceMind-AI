@@ -19,6 +19,7 @@ EXTRACTION RULES
 - Amounts and quantities: decimal STRINGS such as "1190.00" or "2.5", with '.' as decimal separator, no currency symbols or thousand separators. Copy the sign as printed: keep a minus sign when the document prints one and never add one yourself.
 - currency: ISO 4217 code. Map a symbol only when unambiguous (EUR for the euro sign). If only "$" appears with no other hint, use "USD" with low confidence.
 - vendor: the company that issued the invoice (the seller), not the recipient.
+- vendor_tax_id: the seller's VAT / tax identification number exactly as printed (e.g. "DE123456789", "GB123456789", "EIN 12-3456789", "ИНН 7701234567"). Never the buyer's number, never an IBAN, invoice number or phone number. null when absent.
 - line_items: one entry per row; copy values as printed. If there is no table, return an empty list.
 - confidence: 0..1 per field = how clearly the text supports the value (1.0 explicit and unambiguous, <0.6 doubtful, 0 when null).
 - needs_review: true if anything required (vendor, invoice_number, invoice_date, currency, total) is missing, ambiguous, or the document looks inconsistent. review_reasons: short English phrases."""

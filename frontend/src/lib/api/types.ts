@@ -27,6 +27,10 @@ export type WebhookEndpoint = S["EndpointDto"];
 export type CreatedWebhook = S["CreatedEndpointDto"];
 export type WebhookDelivery = S["DeliveryDto"];
 export type ManualRate = S["ManualRate"];
+export type Vendor = S["VendorDto"];
+export type VendorStatus = Vendor["status"];
+export type DuplicateInfo = S["DuplicateInfo"];
+export type DuplicateDecision = S["DuplicateDecisionRequest"]["decision"];
 /** Error envelope returned by every failing API call (see GlobalExceptionHandler in the backend). */
 export interface ErrorBody {
   timestamp: string;

@@ -78,7 +78,7 @@ class PipelineIT extends AbstractIntegrationTest {
     assertThat(inv.get("tax").decimalValue()).isEqualByComparingTo("190.00");
     assertThat(inv.get("currency").asText()).isEqualTo("EUR");
     assertThat(inv.get("invoiceDate").asText()).isEqualTo("2026-03-14");
-    assertThat(inv.get("issues")).isEmpty();
+    assertThat(codes(inv)).containsExactly("VENDOR_UNVERIFIED"); // a first invoice from a new vendor: a warning only
     assertThat(inv.get("lineItems")).hasSize(1);
     assertThat(inv.at("/ocr/engine").asText()).isEqualTo("tesseract");
     assertThat(inv.at("/ocr/pageCount").asInt()).isEqualTo(1);
@@ -99,6 +99,10 @@ class PipelineIT extends AbstractIntegrationTest {
     assertThat(perms.get("canEdit").asBoolean()).isTrue();
     assertThat(perms.get("canApprove").asBoolean()).isFalse(); // uploader is a plain USER
     JsonNode approverView = api.get("/api/v1/invoices/" + invoice, approver.token()).json();
+    assertThat(approverView.at("/permissions/canApprove").asBoolean()).isFalse(); // the new vendor is not confirmed yet
+    assertThat(approverView.at("/permissions/approvalBlockedReason").asText()).isEqualTo("Confirm the vendor before approving");
+    api.verifyVendorOf(approver.token(), invoice);
+    approverView = api.get("/api/v1/invoices/" + invoice, approver.token()).json();
     assertThat(approverView.at("/permissions/canApprove").asBoolean()).isTrue();
 
     // audit trail is written by the pipeline, in order
@@ -154,7 +158,7 @@ class PipelineIT extends AbstractIntegrationTest {
     assertThat(fixed.status()).isEqualTo(200);
     assertThat(fixed.json().get("status").asText()).isEqualTo("VALIDATED");
     assertThat(fixed.json().get("humanReviewed").asBoolean()).isTrue();
-    assertThat(fixed.json().get("issues")).isEmpty();
+    assertThat(codes(fixed.json())).containsExactly("VENDOR_UNVERIFIED");
 
     // a still-wrong value stays in review
     Resp bad = api.put("/api/v1/invoices/" + invoice, user.token(),
@@ -184,6 +188,7 @@ class PipelineIT extends AbstractIntegrationTest {
     assertThat(codes(inv)).contains("TOTAL_MISMATCH", "PROMPT_INJECTION_SUSPECTED", "MODEL_FLAGGED");
 
     // not approvable in this state, and the API says why
+    api.verifyVendorOf(approver.token(), invoice);
     Resp approve = api.post("/api/v1/invoices/" + invoice + "/approve", approver.token(), Map.of());
     assertThat(approve.status()).isEqualTo(409);
     assertThat(approve.json().get("code").asText()).isEqualTo("invoice_not_approvable");
@@ -192,6 +197,7 @@ class PipelineIT extends AbstractIntegrationTest {
     Resp fixed = api.put("/api/v1/invoices/" + invoice, approver.token(), correction(inv, Map.of("total", new BigDecimal("1190.00"))));
     assertThat(fixed.json().get("status").asText()).isEqualTo("VALIDATED");
     assertThat(codes(fixed.json())).doesNotContain("PROMPT_INJECTION_SUSPECTED");
+    api.verifyVendorOf(approver.token(), invoice);
     assertThat(api.post("/api/v1/invoices/" + invoice + "/approve", approver.token(), Map.of("comment", "checked manually"))
         .status()).isEqualTo(200);
   }
@@ -332,9 +338,13 @@ class PipelineIT extends AbstractIntegrationTest {
 
   /** Scenario whose document is a credit note; {@code sign} is what the document prints ("" or "-"). */
   static String creditScenario(String number, String sign) {
+    return creditScenario(number, sign, "2026-03-20");
+  }
+
+  static String creditScenario(String number, String sign, String date) {
     String id = id("credit");
     FakeAiServiceForTests.scenario(id, FakeAiServiceForTests.okOcr(id), FakeAiServiceForTests.okExtraction(
-        "credit_note", "ACME GmbH", number, "2026-03-20", null, "EUR", sign + "200.00", sign + "38.00", sign + "238.00",
+        "credit_note", "ACME GmbH", number, date, null, "EUR", sign + "200.00", sign + "38.00", sign + "238.00",
         List.of(line("Returned hours", "2", sign + "100.00", sign + "200.00")), false, false));
     return id;
   }
@@ -344,7 +354,8 @@ class PipelineIT extends AbstractIntegrationTest {
     Session admin = api.registerOrg("Credit Inc");
     Session user = api.createUser(admin, "USER");
     for (String printed : List.of("", "-")) {
-      UUID invoice = upload(user, creditScenario("CN-" + id("n"), printed));
+      // a month apart: two credit notes with the same amount on the same day would be possible duplicates
+      UUID invoice = upload(user, creditScenario("CN-" + id("n"), printed, printed.isEmpty() ? "2026-03-20" : "2026-04-20"));
       JsonNode inv = awaitStatus(user, invoice, "VALIDATED", "NEEDS_REVIEW", "FAILED");
 
       assertThat(inv.get("status").asText()).as("printed sign '%s': %s", printed, codes(inv)).isEqualTo("VALIDATED");

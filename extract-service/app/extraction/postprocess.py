@@ -62,6 +62,15 @@ def finalize(raw: InvoiceExtraction, text: str, injection_suspected: bool) -> In
             setattr(data, name, None)
             conf[name] = 0.0
 
+    # The tax id decides which vendor an invoice belongs to (and so duplicate detection): one that is not printed
+    # in the document is dropped rather than trusted.
+    if data.vendor_tax_id is not None:
+        tax_id = data.vendor_tax_id.strip()[:50]
+        if not tax_id or not invoice_number_in_text(tax_id, text):
+            reasons.append("ungrounded_vendor_tax_id")
+            tax_id = None
+        data.vendor_tax_id = tax_id
+
     # Grounding: every key value must appear in the document text.
     checks = {
         "vendor": vendor_in_text(data.vendor, text),

@@ -7,11 +7,15 @@ import com.invoicemind.ai.common.PageResponse;
 import com.invoicemind.ai.config.AppProperties;
 import com.invoicemind.ai.firm.FirmService;
 import com.invoicemind.ai.invoice.InvoiceDtos.DecisionRequest;
+import com.invoicemind.ai.invoice.InvoiceDtos.DuplicateDecision;
+import com.invoicemind.ai.invoice.InvoiceDtos.DuplicateDecisionRequest;
 import com.invoicemind.ai.invoice.InvoiceDtos.InvoiceDetail;
 import com.invoicemind.ai.invoice.InvoiceDtos.InvoiceSummary;
 import com.invoicemind.ai.invoice.InvoiceDtos.LineItemDto;
 import com.invoicemind.ai.invoice.InvoiceDtos.OcrTextResponse;
 import com.invoicemind.ai.invoice.InvoiceDtos.UpdateInvoiceRequest;
+import com.invoicemind.ai.vendor.VendorEntity;
+import com.invoicemind.ai.vendor.VendorService;
 import com.invoicemind.ai.notification.NotificationService;
 import com.invoicemind.ai.processing.ProcessingJobQueue;
 import com.invoicemind.ai.processing.TraceContextCodec;
@@ -158,7 +162,11 @@ public class InvoiceService {
     String vendor = blankToNull(req.vendorName());
     track(changes, "vendorName", inv.getVendorName(), vendor);
     inv.setVendorName(vendor);
-    inv.setVendorId(vendors.findOrCreate(inv.getOrganizationId(), vendor));
+    String taxId = req.vendorTaxId() == null ? inv.getVendorTaxId() : VendorEntity.normalizeTaxId(req.vendorTaxId());
+    track(changes, "vendorTaxId", inv.getVendorTaxId(), taxId);
+    inv.setVendorTaxId(taxId);
+    VendorService.Match match = vendors.match(inv.getOrganizationId(), vendor, taxId, inv.getCurrency());
+    inv.setVendorId(match == null ? null : match.vendorId());
     String number = blankToNull(req.invoiceNumber());
     track(changes, "invoiceNumber", inv.getInvoiceNumber(), number);
     inv.setInvoiceNumber(number);
@@ -191,6 +199,7 @@ public class InvoiceService {
 
     audit.log(me.organizationId(), me.userId(), "INVOICE_CORRECTED", AuditService.INVOICE, inv.getId(), changes);
     status.publish(inv);
+    validation.recheckNewerOfSameVendor(inv).forEach(status::publish);
     return mapper.toDetail(inv, me);
   }
 
@@ -199,12 +208,10 @@ public class InvoiceService {
   public InvoiceDetail approve(UUID id, DecisionRequest req, AuthPrincipal me) {
     InvoiceEntity inv = load(id, me);
     requireReviewer(me);
-    if (inv.getStatus() != InvoiceStatus.VALIDATED) {
-      throw ApiException.conflict("invoice_not_approvable",
-          "Only validated invoices can be approved (current status: " + inv.getStatus() + ")");
-    }
-    if (me.role() == Role.APPROVER && inv.getUploadedBy().equals(me.userId())) {
-      throw ApiException.forbidden("You cannot approve an invoice you uploaded yourself");
+    String blocked = ApprovalRules.blockedReason(inv, mapper.isVendorVerified(inv), me);
+    if (blocked != null) {
+      if (blocked.startsWith("You cannot approve")) throw ApiException.forbidden(blocked);
+      throw ApiException.conflict("invoice_not_approvable", blocked);
     }
     return decide(inv, InvoiceStatus.APPROVED, "INVOICE_APPROVED", req, me);
   }
@@ -249,6 +256,46 @@ public class InvoiceService {
     }
     status.publish(inv);
     return mapper.toDetail(inv, me);
+  }
+
+  /**
+   * A person decides about a POSSIBLE_DUPLICATE: NOT_DUPLICATE clears the finding for this invoice (it is
+   * re-validated and the decision is audited); DUPLICATE rejects it as a duplicate of the earlier invoice.
+   * An exact DUPLICATE cannot be cleared: delete or reject it.
+   */
+  @Transactional
+  public InvoiceDetail decideDuplicate(UUID id, DuplicateDecisionRequest req, AuthPrincipal me) {
+    InvoiceEntity inv = load(id, me);
+    if (!InvoiceMapper.permissions(inv, me, true).canDecideDuplicate()) {
+      throw inv.getDuplicateStatus() == DuplicateStatus.DUPLICATE
+          ? ApiException.conflict("exact_duplicate", "An exact duplicate cannot be marked as a separate invoice")
+          : inv.getDuplicateStatus() != DuplicateStatus.POSSIBLE_DUPLICATE
+              ? ApiException.conflict("not_a_possible_duplicate", "This invoice is not flagged as a possible duplicate")
+              : ApiException.forbidden("You cannot decide on this invoice");
+    }
+    String comment = req.comment() == null ? null : blankToNull(req.comment());
+    UUID original = inv.getDuplicateOf();
+    Map<String, Object> details = new LinkedHashMap<>();
+    details.put("decision", req.decision().name());
+    if (original != null) details.put("duplicateOf", original.toString());
+    if (comment != null) details.put("comment", comment);
+
+    if (req.decision() == DuplicateDecision.NOT_DUPLICATE) {
+      inv.setDuplicateClearedBy(me.userId());
+      inv.setDuplicateClearedAt(Instant.now(clock));
+      InvoiceStatus next = validation.revalidate(inv);
+      inv.setStatus(next);
+      invoices.saveAndFlush(inv);
+      audit.log(me.organizationId(), me.userId(), "DUPLICATE_CLEARED", AuditService.INVOICE, inv.getId(), details);
+      status.publish(inv);
+      return mapper.toDetail(inv, me);
+    }
+    String reason = "Duplicate of " + (original == null ? "an earlier invoice"
+        : invoices.findById(original).map(InvoiceEntity::displayLabel).orElse("an earlier invoice"))
+        + (comment == null ? "" : ": " + comment);
+    audit.log(me.organizationId(), me.userId(), "DUPLICATE_CONFIRMED", AuditService.INVOICE, inv.getId(), details);
+    inv.setDuplicateStatus(DuplicateStatus.DUPLICATE);
+    return decide(inv, InvoiceStatus.REJECTED, "INVOICE_REJECTED", new DecisionRequest(reason), me);
   }
 
   @Transactional

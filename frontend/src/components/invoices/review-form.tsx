@@ -26,6 +26,7 @@ const isoDate = z.string().refine((v) => v === "" || /^\d{4}-\d{2}-\d{2}$/.test(
 const schema = z.object({
   documentType: z.enum(["INVOICE", "CREDIT_NOTE"]),
   vendorName: z.string().max(300),
+  vendorTaxId: z.string().max(60),
   invoiceNumber: z.string().max(100),
   invoiceDate: isoDate,
   dueDate: isoDate,
@@ -46,6 +47,7 @@ function toForm(inv: InvoiceDetail): FormValues {
   return {
     documentType: inv.documentType,
     vendorName: inv.vendorName ?? "",
+    vendorTaxId: inv.vendorTaxId ?? "",
     invoiceNumber: inv.invoiceNumber ?? "",
     invoiceDate: inv.invoiceDate ?? "",
     dueDate: inv.dueDate ?? "",
@@ -68,6 +70,8 @@ function toRequest(v: FormValues, version: number): UpdateInvoiceRequest {
   return {
     documentType: v.documentType,
     vendorName: v.vendorName.trim() || undefined,
+    // an empty string clears the tax id on the server; the vendor is matched again from name and tax id
+    vendorTaxId: v.vendorTaxId.trim(),
     invoiceNumber: v.invoiceNumber.trim() || undefined,
     invoiceDate: v.invoiceDate || undefined,
     dueDate: v.dueDate || undefined,
@@ -255,7 +259,10 @@ export function ReviewForm({ invoice }: { invoice: InvoiceDetail }) {
               <p className="mt-1.5 text-xs text-dim">A credit note reduces what is owed, so its amounts are stored as negative values.</p>
             )}
           </div>
-          {renderField({ name: "vendorName", label: "Vendor" })}
+          <div className="grid gap-4 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+            {renderField({ name: "vendorName", label: "Vendor" })}
+            {renderField({ name: "vendorTaxId", label: "Vendor tax / VAT id", mono: true, placeholder: "none printed" })}
+          </div>
           <div className="grid gap-4 sm:grid-cols-2">
             {renderField({ name: "invoiceNumber", label: documentType === "CREDIT_NOTE" ? "Credit note number" : "Invoice number", mono: true })}
             {renderField({ name: "currency", label: "Currency", mono: true, placeholder: "EUR", listId: "currencies" })}

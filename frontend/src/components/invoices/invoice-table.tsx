@@ -10,6 +10,7 @@ import { formatAmount, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 import { StatusBadge } from "./status-badge";
+import { TrustFlags } from "./trust-flags";
 
 interface Props {
   page: Page<InvoiceSummary> | undefined;
@@ -107,7 +108,10 @@ export function InvoiceTable({ page, loading, error, onRetry, selectedId, onSele
                     )}
                   </TD>
                   <TD className={cn("border-y border-transparent", !rowActions && "rounded-r-[10px] border-r", selected && "border-accent bg-surface-2/60")}>
-                    <StatusBadge status={inv.status} />
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <StatusBadge status={inv.status} />
+                      <TrustFlags invoice={inv} />
+                    </div>
                   </TD>
                   {rowActions && (
                     <TD

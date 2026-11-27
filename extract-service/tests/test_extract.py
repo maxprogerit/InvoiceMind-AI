@@ -167,3 +167,17 @@ def test_validation_error_does_not_echo_document(client, with_model):
     resp = client.post("/extract", json={"text": ""}, headers=HEADERS)
     assert resp.status_code == 422
     assert resp.json()["error"]["code"] == "invalid_request"
+
+
+def test_vendor_tax_id_printed_in_the_document_is_kept(client, with_model):
+    with_model(lambda kw: make_response(make_extraction(vendor_tax_id="DE123456789")))
+    ex = post_extract(client).json()["extraction"]
+    assert ex["vendor_tax_id"] == "DE123456789"  # printed as "DE 123456789": compared without spaces
+
+
+def test_a_tax_id_that_is_not_in_the_document_is_dropped_not_trusted(client, with_model):
+    # it decides which vendor (and so which duplicates) an invoice belongs to, so a made-up one must not survive
+    with_model(lambda kw: make_response(make_extraction(vendor_tax_id="FR99999999999")))
+    ex = post_extract(client).json()["extraction"]
+    assert ex["vendor_tax_id"] is None
+    assert "ungrounded_vendor_tax_id" in ex["review_reasons"]

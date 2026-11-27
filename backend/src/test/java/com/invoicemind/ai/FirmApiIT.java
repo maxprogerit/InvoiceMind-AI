@@ -101,6 +101,7 @@ class FirmApiIT extends AbstractIntegrationTest {
     awaitStatus(inOne, flagged, "NEEDS_REVIEW");
     awaitStatus(inOne, failed, "FAILED");
     for (UUID id : List.of(approvedEur, approvedUsd)) {
+      api.verifyVendorOf(approver.token(), id);
       assertThat(api.post("/api/v1/invoices/" + id + "/approve", approver.token(), Map.of("comment", "ok")).status()).isEqualTo(200);
     }
     UUID other = upload(inTwo, scenario("EUR", "7.00", today, false));

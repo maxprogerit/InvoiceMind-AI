@@ -23,6 +23,7 @@ def make_invoice(**overrides: Any) -> InvoiceExtraction:
     base = dict(
         document_type="invoice",
         vendor="Acme Test Supplies Ltd",
+        vendor_tax_id=None,
         invoice_number="INV-2026-0042",
         invoice_date="2026-03-15",
         due_date="2026-04-14",

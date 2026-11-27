@@ -3,6 +3,7 @@ package com.invoicemind.ai.invoice;
 import com.invoicemind.ai.audit.AuditService.AuditEntryDto;
 import com.invoicemind.ai.common.PageResponse;
 import com.invoicemind.ai.invoice.InvoiceDtos.DecisionRequest;
+import com.invoicemind.ai.invoice.InvoiceDtos.DuplicateDecisionRequest;
 import com.invoicemind.ai.invoice.InvoiceDtos.InvoiceDetail;
 import com.invoicemind.ai.invoice.InvoiceDtos.InvoiceSummary;
 import com.invoicemind.ai.invoice.InvoiceDtos.OcrTextResponse;
@@ -103,6 +104,11 @@ public class InvoiceController {
   @PreAuthorize("hasAnyRole('APPROVER','ADMIN')")
   public InvoiceDetail reject(@PathVariable UUID id, @Valid @RequestBody DecisionRequest request) {
     return service.reject(id, request, CurrentUser.get());
+  }
+
+  @PostMapping("/{id}/duplicate-decision")
+  public InvoiceDetail decideDuplicate(@PathVariable UUID id, @Valid @RequestBody DuplicateDecisionRequest request) {
+    return service.decideDuplicate(id, request, CurrentUser.get());
   }
 
   @PostMapping("/{id}/retry")

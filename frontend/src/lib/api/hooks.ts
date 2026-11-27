@@ -32,6 +32,9 @@ import {
   type Summary,
   type TeamMember,
   type UpdateInvoiceRequest,
+  type Vendor,
+  type VendorStatus,
+  type DuplicateDecision,
   type VolumeByDay,
   type WebhookDelivery,
   type WebhookEndpoint,
@@ -143,6 +146,21 @@ export function useDecision(id: string, kind: "approve" | "reject") {
           ? api.POST("/api/v1/invoices/{id}/approve", { params: { path: { id } }, body: { comment } })
           : api.POST("/api/v1/invoices/{id}/reject", { params: { path: { id } }, body: { comment } }),
       ) as Promise<InvoiceDetail>,
+    onSuccess: (data) => {
+      qc.setQueryData(["invoice", id], data);
+      invalidate(id);
+      void qc.invalidateQueries({ queryKey: ["invoice", id, "audit"] });
+    },
+  });
+}
+
+/** NOT_DUPLICATE: a separate bill (re-validated); DUPLICATE: reject it as a copy of the earlier invoice. */
+export function useDuplicateDecision(id: string) {
+  const invalidate = useInvalidateInvoices();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { decision: DuplicateDecision; comment?: string }) =>
+      unwrap(api.POST("/api/v1/invoices/{id}/duplicate-decision", { params: { path: { id } }, body })) as Promise<InvoiceDetail>,
     onSuccess: (data) => {
       qc.setQueryData(["invoice", id], data);
       invalidate(id);
@@ -559,3 +577,41 @@ export function useRemoveFirmMember() {
     onSuccess: invalidate,
   });
 }
+
+// ----------------------------------------------------------------- vendors
+export const useVendors = (status?: VendorStatus) =>
+  useQuery({
+    queryKey: ["vendors", status ?? "all"],
+    queryFn: () => unwrap(api.GET("/api/v1/vendors", { params: { query: status ? { status } : {} } })) as Promise<Vendor[]>,
+  });
+
+/** Vendor changes re-check open invoices on the server, so invoices are refetched too. */
+function useVendorMutation<T>(fn: (arg: T) => Promise<unknown>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["vendors"] });
+      void qc.invalidateQueries({ queryKey: ["invoices"] });
+      void qc.invalidateQueries({ queryKey: ["invoice"] });
+    },
+  });
+}
+
+export const useVerifyVendor = () =>
+  useVendorMutation((id: string) => unwrap(api.POST("/api/v1/vendors/{id}/verify", { params: { path: { id } } })));
+
+export const useUpdateVendor = () =>
+  useVendorMutation(({ id, ...body }: { id: string; name: string; taxId?: string; defaultCurrency?: string }) =>
+    unwrap(api.PUT("/api/v1/vendors/{id}", { params: { path: { id } }, body })),
+  );
+
+export const useAddAlias = () =>
+  useVendorMutation(({ id, alias }: { id: string; alias: string }) =>
+    unwrap(api.POST("/api/v1/vendors/{id}/aliases", { params: { path: { id } }, body: { alias } })),
+  );
+
+export const useRemoveAlias = () =>
+  useVendorMutation(({ id, aliasId }: { id: string; aliasId: number }) =>
+    unwrap(api.DELETE("/api/v1/vendors/{id}/aliases/{aliasId}", { params: { path: { id, aliasId } } })),
+  );

@@ -37,6 +37,7 @@ class FieldConfidence(BaseModel):
 class InvoiceExtraction(BaseModel):
     document_type: DocumentType
     vendor: str | None
+    vendor_tax_id: str | None
     invoice_number: str | None
     invoice_date: str | None
     due_date: str | None

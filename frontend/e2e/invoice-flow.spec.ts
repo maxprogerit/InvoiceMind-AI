@@ -6,6 +6,16 @@ const SAMPLES = path.resolve(__dirname, "../../samples/invoices");
 const suffix = Math.random().toString(36).slice(2, 8);
 const PASSWORD = "Passw0rd!long";
 
+/** New vendors are created unverified and block approval until a person confirms them once. */
+async function confirmVendorIfNeeded(page: Page) {
+  await expect(page.getByText("Processing", { exact: true }).first()).toBeVisible();
+  const button = page.getByRole("button", { name: "Confirm vendor" });
+  if (await button.count()) {
+    await button.click();
+    await expect(button).toHaveCount(0);
+  }
+}
+
 /**
  * One fresh organisation per run, so the test is repeatable and never collides with duplicate detection.
  * The extract-service in this stack is the rule-based test double (docker-compose.e2e.yml): real OCR, no LLM.
@@ -64,8 +74,23 @@ test.describe.serial("invoice lifecycle in the browser", () => {
     await expect(page.getByRole("button", { name: "Approve" })).toHaveCount(0); // not approvable while invalid
     await page.fill("#f-total", "1428.00");
     await page.getByRole("button", { name: /Save & revalidate/ }).click();
-    await expect(page.getByText("Saved. All checks passed")).toBeVisible();
 
+    await expect(page.getByText("Saved, but some checks still fail").or(page.getByText("Saved. All checks passed"))).toBeVisible();
+    const detail = page.url();
+
+    // E2E-1002 now matches E2E-1001: same vendor, same total, same date, another number. Whichever of the two was
+    // uploaded later is flagged as a possible duplicate, and a person decides.
+    await page.goto("/invoices");
+    await page.locator("tbody tr", { hasText: "possible duplicate" }).click();
+    await page.getByRole("link", { name: /Review & edit/ }).click();
+    await expect(page.getByRole("alert").getByText(/Possible duplicate of/)).toBeVisible(); // banner + the finding itself
+    await expect(page.getByRole("button", { name: "Approve" })).toHaveCount(0);
+    await page.fill("#dup-comment", "Two separate engagements");
+    await page.getByRole("button", { name: "It is a separate invoice" }).click();
+    await expect(page.getByText("Marked as a separate invoice")).toBeVisible();
+
+    await page.goto(detail);
+    await confirmVendorIfNeeded(page);
     await page.getByRole("button", { name: "Approve" }).click();
     await page.getByRole("dialog").locator("textarea").fill("Checked against the contract");
     await page.getByRole("dialog").getByRole("button", { name: "Approve" }).click();
@@ -100,7 +125,7 @@ test.describe.serial("invoice lifecycle in the browser", () => {
     await page.getByRole("dialog").getByRole("button", { name: "Add document" }).click();
     await expect(page.getByText("1 passages")).toBeVisible();
 
-    // the same mismatching document again: a flagged duplicate that needs review
+    // the same mismatching document again: an identical file, so its result is reused (no second extraction)
     await page.goto("/upload");
     await page.setInputFiles("input[type=file]", path.join(FIXTURES, "e2e-mismatch.pdf"));
     await page.getByRole("link", { name: /Review now/ }).click();
@@ -122,6 +147,7 @@ test.describe.serial("invoice lifecycle in the browser", () => {
     await expect(page.locator("#f-invoiceNumber")).toHaveValue("NL-CN-0031");
     await expect(page.getByText("Credit note number")).toBeVisible();
 
+    await confirmVendorIfNeeded(page);
     await page.getByRole("button", { name: "Approve" }).click();
     await page.getByRole("dialog").getByRole("button", { name: "Approve" }).click();
     await expect(page.getByText("Invoice approved")).toBeVisible();

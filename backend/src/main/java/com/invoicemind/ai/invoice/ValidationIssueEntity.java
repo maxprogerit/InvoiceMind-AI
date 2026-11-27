@@ -21,5 +21,7 @@ public class ValidationIssueEntity {
   private String severity;
   private String field;
   private String message;
+  /** The earlier invoice a duplicate finding points to. */
+  private UUID relatedInvoiceId;
   private Instant createdAt = Instant.now();
 }

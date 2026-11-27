@@ -25,18 +25,37 @@ public final class InvoiceDtos {
       @Digits(integer = 10, fraction = 4) BigDecimal unitPrice,
       @Digits(integer = 12, fraction = 2) @DecimalMin("-999999999999.99") @DecimalMax("999999999999.99") BigDecimal total) {}
 
-  public record IssueDto(@NotNull String code, @NotNull String severity, String field, @NotNull String message) {}
+  /** {@code relatedInvoiceId}: the earlier invoice a duplicate finding points to. */
+  public record IssueDto(@NotNull String code, @NotNull String severity, String field, @NotNull String message,
+                         UUID relatedInvoiceId) {}
+
+  /** The vendor the invoice was matched to; UNVERIFIED vendors must be confirmed before approval. */
+  public record VendorRef(@NotNull UUID id, @NotNull String name, String taxId, @NotNull String status) {}
+
+  /**
+   * Result of the duplicate rules. {@code status}: NONE, DUPLICATE (approval blocked) or POSSIBLE_DUPLICATE (a person
+   * decides); {@code of*}: the earlier invoice; {@code clearedBy*}: who decided a possible duplicate is a separate bill;
+   * {@code reusedFrom}: the identical file whose extraction was reused (the model was not called).
+   */
+  public record DuplicateInfo(@NotNull DuplicateStatus status, UUID ofId, String ofLabel, String ofStatus,
+                              String clearedByName, Instant clearedAt, UUID reusedFrom) {}
+
+  public enum DuplicateDecision { NOT_DUPLICATE, DUPLICATE }
+
+  public record DuplicateDecisionRequest(@NotNull DuplicateDecision decision, @Size(max = 1000) String comment) {}
 
   /** What the current user may do with this invoice, computed server-side so the UI never guesses. */
   public record Permissions(@NotNull boolean canEdit, @NotNull boolean canApprove, @NotNull boolean canReject,
-                            @NotNull boolean canRetry, @NotNull boolean canDelete) {}
+                            @NotNull boolean canRetry, @NotNull boolean canDelete, @NotNull boolean canDecideDuplicate,
+                            /** Why approval is not possible right now, for the UI (null when it is). */
+                            String approvalBlockedReason) {}
 
   public record InvoiceSummary(
       @NotNull UUID id, @NotNull InvoiceStatus status, @NotNull DocumentType documentType,
       @NotNull String originalFilename, String vendorName,
       String invoiceNumber, LocalDate invoiceDate, LocalDate dueDate, String currency, BigDecimal total,
       @NotNull UUID uploadedBy, @NotNull String uploadedByName, @NotNull int errorCount, @NotNull int warningCount,
-      @NotNull Instant createdAt) {}
+      @NotNull Instant createdAt, @NotNull DuplicateStatus duplicateStatus, @NotNull boolean vendorVerified) {}
 
   /** {@code source}: text_layer (PDF text read directly), ocr (Tesseract) or mixed (both, per page). */
   public record OcrInfo(String engine, BigDecimal confidence, Integer pageCount, String source) {}
@@ -51,6 +70,7 @@ public final class InvoiceDtos {
       @NotNull String originalFilename, @NotNull String contentType, @NotNull long fileSize,
       String vendorName, String invoiceNumber, LocalDate invoiceDate, LocalDate dueDate, String currency,
       BigDecimal subtotal, BigDecimal tax, BigDecimal total,
+      String vendorTaxId, VendorRef vendor, @NotNull DuplicateInfo duplicate,
       Map<String, Double> fieldConfidence, List<String> modelReviewReasons, @NotNull boolean injectionSuspected,
       @NotNull boolean humanReviewed, @NotNull OcrInfo ocr, ExtractCheck extractCheck, @NotNull UsageInfo usage, Long processingMs,
       String failureReason,
@@ -64,6 +84,8 @@ public final class InvoiceDtos {
       /** Omitted keeps the current type. Switching to CREDIT_NOTE stores every amount as a negative value. */
       DocumentType documentType,
       @Size(max = 300) String vendorName,
+      /** Omitted (null) keeps the current tax id; an empty string clears it. */
+      @Size(max = 60) String vendorTaxId,
       @Size(max = 100) String invoiceNumber,
       LocalDate invoiceDate,
       LocalDate dueDate,

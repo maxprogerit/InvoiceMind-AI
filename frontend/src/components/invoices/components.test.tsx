@@ -9,6 +9,7 @@ import { STATUS_META } from "@/lib/status";
 import { DecisionDialog } from "./decision-dialog";
 import { PipelineStepper } from "./pipeline-stepper";
 import { StatusBadge } from "./status-badge";
+import { TrustFlags } from "./trust-flags";
 
 function wrap(ui: React.ReactElement) {
   return render(<QueryClientProvider client={new QueryClient()}>{ui}</QueryClientProvider>);
@@ -48,5 +49,17 @@ describe("DecisionDialog", () => {
 
     wrap(<DecisionDialog invoiceId="i1" kind="approve" summary="ACME · INV-1" open onOpenChange={vi.fn()} />);
     expect(screen.getByRole("button", { name: "Approve" })).toBeEnabled();
+  });
+});
+
+describe("trust flags", () => {
+  it("marks duplicates, possible duplicates and unconfirmed vendors", () => {
+    const { rerender } = render(<TrustFlags invoice={{ status: "NEEDS_REVIEW", duplicateStatus: "DUPLICATE", vendorVerified: true }} />);
+    expect(screen.getByText("duplicate")).toBeInTheDocument();
+    rerender(<TrustFlags invoice={{ status: "NEEDS_REVIEW", duplicateStatus: "POSSIBLE_DUPLICATE", vendorVerified: false }} />);
+    expect(screen.getByText("possible duplicate")).toBeInTheDocument();
+    expect(screen.getByText("new vendor")).toBeInTheDocument();
+    rerender(<TrustFlags invoice={{ status: "APPROVED", duplicateStatus: "NONE", vendorVerified: false }} />);
+    expect(screen.queryByText("new vendor")).toBeNull();
   });
 });
