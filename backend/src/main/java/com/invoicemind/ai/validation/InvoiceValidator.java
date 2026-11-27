@@ -34,8 +34,10 @@ public class InvoiceValidator {
     INVOICE_DATE_TOO_OLD(Severity.ERROR, false),
     DUE_BEFORE_INVOICE(Severity.ERROR, false),
     DUPLICATE_INVOICE(Severity.ERROR, false),
+    DUPLICATE_FILE(Severity.ERROR, false),
+    POSSIBLE_DUPLICATE(Severity.ERROR, false),
     LINE_TOTAL_MISMATCH(Severity.WARNING, false),
-    DUPLICATE_FILE(Severity.WARNING, false),
+    VENDOR_UNVERIFIED(Severity.WARNING, false),
     LOW_CONFIDENCE(Severity.WARNING, true),
     MODEL_FLAGGED(Severity.WARNING, true),
     PROMPT_INJECTION_SUSPECTED(Severity.WARNING, true);
@@ -60,11 +62,17 @@ public class InvoiceValidator {
       BigDecimal subtotal, BigDecimal tax, BigDecimal total, List<Line> lines,
       String fileSha256, Map<String, Double> confidence,
       boolean modelNeedsReview, List<String> modelReasons, boolean injectionSuspected,
-      boolean humanReviewed, Instant createdAt) {}
+      boolean humanReviewed, Instant createdAt, boolean vendorVerified, boolean duplicateCleared) {}
 
-  public record Issue(Code code, String field, String message) {
+  /** {@code related}: the earlier invoice a duplicate finding points to (null for other findings). */
+  public record Issue(Code code, String field, String message, UUID related) {
+    public Issue(Code code, String field, String message) { this(code, field, message, null); }
+
     public Severity severity() { return code.severity; }
   }
+
+  /** An earlier invoice that looks like the same bill: same vendor and total, date close by. */
+  public record Candidate(UUID id, String invoiceNumber, LocalDate invoiceDate) {}
 
   /** Database-backed lookups, injected so the rules stay unit-testable. */
   public interface Lookups {
@@ -72,7 +80,23 @@ public class InvoiceValidator {
     Optional<UUID> duplicateOf(UUID organizationId, UUID invoiceId, DocumentType type, UUID vendorId,
                                String invoiceNumber, Instant createdAt);
 
-    boolean sameFileSeenBefore(UUID organizationId, UUID invoiceId, String sha256);
+    /** The earliest older invoice with the identical file (same SHA-256). */
+    Optional<UUID> earlierSameFile(UUID organizationId, UUID invoiceId, String sha256, Instant createdAt);
+
+    /** An older live invoice of the same vendor with the same total and currency, dated within {@code windowDays}. */
+    Optional<Candidate> possibleDuplicateOf(UUID organizationId, UUID invoiceId, DocumentType type, UUID vendorId,
+                                            BigDecimal total, String currency, LocalDate invoiceDate, int windowDays,
+                                            Instant createdAt);
+  }
+
+  public static final int DEFAULT_POSSIBLE_DUPLICATE_WINDOW_DAYS = 7;
+
+  private final int possibleDuplicateWindowDays;
+
+  public InvoiceValidator() { this(DEFAULT_POSSIBLE_DUPLICATE_WINDOW_DAYS); }
+
+  public InvoiceValidator(int possibleDuplicateWindowDays) {
+    this.possibleDuplicateWindowDays = possibleDuplicateWindowDays;
   }
 
   static final BigDecimal CENT = new BigDecimal("0.01");
@@ -96,6 +120,7 @@ public class InvoiceValidator {
     dates(issues, in, today);
     lineItems(issues, in);
     duplicates(issues, in, lookups);
+    vendor(issues, in);
 
     if (!in.humanReviewed()) {
       lowConfidence(issues, in);
@@ -202,16 +227,55 @@ public class InvoiceValidator {
     }
   }
 
+  /**
+   * Three deterministic rules, strongest first; each finding says which rule fired and why.
+   * <ul>
+   *   <li>same vendor + same invoice number as an earlier invoice: DUPLICATE (a re-scan or a resend of the same bill);</li>
+   *   <li>byte-identical file uploaded earlier: DUPLICATE;</li>
+   *   <li>same vendor + same total and currency, date within N days, different number: POSSIBLE_DUPLICATE, unless a
+   *       person already decided that this invoice is a separate one.</li>
+   * </ul>
+   * Only older invoices count ("the older one wins"), so the original is never flagged because of its copy.
+   */
   private void duplicates(List<Issue> issues, Input in, Lookups lookups) {
+    boolean exact = false;
     if (in.vendorId() != null && in.invoiceNumber() != null && !in.invoiceNumber().isBlank()) {
-      lookups.duplicateOf(in.organizationId(), in.invoiceId(), type(in), in.vendorId(), in.invoiceNumber().trim(),
-              in.createdAt())
-          .ifPresent(other -> issues.add(new Issue(Code.DUPLICATE_INVOICE, "invoiceNumber",
-              type(in).label() + " " + in.invoiceNumber() + " from " + in.vendorName() + " already exists (id "
-                  + other + ")")));
+      Optional<UUID> other = lookups.duplicateOf(in.organizationId(), in.invoiceId(), type(in), in.vendorId(),
+          in.invoiceNumber().trim(), in.createdAt());
+      if (other.isPresent()) {
+        exact = true;
+        issues.add(new Issue(Code.DUPLICATE_INVOICE, "invoiceNumber",
+            "Duplicate: " + type(in).label().toLowerCase() + " " + in.invoiceNumber() + " from " + in.vendorName()
+                + " was already received (same vendor and number). Approval is blocked.", other.get()));
+      }
     }
-    if (in.fileSha256() != null && lookups.sameFileSeenBefore(in.organizationId(), in.invoiceId(), in.fileSha256())) {
-      issues.add(new Issue(Code.DUPLICATE_FILE, null, "An identical file was uploaded before"));
+    if (in.fileSha256() != null) {
+      Optional<UUID> sameFile = lookups.earlierSameFile(in.organizationId(), in.invoiceId(), in.fileSha256(), in.createdAt());
+      if (sameFile.isPresent()) {
+        exact = true;
+        issues.add(new Issue(Code.DUPLICATE_FILE, null,
+            "Duplicate: this exact file was uploaded before (same SHA-256). Approval is blocked.", sameFile.get()));
+      }
+    }
+    if (!exact && !in.duplicateCleared() && in.vendorId() != null && in.total() != null && in.invoiceDate() != null) {
+      lookups.possibleDuplicateOf(in.organizationId(), in.invoiceId(), type(in), in.vendorId(), in.total(),
+              in.currency(), in.invoiceDate(), possibleDuplicateWindowDays, in.createdAt())
+          .ifPresent(c -> {
+            long days = Math.abs(java.time.temporal.ChronoUnit.DAYS.between(c.invoiceDate(), in.invoiceDate()));
+            issues.add(new Issue(Code.POSSIBLE_DUPLICATE, "total",
+                "Possible duplicate of " + type(in).label().toLowerCase() + " "
+                    + (c.invoiceNumber() == null ? "(no number)" : c.invoiceNumber()) + ": same vendor and total "
+                    + fmt(in.total()) + (in.currency() == null ? "" : " " + in.currency()) + ", dated " + c.invoiceDate()
+                    + " (" + days + (days == 1 ? " day" : " days") + " apart), different number. "
+                    + "Decide whether it is a separate invoice.", c.id()));
+          });
+    }
+  }
+
+  private void vendor(List<Issue> issues, Input in) {
+    if (in.vendorId() != null && !in.vendorVerified()) {
+      issues.add(new Issue(Code.VENDOR_UNVERIFIED, "vendorName", "Vendor '" + in.vendorName()
+          + "' is not confirmed yet: it was created from a document. Confirm it before the invoice is approved."));
     }
   }
 

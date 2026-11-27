@@ -44,6 +44,7 @@ class EmailIngestIT extends AbstractIntegrationTest {
   @Autowired UserRepository users;
   @Autowired com.invoicemind.ai.firm.OrgAccessService orgAccess;
   @Autowired InvoiceService invoices;
+  @Autowired com.invoicemind.ai.ingest.IntakeAccounts intake;
   @Autowired AuditService audit;
   @Autowired NamedParameterJdbcTemplate jdbc;
 
@@ -102,7 +103,7 @@ class EmailIngestIT extends AbstractIntegrationTest {
   @Test
   void aMailFromAKnownSenderBecomesInvoicesThatFlowThroughThePipeline() throws Exception {
     Session admin = api.registerOrg("Mail Inc");
-    Session user = api.createUser(admin, "USER");
+    Session user = api.createUser(admin, "ACCOUNTANT");
     String token = token(admin);
     assertThat(api.get("/api/v1/ingest/email", admin.token()).json().get("address").asText())
         .isEqualTo("invoices+" + token + "@example.com");
@@ -133,10 +134,12 @@ class EmailIngestIT extends AbstractIntegrationTest {
   @Test
   void messagesThatDoNotQualifyAreRejectedAndLoggedNotProcessed() throws Exception {
     Session admin = api.registerOrg("Mail Rules Inc");
-    Session user = api.createUser(admin, "USER");
-    Session disabled = api.createUser(admin, "USER");
+    Session user = api.createUser(admin, "ACCOUNTANT");
+    Session disabled = api.createUser(admin, "ACCOUNTANT");
     Session stranger = api.registerOrg("Mail Stranger Inc");
     String token = token(admin);
+    // this organisation takes invoices only from its own people
+    assertThat(api.put("/api/v1/ingest/email/policy", admin.token(), Map.of("acceptFrom", "USERS")).status()).isEqualTo(200);
     assertThat(api.patch("/api/v1/users/" + disabled.userId(), admin.token(), Map.of("enabled", false)).status()).isEqualTo(200);
 
     String unknownToken = "ffffffffffffffffffffffff";
@@ -167,9 +170,47 @@ class EmailIngestIT extends AbstractIntegrationTest {
   }
 
   @Test
+  void aVendorMailsItsInvoiceTheBodyStaysOutOfTheModelAndAPersonMustApprove() throws Exception {
+    Session admin = api.registerOrg("Vendor Mail Inc");
+    Session approver = api.createUser(admin, "APPROVER");
+    String token = token(admin);
+    assertThat(api.get("/api/v1/ingest/email", admin.token()).json().get("acceptFrom").asText()).isEqualTo("ANYONE");
+    // a rule that would approve this small amount automatically if it had been uploaded by a person
+    api.put("/api/v1/approval-rules", admin.token(), Map.of("rules", List.of(Map.of("currency", "EUR", "autoApproveBelow", "5000.00"))));
+
+    String sc = "vendor-mail-" + UUID.randomUUID().toString().substring(0, 8);
+    FakeAiServiceForTests.scenario(sc, FakeAiServiceForTests.okOcr(sc),
+        PipelineIT.extraction("Fjord Office Supplies AS", "FOS-" + sc, "1000.00", "190.00", "1190.00"));
+    deliver(mail(addr(token), "billing@fjord-office.example", "Invoice FOS", "<vendor-" + sc + "@test>",
+        List.of(new Att("fos.pdf", TestApi.pdf(sc), "application/pdf"))));
+    assertThat(service.pollOnce()).isEqualTo(new Result(1, 1, 0));
+
+    JsonNode summary = api.get("/api/v1/invoices?size=10", admin.token()).json().get("items").get(0);
+    assertThat(summary.get("source").asText()).isEqualTo("EMAIL");
+    assertThat(summary.get("uploadedByName").asText()).isEqualTo("E-mail intake");
+    UUID id = UUID.fromString(summary.get("id").asText());
+    JsonNode inv = awaitStatus(admin, id, "VALIDATED", "NEEDS_REVIEW", "FAILED", "APPROVED");
+    assertThat(inv.get("sourceEmail").asText()).isEqualTo("billing@fjord-office.example");
+
+    // only the attachment reached the extraction; the mail body never did
+    assertThat(FakeAiServiceForTests.textSentToExtract(sc)).doesNotContain("Please book the attached documents");
+
+    // never approved automatically, even under the rule and with a confirmed vendor; a person can approve it
+    api.verifyVendorOf(admin.token(), id);
+    JsonNode after = api.get("/api/v1/invoices/" + id, admin.token()).json();
+    assertThat(after.get("status").asText()).isEqualTo("VALIDATED");
+    assertThat(api.post("/api/v1/invoices/" + id + "/approve", approver.token(), Map.of()).json().get("status").asText()).isEqualTo("APPROVED");
+
+    // the intake account is not part of the team and cannot sign in
+    assertThat(api.get("/api/v1/users", admin.token()).json().findValuesAsText("fullName")).doesNotContain("E-mail intake");
+    assertThat(api.post("/api/v1/auth/login", null, Map.of("email", "intake+" + admin.organizationId() + "@system.invoicemind.invalid",
+        "password", "!disabled")).status()).isEqualTo(401);
+  }
+
+  @Test
   void aMessageIsNeverProcessedTwiceEvenIfItReappearsUnread() throws Exception {
     Session admin = api.registerOrg("Mail Dup Inc");
-    Session user = api.createUser(admin, "USER");
+    Session user = api.createUser(admin, "ACCOUNTANT");
     String token = token(admin);
     String id = "<same-" + UUID.randomUUID() + "@test>";
     Att attachment = pdf("once.pdf");
@@ -185,7 +226,7 @@ class EmailIngestIT extends AbstractIntegrationTest {
   @Test
   void anotherPollFindsNothingNewAndAttachmentsAreCapped() throws Exception {
     Session admin = api.registerOrg("Mail Cap Inc");
-    Session user = api.createUser(admin, "USER");
+    Session user = api.createUser(admin, "ACCOUNTANT");
     String token = token(admin);
     List<Att> seven = new ArrayList<>();
     for (int i = 0; i < 7; i++) seven.add(pdf("doc-" + i + ".pdf"));
@@ -200,7 +241,7 @@ class EmailIngestIT extends AbstractIntegrationTest {
   @Test
   void rotatingTheTokenInvalidatesTheOldAddress() throws Exception {
     Session admin = api.registerOrg("Mail Rotate Inc");
-    Session user = api.createUser(admin, "USER");
+    Session user = api.createUser(admin, "ACCOUNTANT");
     String oldToken = token(admin);
 
     JsonNode rotated = api.post("/api/v1/ingest/email/token", admin.token(), null).json();
@@ -219,11 +260,11 @@ class EmailIngestIT extends AbstractIntegrationTest {
   @Test
   void whenRequiredTheMailServersAuthenticationResultsMustVouchForTheSender() throws Exception {
     Session admin = api.registerOrg("Mail Auth Inc");
-    Session user = api.createUser(admin, "USER");
+    Session user = api.createUser(admin, "ACCOUNTANT");
     String token = token(admin);
     MailProperties strictProps = new MailProperties(true, mailProps.address(), mailProps.host(), mailProps.port(),
         mailProps.username(), mailProps.password(), false, "INBOX", 3600, true, 20, 5, 30_000_000);
-    EmailIngestService strict = new EmailIngestService(strictProps, appProps, organizations, users, orgAccess, invoices, audit, jdbc);
+    EmailIngestService strict = new EmailIngestService(strictProps, appProps, organizations, users, orgAccess, invoices, intake, audit, jdbc);
 
     MimeMessage forged = mail(addr(token), user.email(), "forged sender", null, List.of(pdf("a.pdf")));
     forged.setHeader("Authentication-Results", "mx.example.com; dkim=fail; spf=fail");

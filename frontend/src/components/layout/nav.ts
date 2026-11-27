@@ -1,4 +1,4 @@
-import { BarChart3, BookOpen, Building2, UserCog, CheckCircle2, Download, FileText, ScrollText, Settings, UploadCloud, Users, Webhook, type LucideIcon } from "lucide-react";
+import { BarChart3, BookOpen, Building2, UserCog, CheckCircle2, Download, FileText, ScrollText, Settings, Store, UploadCloud, Users, Webhook, type LucideIcon } from "lucide-react";
 
 import type { FirmRole, Role } from "@/lib/api/types";
 
@@ -18,6 +18,7 @@ export const NAV: NavItem[] = [
   { href: "/firm/team", label: "Firm team", icon: UserCog, firmRoles: ["FIRM_ADMIN"] },
   { href: "/upload", label: "Upload", icon: UploadCloud },
   { href: "/approvals", label: "Approvals", icon: CheckCircle2, roles: ["APPROVER", "ADMIN"] },
+  { href: "/vendors", label: "Vendors", icon: Store },
   { href: "/analytics", label: "Analysis", icon: BarChart3 },
   { href: "/export", label: "Export", icon: Download },
   { href: "/knowledge", label: "Knowledge", icon: BookOpen, roles: ["APPROVER", "ADMIN"] },

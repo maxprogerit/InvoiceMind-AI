@@ -29,11 +29,16 @@ public record AppProperties(
 
   public record Storage(String root, long maxFileBytes) {}
 
-  public record Ai(@NotBlank String baseUrl, @NotBlank String token, int connectTimeoutMs, int ocrTimeoutMs,
-                   int extractTimeoutMs, int retryAttempts, long retryInitialBackoffMs,
-                   int circuitFailureRate, int circuitOpenSeconds) {}
+  /** The internal extract-service. One attempt per call; retries are the job queue's (see Processing). */
+  public record Ai(@NotBlank String baseUrl, @NotBlank String token, int connectTimeoutMs, int readTimeoutMs) {}
 
-  public record Processing(String topic, int stuckAfterMinutes, int requeueUploadedAfterMinutes) {}
+  /**
+   * The Postgres job queue: {@code concurrency} jobs per backend instance, polled every {@code pollInterval};
+   * failed transient attempts wait {@code retryBase} x 2^(attempt-1); a job RUNNING for {@code stuckAfterMinutes}
+   * is handed out again.
+   */
+  public record Processing(int concurrency, java.time.Duration pollInterval, java.time.Duration retryBase,
+                           int maxAttempts, int stuckAfterMinutes) {}
 
   public record RateLimit(int authPerMinute, int refreshPerMinute, int uploadPerMinute) {}
 

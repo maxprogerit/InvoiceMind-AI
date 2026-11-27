@@ -16,7 +16,7 @@ vi.mock("./client", () => ({
   unwrap: async (p: Promise<{ data: unknown }>) => (await p).data,
 }));
 
-const userIn = (org: string, name: string, role: "ADMIN" | "USER") =>
+const userIn = (org: string, name: string, role: "ADMIN" | "ACCOUNTANT") =>
   ({ id: "u", email: "a@b.io", fullName: "A", role, organizationId: org, organizationName: name, firmRole: "ACCOUNTANT" }) as const;
 
 describe("switching client company", () => {
@@ -27,7 +27,7 @@ describe("switching client company", () => {
   });
 
   it("stores the new token, forgets everything cached for the previous company and forgets its live events", async () => {
-    post.mockResolvedValue({ data: { accessToken: "token-for-b", expiresIn: 900, user: userIn("b", "Bakery", "USER") } });
+    post.mockResolvedValue({ data: { accessToken: "token-for-b", expiresIn: 900, user: userIn("b", "Bakery", "ACCOUNTANT") } });
     const qc = new QueryClient();
     qc.setQueryData(["invoices", {}], { items: ["invoice of Acme"] });
     const { result } = renderHook(() => useSwitchOrganization(), {
@@ -40,7 +40,7 @@ describe("switching client company", () => {
     await waitFor(() => expect(useAuth.getState().token).toBe("token-for-b"));
 
     expect(post).toHaveBeenCalledWith("/api/v1/auth/switch-organization", { body: { organizationId: "b" } });
-    expect(useAuth.getState().user).toMatchObject({ organizationId: "b", role: "USER" });   // the role in the new company
+    expect(useAuth.getState().user).toMatchObject({ organizationId: "b", role: "ACCOUNTANT" });   // the role in the new company
     expect(qc.getQueryData(["invoices", {}])).toBeUndefined();
     expect(useLive.getState().latest).toEqual({});
   });

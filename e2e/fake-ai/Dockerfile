@@ -5,9 +5,9 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng tesseract-ocr-deu tesseract-ocr-rus poppler-utils \
  && rm -rf /var/lib/apt/lists/*
 WORKDIR /srv
-COPY ai-service/requirements.txt .
+COPY extract-service/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY ai-service/app ./app
+COPY extract-service/app ./app
 COPY e2e/fake-ai/e2e_main.py .
 RUN useradd --create-home --uid 10001 app
 USER app

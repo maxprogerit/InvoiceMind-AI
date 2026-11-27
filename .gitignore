@@ -26,6 +26,6 @@ __pycache__/
 /backend/storage/
 *.log
 .DS_Store
-eval/results/smoke-test.json
+eval/results/smoke-test.*
 frontend/test-results/
 frontend/playwright-report/

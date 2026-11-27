@@ -1,0 +1,45 @@
+{
+  "meta": {
+    "file": "20-multitax-uk-zero.pdf",
+    "layout": "classic",
+    "kind": "text-pdf",
+    "adversarial": false,
+    "synthetic": true,
+    "pages": 1,
+    "tags": [
+      "text-pdf",
+      "multi-tax"
+    ]
+  },
+  "expected": {
+    "document_type": "invoice",
+    "vendor": "Kestrel Learning Ltd",
+    "invoice_number": "KL-20931",
+    "invoice_date": "2026-06-23",
+    "due_date": "2026-07-23",
+    "currency": "GBP",
+    "subtotal": "3280.00",
+    "tax": "540.00",
+    "total": "3820.00",
+    "line_items": [
+      {
+        "description": "Printed course handbooks",
+        "quantity": 40,
+        "unit_price": "14.50",
+        "total": "580.00"
+      },
+      {
+        "description": "Online course licences",
+        "quantity": 40,
+        "unit_price": "35.00",
+        "total": "1400.00"
+      },
+      {
+        "description": "Trainer day rate",
+        "quantity": 2,
+        "unit_price": "650.00",
+        "total": "1300.00"
+      }
+    ]
+  }
+}

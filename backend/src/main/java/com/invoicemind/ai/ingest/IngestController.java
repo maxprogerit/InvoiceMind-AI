@@ -18,6 +18,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -32,7 +34,9 @@ public class IngestController {
                                @NotNull int invoicesCreated, @NotNull Instant receivedAt) {}
 
   public record EmailIngestStatus(@NotNull boolean enabled, String address, @NotNull boolean requireAuthResults,
-                                  @NotNull List<MailMessageDto> recent) {}
+                                  @NotNull IngestPolicy acceptFrom, @NotNull List<MailMessageDto> recent) {}
+
+  public record PolicyRequest(@NotNull IngestPolicy acceptFrom) {}
 
   private final MailProperties props;
   private final OrganizationRepository organizations;
@@ -58,6 +62,20 @@ public class IngestController {
     return status(org);
   }
 
+  /** ANYONE: vendors can mail their invoices; USERS: only the organisation's users. */
+  @PutMapping("/policy")
+  @Transactional
+  public EmailIngestStatus policy(@jakarta.validation.Valid @RequestBody PolicyRequest request) {
+    AuthPrincipal me = CurrentUser.get();
+    OrganizationEntity org = organizations.findById(me.organizationId()).orElseThrow();
+    IngestPolicy before = org.getIngestAcceptFrom();
+    org.setIngestAcceptFrom(request.acceptFrom());
+    organizations.save(org);
+    audit.log(me.organizationId(), me.userId(), "EMAIL_POLICY_CHANGED", AuditService.ORGANIZATION, me.organizationId(),
+        Map.of("from", before.name(), "to", request.acceptFrom().name()));
+    return status(org);
+  }
+
   private EmailIngestStatus status(OrganizationEntity org) {
     List<MailMessageDto> recent = jdbc.query("""
         select id, from_address, subject, status, reason, invoices_created, created_at from email_ingest_log
@@ -67,7 +85,7 @@ public class IngestController {
             rs.getString("status"), rs.getString("reason"), rs.getInt("invoices_created"),
             rs.getTimestamp("created_at").toInstant()));
     return new EmailIngestStatus(props.configured(), props.configured() ? addressFor(org.getIngestToken()) : null,
-        props.requireAuthResults(), recent);
+        props.requireAuthResults(), org.getIngestAcceptFrom(), recent);
   }
 
   /** {@code invoices+<token>@example.com} from {@code invoices@example.com}. */

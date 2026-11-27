@@ -20,10 +20,11 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 /**
- * End-to-end through the real stack: HTTP upload -> Postgres -> Kafka -> consumer -> (fake) ai-service ->
+ * End-to-end through the real stack: HTTP upload -> Postgres (processing_jobs) -> worker -> (fake) ai-service ->
  * deterministic validation -> status events. Only the ai-service itself is a test double.
  */
 class PipelineIT extends AbstractIntegrationTest {
+  @org.springframework.beans.factory.annotation.Autowired com.invoicemind.ai.processing.ProcessingJobQueue jobs;
 
   static String id(String prefix) { return prefix + "-" + UUID.randomUUID().toString().substring(0, 8); }
 
@@ -64,7 +65,7 @@ class PipelineIT extends AbstractIntegrationTest {
   void consistentInvoiceFlowsFromUploadToValidated() {
     Session admin = api.registerOrg("Happy Inc");
     Session approver = api.createUser(admin, "APPROVER");
-    Session user = api.createUser(admin, "USER");
+    Session user = api.createUser(admin, "ACCOUNTANT");
     String sc = scenario("ACME GmbH", "INV-" + id("n"), "1000.00", "190.00", "1190.00");
 
     UUID invoice = upload(user, sc);
@@ -77,7 +78,7 @@ class PipelineIT extends AbstractIntegrationTest {
     assertThat(inv.get("tax").decimalValue()).isEqualByComparingTo("190.00");
     assertThat(inv.get("currency").asText()).isEqualTo("EUR");
     assertThat(inv.get("invoiceDate").asText()).isEqualTo("2026-03-14");
-    assertThat(inv.get("issues")).isEmpty();
+    assertThat(codes(inv)).containsExactly("VENDOR_UNVERIFIED"); // a first invoice from a new vendor: a warning only
     assertThat(inv.get("lineItems")).hasSize(1);
     assertThat(inv.at("/ocr/engine").asText()).isEqualTo("tesseract");
     assertThat(inv.at("/ocr/pageCount").asInt()).isEqualTo(1);
@@ -98,6 +99,10 @@ class PipelineIT extends AbstractIntegrationTest {
     assertThat(perms.get("canEdit").asBoolean()).isTrue();
     assertThat(perms.get("canApprove").asBoolean()).isFalse(); // uploader is a plain USER
     JsonNode approverView = api.get("/api/v1/invoices/" + invoice, approver.token()).json();
+    assertThat(approverView.at("/permissions/canApprove").asBoolean()).isFalse(); // the new vendor is not confirmed yet
+    assertThat(approverView.at("/permissions/approvalBlockedReason").asText()).isEqualTo("Confirm the vendor before approving");
+    api.verifyVendorOf(approver.token(), invoice);
+    approverView = api.get("/api/v1/invoices/" + invoice, approver.token()).json();
     assertThat(approverView.at("/permissions/canApprove").asBoolean()).isTrue();
 
     // audit trail is written by the pipeline, in order
@@ -133,7 +138,7 @@ class PipelineIT extends AbstractIntegrationTest {
   @Test
   void inconsistentTotalsRequireReviewAndCanBeCorrectedByAHuman() {
     Session admin = api.registerOrg("Mismatch Inc");
-    Session user = api.createUser(admin, "USER");
+    Session user = api.createUser(admin, "ACCOUNTANT");
     String sc = scenario("ACME GmbH", "INV-" + id("n"), "1000.00", "190.00", "1500.00"); // 1000 + 190 != 1500
 
     UUID invoice = upload(user, sc);
@@ -153,7 +158,7 @@ class PipelineIT extends AbstractIntegrationTest {
     assertThat(fixed.status()).isEqualTo(200);
     assertThat(fixed.json().get("status").asText()).isEqualTo("VALIDATED");
     assertThat(fixed.json().get("humanReviewed").asBoolean()).isTrue();
-    assertThat(fixed.json().get("issues")).isEmpty();
+    assertThat(codes(fixed.json())).containsExactly("VENDOR_UNVERIFIED");
 
     // a still-wrong value stays in review
     Resp bad = api.put("/api/v1/invoices/" + invoice, user.token(),
@@ -169,7 +174,7 @@ class PipelineIT extends AbstractIntegrationTest {
   void promptInjectionInTheDocumentCannotSlipThroughToApproval() {
     Session admin = api.registerOrg("Injection Inc");
     Session approver = api.createUser(admin, "APPROVER");
-    Session user = api.createUser(admin, "USER");
+    Session user = api.createUser(admin, "ACCOUNTANT");
     String sc = id("inject");
     // the "model" obeyed text hidden in the invoice and reported a tiny total; ai-service also flagged it
     FakeAiServiceForTests.scenario(sc, FakeAiServiceForTests.okOcr(sc), FakeAiServiceForTests.okExtraction(
@@ -183,6 +188,7 @@ class PipelineIT extends AbstractIntegrationTest {
     assertThat(codes(inv)).contains("TOTAL_MISMATCH", "PROMPT_INJECTION_SUSPECTED", "MODEL_FLAGGED");
 
     // not approvable in this state, and the API says why
+    api.verifyVendorOf(approver.token(), invoice);
     Resp approve = api.post("/api/v1/invoices/" + invoice + "/approve", approver.token(), Map.of());
     assertThat(approve.status()).isEqualTo(409);
     assertThat(approve.json().get("code").asText()).isEqualTo("invoice_not_approvable");
@@ -191,6 +197,7 @@ class PipelineIT extends AbstractIntegrationTest {
     Resp fixed = api.put("/api/v1/invoices/" + invoice, approver.token(), correction(inv, Map.of("total", new BigDecimal("1190.00"))));
     assertThat(fixed.json().get("status").asText()).isEqualTo("VALIDATED");
     assertThat(codes(fixed.json())).doesNotContain("PROMPT_INJECTION_SUSPECTED");
+    api.verifyVendorOf(approver.token(), invoice);
     assertThat(api.post("/api/v1/invoices/" + invoice + "/approve", approver.token(), Map.of("comment", "checked manually"))
         .status()).isEqualTo(200);
   }
@@ -233,7 +240,69 @@ class PipelineIT extends AbstractIntegrationTest {
     JsonNode failed = awaitStatus(s, invoice, "FAILED", "VALIDATED");
     assertThat(failed.get("status").asText()).isEqualTo("FAILED");
     assertThat(failed.get("failureReason").asText()).contains("rate limited");
-    assertThat(FakeAiServiceForTests.extractCalls(sc)).isEqualTo(2); // app.ai.retry-attempts=2 in the test profile
+    // one call per job attempt: the job queue retried with backoff up to max-attempts (5), the client never retries
+    assertThat(FakeAiServiceForTests.extractCalls(sc)).isEqualTo(5);
+    assertThat(jobs.statuses(invoice)).containsExactly("FAILED");
+  }
+
+  @Test
+  void aTransientOutageIsRetriedWithBackoffUntilItRecovers() {
+    Session s = api.registerOrg("Flaky Inc");
+    String sc = id("flaky");
+    Reply outage = Reply.json(504, Map.of("error", Map.of("code", "llm_timeout", "message", "The language model timed out")));
+    FakeAiServiceForTests.scenarioSequence(sc, FakeAiServiceForTests.okOcr(sc),
+        List.of(outage, outage, extraction("ACME GmbH", "INV-" + sc, "1000.00", "190.00", "1190.00")));
+
+    long started = System.nanoTime();
+    UUID invoice = upload(s, sc);
+    JsonNode done = awaitStatus(s, invoice, "VALIDATED", "NEEDS_REVIEW", "FAILED");
+    long elapsedMs = (System.nanoTime() - started) / 1_000_000;
+
+    assertThat(done.get("status").asText()).isEqualTo("VALIDATED");
+    assertThat(done.hasNonNull("failureReason")).isFalse();
+    assertThat(FakeAiServiceForTests.extractCalls(sc)).isEqualTo(3);
+    assertThat(jobs.statuses(invoice)).containsExactly("DONE");
+    // retry-base 0.2 s in the test profile: waits of 0.2 s and 0.4 s before attempts 2 and 3
+    assertThat(elapsedMs).isGreaterThanOrEqualTo(600);
+  }
+
+  @Test
+  void aClientErrorFromTheExtractServiceIsNotRetried() {
+    Session s = api.registerOrg("Broken File Inc");
+    String sc = id("broken");
+    FakeAiServiceForTests.scenario(sc,
+        Reply.json(422, Map.of("error", Map.of("code", "unreadable_file", "message", "File could not be decoded"))),
+        extraction("ACME GmbH", "INV-" + sc, "1000.00", "190.00", "1190.00"));
+
+    UUID invoice = upload(s, sc);
+    JsonNode failed = awaitStatus(s, invoice, "FAILED", "VALIDATED");
+    assertThat(failed.get("failureReason").asText()).isEqualTo("File could not be decoded");
+    assertThat(FakeAiServiceForTests.ocrCalls(sc)).isEqualTo(1);
+    assertThat(FakeAiServiceForTests.extractCalls(sc)).isZero();
+    assertThat(jobs.statuses(invoice)).containsExactly("FAILED");
+  }
+
+  @Test
+  void theExtractServiceResultIsMappedSourceChecksAndExactMoney() {
+    Session s = api.registerOrg("Mapping Inc");
+    String sc = id("mapping");
+    FakeAiServiceForTests.scenario(sc, FakeAiServiceForTests.okOcr(sc),
+        FakeAiServiceForTests.okExtraction("ACME GmbH", "INV-" + sc, "2026-03-14", "2026-04-13", "EUR",
+            "0.30", "0.06", "0.36", List.of(line("Bolt", "3", "0.10", "0.30")), false, false));
+    FakeAiServiceForTests.validation(sc, "needs_review", List.of(Map.of("code", "missing_optional_field",
+        "severity", "warning", "field", "tax", "message", "x"), Map.of("code", "total_mismatch", "severity", "error",
+        "field", "total", "message", "y")));
+
+    UUID invoice = upload(s, sc);
+    JsonNode inv = awaitStatus(s, invoice, "VALIDATED", "NEEDS_REVIEW", "FAILED");
+    assertThat(inv.path("ocr").path("source").asText()).isEqualTo("text_layer");
+    assertThat(inv.path("extractCheck").path("status").asText()).isEqualTo("needs_review");
+    assertThat(inv.path("extractCheck").path("errors").asInt()).isEqualTo(1);
+    assertThat(inv.path("extractCheck").path("warnings").asInt()).isEqualTo(1);
+    // Java re-validates on its own: 0.30 + 0.06 = 0.36 is consistent, so the invoice is VALIDATED
+    assertThat(inv.get("status").asText()).isEqualTo("VALIDATED");
+    assertThat(new BigDecimal(inv.get("total").asText())).isEqualByComparingTo("0.36");
+    assertThat(new BigDecimal(inv.path("lineItems").get(0).get("unitPrice").asText())).isEqualByComparingTo("0.10");
   }
 
   @Test
@@ -269,9 +338,13 @@ class PipelineIT extends AbstractIntegrationTest {
 
   /** Scenario whose document is a credit note; {@code sign} is what the document prints ("" or "-"). */
   static String creditScenario(String number, String sign) {
+    return creditScenario(number, sign, "2026-03-20");
+  }
+
+  static String creditScenario(String number, String sign, String date) {
     String id = id("credit");
     FakeAiServiceForTests.scenario(id, FakeAiServiceForTests.okOcr(id), FakeAiServiceForTests.okExtraction(
-        "credit_note", "ACME GmbH", number, "2026-03-20", null, "EUR", sign + "200.00", sign + "38.00", sign + "238.00",
+        "credit_note", "ACME GmbH", number, date, null, "EUR", sign + "200.00", sign + "38.00", sign + "238.00",
         List.of(line("Returned hours", "2", sign + "100.00", sign + "200.00")), false, false));
     return id;
   }
@@ -279,9 +352,10 @@ class PipelineIT extends AbstractIntegrationTest {
   @Test
   void creditNotesAreStoredNegativeWhicheverSignWasPrinted() {
     Session admin = api.registerOrg("Credit Inc");
-    Session user = api.createUser(admin, "USER");
+    Session user = api.createUser(admin, "ACCOUNTANT");
     for (String printed : List.of("", "-")) {
-      UUID invoice = upload(user, creditScenario("CN-" + id("n"), printed));
+      // a month apart: two credit notes with the same amount on the same day would be possible duplicates
+      UUID invoice = upload(user, creditScenario("CN-" + id("n"), printed, printed.isEmpty() ? "2026-03-20" : "2026-04-20"));
       JsonNode inv = awaitStatus(user, invoice, "VALIDATED", "NEEDS_REVIEW", "FAILED");
 
       assertThat(inv.get("status").asText()).as("printed sign '%s': %s", printed, codes(inv)).isEqualTo("VALIDATED");

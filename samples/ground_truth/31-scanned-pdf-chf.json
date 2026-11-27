@@ -1,0 +1,45 @@
+{
+  "meta": {
+    "file": "31-scanned-pdf-chf.pdf",
+    "layout": "modern",
+    "kind": "scanned-pdf",
+    "adversarial": false,
+    "synthetic": true,
+    "pages": 1,
+    "tags": [
+      "scan",
+      "scanned-pdf"
+    ]
+  },
+  "expected": {
+    "document_type": "invoice",
+    "vendor": "Seeblick Consulting AG",
+    "invoice_number": "SBC-2026-219",
+    "invoice_date": "2026-10-14",
+    "due_date": "2026-11-13",
+    "currency": "CHF",
+    "subtotal": "6860.00",
+    "tax": "555.66",
+    "total": "7415.66",
+    "line_items": [
+      {
+        "description": "Strategy workshop (day)",
+        "quantity": 2,
+        "unit_price": "2400.00",
+        "total": "4800.00"
+      },
+      {
+        "description": "Preparation and report",
+        "quantity": 1,
+        "unit_price": "1800.00",
+        "total": "1800.00"
+      },
+      {
+        "description": "Travel expenses (flat)",
+        "quantity": 1,
+        "unit_price": "260.00",
+        "total": "260.00"
+      }
+    ]
+  }
+}

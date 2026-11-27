@@ -3,7 +3,13 @@
     "file": "16-german-scan-2.png",
     "layout": "classic",
     "kind": "scan",
-    "adversarial": false
+    "adversarial": false,
+    "synthetic": true,
+    "pages": 1,
+    "tags": [
+      "scan",
+      "decimal-comma"
+    ]
   },
   "expected": {
     "document_type": "invoice",
@@ -12,21 +18,21 @@
     "invoice_date": "2026-05-15",
     "due_date": "2026-06-14",
     "currency": "EUR",
-    "subtotal": 1163.6,
-    "tax": 221.08,
-    "total": 1384.68,
+    "subtotal": "1163.60",
+    "tax": "221.08",
+    "total": "1384.68",
     "line_items": [
       {
         "description": "Ersatzteil Lager 6205-2RS",
         "quantity": 24,
-        "unit_price": 11.4,
-        "total": 273.6
+        "unit_price": "11.40",
+        "total": "273.60"
       },
       {
         "description": "Wartung Fräsmaschine",
         "quantity": 1,
-        "unit_price": 890.0,
-        "total": 890.0
+        "unit_price": "890.00",
+        "total": "890.00"
       }
     ]
   }

@@ -3,11 +3,13 @@ package com.invoicemind.ai.validation;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.invoicemind.ai.invoice.DocumentType;
+import com.invoicemind.ai.validation.InvoiceValidator.Candidate;
 import com.invoicemind.ai.validation.InvoiceValidator.Code;
 import com.invoicemind.ai.validation.InvoiceValidator.Input;
 import com.invoicemind.ai.validation.InvoiceValidator.Issue;
 import com.invoicemind.ai.validation.InvoiceValidator.Line;
 import com.invoicemind.ai.validation.InvoiceValidator.Lookups;
+import com.invoicemind.ai.validation.InvoiceValidator.Severity;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -23,10 +25,22 @@ class InvoiceValidatorTest {
   static final UUID VENDOR = UUID.randomUUID();
 
   final InvoiceValidator validator = new InvoiceValidator();
-  final Lookups noDuplicates = new Lookups() {
-    public Optional<UUID> duplicateOf(UUID o, UUID i, DocumentType t, UUID v, String n, Instant c) { return Optional.empty(); }
-    public boolean sameFileSeenBefore(UUID o, UUID i, String s) { return false; }
-  };
+  /** Test double: answers every lookup with nothing unless a test sets a field. */
+  static class FakeLookups implements Lookups {
+    UUID sameNumber, sameFile;
+    Candidate possible;
+    int windowAsked = -1;
+
+    public Optional<UUID> duplicateOf(UUID o, UUID i, DocumentType t, UUID v, String n, Instant c) { return Optional.ofNullable(sameNumber); }
+    public Optional<UUID> earlierSameFile(UUID o, UUID i, String s, Instant c) { return Optional.ofNullable(sameFile); }
+    public Optional<Candidate> possibleDuplicateOf(UUID o, UUID i, DocumentType t, UUID v, BigDecimal total, String cur,
+                                                   LocalDate date, int window, Instant c) {
+      windowAsked = window;
+      return Optional.ofNullable(possible);
+    }
+  }
+
+  final Lookups noDuplicates = new FakeLookups();
 
   static BigDecimal d(String v) { return new BigDecimal(v); }
 
@@ -37,7 +51,7 @@ class InvoiceValidatorTest {
     Fields f = change.apply(new Fields());
     return new Input(UUID.randomUUID(), ORG, f.type, VENDOR, f.vendorName, f.invoiceNumber, f.invoiceDate, f.dueDate,
         f.currency, f.subtotal, f.tax, f.total, f.lines, "sha", f.confidence, f.modelNeedsReview, f.modelReasons,
-        f.injection, f.humanReviewed, Instant.now());
+        f.injection, f.humanReviewed, Instant.now(), f.vendorVerified, f.duplicateCleared);
   }
 
   static class Fields {
@@ -56,6 +70,8 @@ class InvoiceValidatorTest {
     List<String> modelReasons = List.of();
     boolean injection = false;
     boolean humanReviewed = false;
+    boolean vendorVerified = true;
+    boolean duplicateCleared = false;
   }
 
   List<Code> codes(List<Issue> issues) { return issues.stream().map(Issue::code).toList(); }
@@ -205,26 +221,82 @@ class InvoiceValidatorTest {
   }
 
   @Test
-  void duplicateInvoiceIsAnError() {
-    UUID other = UUID.randomUUID();
-    Lookups dup = new Lookups() {
-      public Optional<UUID> duplicateOf(UUID o, UUID i, DocumentType t, UUID v, String n, Instant c) { return Optional.of(other); }
-      public boolean sameFileSeenBefore(UUID o, UUID i, String s) { return true; }
-    };
-    List<Issue> issues = validator.validate(base(f -> f), dup, TODAY);
-    assertThat(codes(issues)).contains(Code.DUPLICATE_INVOICE, Code.DUPLICATE_FILE);
-    assertThat(issues.stream().filter(i -> i.code() == Code.DUPLICATE_INVOICE).findFirst().orElseThrow().message())
-        .contains(other.toString());
+  void sameVendorAndNumberIsAnExactDuplicateThatPointsToTheOriginal() {
+    FakeLookups l = new FakeLookups();
+    l.sameNumber = UUID.randomUUID();
+    List<Issue> issues = validator.validate(base(f -> f), l, TODAY);
+    Issue dup = issues.stream().filter(i -> i.code() == Code.DUPLICATE_INVOICE).findFirst().orElseThrow();
+    assertThat(dup.severity()).isEqualTo(Severity.ERROR);
+    assertThat(dup.related()).isEqualTo(l.sameNumber);
+    assertThat(dup.message()).contains("same vendor and number").contains("Approval is blocked");
+    assertThat(InvoiceValidator.needsReview(issues)).isTrue();
+  }
+
+  @Test
+  void anIdenticalFileIsAnExactDuplicate() {
+    FakeLookups l = new FakeLookups();
+    l.sameFile = UUID.randomUUID();
+    Issue dup = validator.validate(base(f -> f), l, TODAY).stream().filter(i -> i.code() == Code.DUPLICATE_FILE)
+        .findFirst().orElseThrow();
+    assertThat(dup.severity()).isEqualTo(Severity.ERROR);
+    assertThat(dup.related()).isEqualTo(l.sameFile);
+    assertThat(dup.message()).contains("SHA-256");
+  }
+
+  @Test
+  void sameVendorAndTotalCloseByWithADifferentNumberIsAPossibleDuplicate() {
+    FakeLookups l = new FakeLookups();
+    l.possible = new Candidate(UUID.randomUUID(), "INV-0", LocalDate.of(2026, 5, 29));
+    List<Issue> issues = validator.validate(base(f -> f), l, TODAY);
+    Issue p = issues.stream().filter(i -> i.code() == Code.POSSIBLE_DUPLICATE).findFirst().orElseThrow();
+    assertThat(p.severity()).isEqualTo(Severity.ERROR);
+    assertThat(p.related()).isEqualTo(l.possible.id());
+    assertThat(p.message()).contains("INV-0").contains("1190.00 EUR").contains("3 days apart").contains("different number");
+    assertThat(l.windowAsked).isEqualTo(InvoiceValidator.DEFAULT_POSSIBLE_DUPLICATE_WINDOW_DAYS);
+  }
+
+  @Test
+  void theWindowForPossibleDuplicatesIsConfigurable() {
+    FakeLookups l = new FakeLookups();
+    new InvoiceValidator(30).validate(base(f -> f), l, TODAY);
+    assertThat(l.windowAsked).isEqualTo(30);
+  }
+
+  @Test
+  void aPossibleDuplicateClearedByAPersonIsNotFlaggedAgain() {
+    FakeLookups l = new FakeLookups();
+    l.possible = new Candidate(UUID.randomUUID(), "INV-0", LocalDate.of(2026, 6, 1));
+    assertThat(codes(validator.validate(base(f -> { f.duplicateCleared = true; return f; }), l, TODAY)))
+        .doesNotContain(Code.POSSIBLE_DUPLICATE);
+  }
+
+  @Test
+  void anExactDuplicateIsNotAlsoReportedAsPossible() {
+    FakeLookups l = new FakeLookups();
+    l.sameNumber = UUID.randomUUID();
+    l.possible = new Candidate(UUID.randomUUID(), "INV-1", LocalDate.of(2026, 6, 1));
+    assertThat(codes(validator.validate(base(f -> f), l, TODAY))).contains(Code.DUPLICATE_INVOICE)
+        .doesNotContain(Code.POSSIBLE_DUPLICATE);
+  }
+
+  @Test
+  void anUnverifiedVendorIsAWarningThatDoesNotForceReview() {
+    List<Issue> issues = run(base(f -> { f.vendorVerified = false; return f; }));
+    assertThat(codes(issues)).containsExactly(Code.VENDOR_UNVERIFIED);
+    assertThat(InvoiceValidator.needsReview(issues)).isFalse();
   }
 
   @Test
   void duplicateLookupIsSkippedWithoutVendorOrNumber() {
-    Lookups mustNotBeCalled = new Lookups() {
+    Lookups mustNotBeCalled = new FakeLookups() {
+      @Override
       public Optional<UUID> duplicateOf(UUID o, UUID i, DocumentType t, UUID v, String n, Instant c) { throw new AssertionError(); }
-      public boolean sameFileSeenBefore(UUID o, UUID i, String s) { return false; }
+      @Override
+      public Optional<Candidate> possibleDuplicateOf(UUID o, UUID i, DocumentType t, UUID v, BigDecimal total, String cur,
+                                                     LocalDate date, int window, Instant c) { throw new AssertionError(); }
     };
     Input in = new Input(UUID.randomUUID(), ORG, DocumentType.INVOICE, null, "ACME", "INV-1", TODAY, null, "EUR", d("1.00"), null, d("1.00"),
-        List.of(), "sha", Map.of(), false, List.of(), false, false, Instant.now());
+        List.of(), "sha", Map.of(), false, List.of(), false, false, Instant.now(), true, false);
     validator.validate(in, mustNotBeCalled, TODAY); // no exception == pass
   }
 

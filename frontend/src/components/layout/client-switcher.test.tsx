@@ -31,7 +31,7 @@ describe("ClientSwitcher", () => {
     nav.push.mockClear();
     nav.pathname = "/invoices";
     mutate.mockReset();
-    orgs.data = [option("a", "Acme GmbH", "ADMIN", true), option("b", "Bakery Müller", "USER"), option("c", "Café Nord", "APPROVER")];
+    orgs.data = [option("a", "Acme GmbH", "ADMIN", true), option("b", "Bakery Müller", "ACCOUNTANT"), option("c", "Café Nord", "APPROVER")];
     useAuth.setState({
       status: "authenticated",
       token: "t",
@@ -58,7 +58,7 @@ describe("ClientSwitcher", () => {
     const list = await screen.findByRole("listbox", { name: /client companies/i });
     expect(list.querySelectorAll("[role=option]")).toHaveLength(3);
     expect(screen.getByRole("option", { name: /acme gmbh/i })).toHaveAttribute("aria-selected", "true");
-    expect(screen.getByRole("option", { name: /bakery müller/i })).toHaveTextContent("user");
+    expect(screen.getByRole("option", { name: /bakery müller/i })).toHaveTextContent("accountant");
   });
 
   it("filters by what is typed and says so when nothing matches", async () => {

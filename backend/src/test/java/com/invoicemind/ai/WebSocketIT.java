@@ -60,7 +60,7 @@ class WebSocketIT extends AbstractIntegrationTest {
   @Test
   void uploaderReceivesLiveStatusEventsForTheirInvoice() throws Exception {
     Session admin = api.registerOrg("Live Inc");
-    Session user = api.createUser(admin, "USER");
+    Session user = api.createUser(admin, "ACCOUNTANT");
     StompSession ws = connect(user.token());
     BlockingQueue<JsonNode> events = subscribe(ws, "/user/queue/invoices");
     Thread.sleep(300); // let the subscription register on the broker
@@ -80,8 +80,8 @@ class WebSocketIT extends AbstractIntegrationTest {
   @Test
   void otherUsersDoNotReceiveSomeoneElsesEvents() throws Exception {
     Session admin = api.registerOrg("Private Inc");
-    Session alice = api.createUser(admin, "USER");
-    Session bob = api.createUser(admin, "USER");
+    Session alice = api.createUser(admin, "ACCOUNTANT");
+    Session bob = api.createUser(admin, "ACCOUNTANT");
     StompSession bobWs = connect(bob.token());
     BlockingQueue<JsonNode> bobEvents = subscribe(bobWs, "/user/queue/invoices");
     Thread.sleep(300);
@@ -96,7 +96,7 @@ class WebSocketIT extends AbstractIntegrationTest {
   void reviewersTopicIsRestrictedToReviewersOfTheSameOrganisation() throws Exception {
     Session admin = api.registerOrg("Topic Inc");
     Session approver = api.createUser(admin, "APPROVER");
-    Session user = api.createUser(admin, "USER");
+    Session user = api.createUser(admin, "ACCOUNTANT");
     Session foreignApprover = api.createUser(api.registerOrg("Foreign Inc"), "APPROVER");
     String topic = "/topic/org/" + admin.organizationId() + "/reviewers";
 
@@ -110,8 +110,17 @@ class WebSocketIT extends AbstractIntegrationTest {
     assertThat(first.get("invoiceId").asText()).isEqualTo(invoice.toString());
     awaitStatus(user, invoice, "VALIDATED");
 
-    // a plain USER and a reviewer of another org are refused (the broker closes the session)
-    for (Session intruder : List.of(user, foreignApprover)) {
+    // an accountant of the same organisation follows it too
+    StompSession accountantWs = connect(user.token());
+    BlockingQueue<JsonNode> accountantEvents = subscribe(accountantWs, topic);
+    Thread.sleep(300);
+    UUID another = upload(admin, scenario());
+    assertThat(accountantEvents.poll(30, TimeUnit.SECONDS)).isNotNull();
+    awaitStatus(admin, another, "VALIDATED", "NEEDS_REVIEW");
+    accountantWs.disconnect();
+
+    // a reviewer of another organisation is refused (the broker closes the session)
+    for (Session intruder : List.of(foreignApprover)) {
       StompSession ws = connect(intruder.token());
       BlockingQueue<JsonNode> q = subscribe(ws, topic);
       Thread.sleep(500);

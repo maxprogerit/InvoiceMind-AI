@@ -17,7 +17,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
-/** Boots the full application once (shared context) against real Postgres, Kafka and Redis. */
+/** Boots the full application once (shared context) against a real Postgres. */
 // @SpringBootTest switches tracing off by default; the tracing test needs it on (nothing is exported, see application-test.yml)
 @AutoConfigureObservability
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -36,6 +36,8 @@ public abstract class AbstractIntegrationTest {
     registry.add("app.fx.base-url", FakeFrankfurterForTests::baseUrl);
     registry.add("app.mail.host", () -> "127.0.0.1");
     registry.add("app.mail.port", MailServerForTests::imapPort);
+    registry.add("spring.mail.host", () -> "127.0.0.1");
+    registry.add("spring.mail.port", MailServerForTests::smtpPort);
   }
 
   @BeforeEach
@@ -50,7 +52,7 @@ public abstract class AbstractIntegrationTest {
     return UUID.fromString(r.json().get("id").asText());
   }
 
-  /** Polls the invoice until it reaches one of the given statuses (the pipeline is asynchronous via Kafka). */
+  /** Polls the invoice until it reaches one of the given statuses (the pipeline is asynchronous via the job queue). */
   protected JsonNode awaitStatus(TestApi.Session who, UUID id, String... statuses) {
     Set<String> wanted = Set.of(statuses);
     JsonNode[] last = new JsonNode[1];

@@ -4,6 +4,22 @@
  */
 
 export interface paths {
+    "/api/v1/vendors/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/organization": {
         parameters: {
             query?: never;
@@ -28,9 +44,25 @@ export interface paths {
             cookie?: never;
         };
         get: operations["get"];
-        put: operations["update"];
+        put: operations["update_1"];
         post?: never;
         delete: operations["delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ingest/email/policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["policy"];
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -84,7 +116,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/webhooks": {
+    "/api/v1/approval-rules": {
         parameters: {
             query?: never;
             header?: never;
@@ -92,6 +124,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["list"];
+        put: operations["replace"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/webhooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_1"];
         put?: never;
         post: operations["create"];
         delete?: never;
@@ -132,6 +180,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/vendors/{id}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["verify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vendors/{id}/aliases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["addAlias"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users": {
         parameters: {
             query?: never;
@@ -139,7 +219,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_1"];
+        get: operations["list_2"];
         put?: never;
         post: operations["create_1"];
         delete?: never;
@@ -187,7 +267,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_2"];
+        get: operations["list_3"];
         put?: never;
         post: operations["addText"];
         delete?: never;
@@ -235,7 +315,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_3"];
+        get: operations["list_4"];
         put?: never;
         post: operations["upload_1"];
         delete?: never;
@@ -292,6 +372,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/invoices/{id}/duplicate-decision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["decideDuplicate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/invoices/{id}/approve": {
         parameters: {
             query?: never;
@@ -302,6 +398,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["approve"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/invoices/zip": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["uploadZip"];
         delete?: never;
         options?: never;
         head?: never;
@@ -382,6 +494,22 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["activate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/export/accounting": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["exportToAccounting"];
         delete?: never;
         options?: never;
         head?: never;
@@ -481,7 +609,7 @@ export interface paths {
         delete: operations["delete_1"];
         options?: never;
         head?: never;
-        patch: operations["update_1"];
+        patch: operations["update_2"];
         trace?: never;
     };
     "/api/v1/users/{id}": {
@@ -497,7 +625,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch: operations["update_2"];
+        patch: operations["update_3"];
         trace?: never;
     };
     "/api/v1/webhooks/{id}/deliveries": {
@@ -532,6 +660,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/vendors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_5"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/notifications": {
         parameters: {
             query?: never;
@@ -539,7 +683,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_4"];
+        get: operations["list_6"];
         put?: never;
         post?: never;
         delete?: never;
@@ -580,6 +724,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/invoices/{id}/corrections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["corrections"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/invoices/{id}/audit": {
         parameters: {
             query?: never;
@@ -588,6 +748,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["audit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/invoices/queues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["queues"];
         put?: never;
         post?: never;
         delete?: never;
@@ -652,6 +828,54 @@ export interface paths {
             cookie?: never;
         };
         get: operations["invoices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/export/accounting/pending": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["pending"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/export/accounting/batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["batches"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/export/accounting/batches/{id}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["batchFile"];
         put?: never;
         post?: never;
         delete?: never;
@@ -747,7 +971,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get: operations["list_5"];
+        get: operations["list_7"];
         put?: never;
         post?: never;
         delete?: never;
@@ -836,6 +1060,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/vendors/{id}/memory/{memoryId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["forget"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vendors/{id}/aliases/{aliasId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["removeAlias"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/knowledge/documents/{id}": {
         parameters: {
             query?: never;
@@ -888,6 +1144,53 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        UpdateVendorRequest: {
+            name: string;
+            taxId?: string;
+            defaultCurrency?: string;
+            /** Format: int32 */
+            paymentTermsDays?: number;
+        };
+        AliasDto: {
+            /** Format: int64 */
+            id: number;
+            alias: string;
+        };
+        MemoryDto: {
+            /** Format: int64 */
+            id: number;
+            field: string;
+            whenExtracted?: string;
+            value: string;
+            learnedByName?: string;
+            /** Format: date-time */
+            learnedAt: string;
+            /** Format: int32 */
+            timesApplied: number;
+            /** Format: uuid */
+            learnedFromInvoice?: string;
+        };
+        VendorDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            taxId?: string;
+            defaultCurrency?: string;
+            /** Format: int32 */
+            paymentTermsDays?: number;
+            defaultCategory?: string;
+            /** @enum {string} */
+            status: "UNVERIFIED" | "VERIFIED";
+            verifiedByName?: string;
+            /** Format: date-time */
+            verifiedAt?: string;
+            aliases: components["schemas"]["AliasDto"][];
+            memory: components["schemas"]["MemoryDto"][];
+            /** Format: int64 */
+            invoiceCount: number;
+            /** Format: date-time */
+            createdAt: string;
+        };
         UpdateOrganizationRequest: {
             baseCurrency: string;
         };
@@ -909,6 +1212,7 @@ export interface components {
             /** @enum {string} */
             documentType?: "INVOICE" | "CREDIT_NOTE";
             vendorName?: string;
+            vendorTaxId?: string;
             invoiceNumber?: string;
             /** Format: date */
             invoiceDate?: string;
@@ -919,8 +1223,42 @@ export interface components {
             tax?: number;
             total?: number;
             lineItems?: components["schemas"]["LineItemDto"][];
+            expenseCategory?: string;
             /** Format: int64 */
             version?: number;
+        };
+        ApprovalInfo: {
+            /** Format: int32 */
+            required: number;
+            rule: string;
+            given: components["schemas"]["GivenApproval"][];
+            autoApproved: boolean;
+        };
+        DuplicateInfo: {
+            /** @enum {string} */
+            status: "NONE" | "DUPLICATE" | "POSSIBLE_DUPLICATE";
+            /** Format: uuid */
+            ofId?: string;
+            ofLabel?: string;
+            ofStatus?: string;
+            clearedByName?: string;
+            /** Format: date-time */
+            clearedAt?: string;
+            /** Format: uuid */
+            reusedFrom?: string;
+        };
+        ExtractCheck: {
+            status: string;
+            /** Format: int32 */
+            errors: number;
+            /** Format: int32 */
+            warnings: number;
+        };
+        GivenApproval: {
+            name: string;
+            /** Format: date-time */
+            at: string;
+            comment?: string;
         };
         InvoiceDetail: {
             /** Format: uuid */
@@ -943,6 +1281,15 @@ export interface components {
             subtotal?: number;
             tax?: number;
             total?: number;
+            vendorTaxId?: string;
+            vendor?: components["schemas"]["VendorRef"];
+            duplicate: components["schemas"]["DuplicateInfo"];
+            expenseCategory?: string;
+            memoryApplied: components["schemas"]["MemoryAppliedDto"][];
+            approval: components["schemas"]["ApprovalInfo"];
+            /** @enum {string} */
+            source: "WEB" | "BATCH" | "EMAIL";
+            sourceEmail?: string;
             fieldConfidence?: {
                 [key: string]: number;
             };
@@ -950,6 +1297,7 @@ export interface components {
             injectionSuspected: boolean;
             humanReviewed: boolean;
             ocr: components["schemas"]["OcrInfo"];
+            extractCheck?: components["schemas"]["ExtractCheck"];
             usage: components["schemas"]["UsageInfo"];
             /** Format: int64 */
             processingMs?: number;
@@ -976,12 +1324,22 @@ export interface components {
             severity: string;
             field?: string;
             message: string;
+            /** Format: uuid */
+            relatedInvoiceId?: string;
+        };
+        MemoryAppliedDto: {
+            field: string;
+            value: string;
+            extracted?: string;
+            /** Format: int64 */
+            memoryId?: number;
         };
         OcrInfo: {
             engine?: string;
             confidence?: number;
             /** Format: int32 */
             pageCount?: number;
+            source?: string;
         };
         Permissions: {
             canEdit: boolean;
@@ -989,6 +1347,8 @@ export interface components {
             canReject: boolean;
             canRetry: boolean;
             canDelete: boolean;
+            canDecideDuplicate: boolean;
+            approvalBlockedReason?: string;
         };
         UsageInfo: {
             model?: string;
@@ -997,6 +1357,37 @@ export interface components {
             /** Format: int32 */
             outputTokens?: number;
             costUsd?: number;
+        };
+        VendorRef: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            taxId?: string;
+            status: string;
+        };
+        PolicyRequest: {
+            /** @enum {string} */
+            acceptFrom: "ANYONE" | "USERS";
+        };
+        EmailIngestStatus: {
+            enabled: boolean;
+            address?: string;
+            requireAuthResults: boolean;
+            /** @enum {string} */
+            acceptFrom: "ANYONE" | "USERS";
+            recent: components["schemas"]["MailMessageDto"][];
+        };
+        MailMessageDto: {
+            /** Format: int64 */
+            id: number;
+            from?: string;
+            subject?: string;
+            status: string;
+            reason?: string;
+            /** Format: int32 */
+            invoicesCreated: number;
+            /** Format: date-time */
+            receivedAt: string;
         };
         ManualRateRequest: {
             currency: string;
@@ -1016,13 +1407,13 @@ export interface components {
         };
         GrantAccessRequest: {
             /** @enum {string} */
-            role: "USER" | "APPROVER" | "ADMIN";
+            role: "ACCOUNTANT" | "APPROVER" | "ADMIN";
         };
         ClientAccess: {
             /** Format: uuid */
             organizationId: string;
             /** @enum {string} */
-            role: "USER" | "APPROVER" | "ADMIN";
+            role: "ACCOUNTANT" | "APPROVER" | "ADMIN";
         };
         UpdateClientRequest: {
             name?: string;
@@ -1045,6 +1436,14 @@ export interface components {
             monthToDateTotal: number;
             /** Format: int64 */
             monthToDateOtherCurrency: number;
+        };
+        Rule: {
+            currency: string;
+            autoApproveBelow?: number;
+            twoApproversAbove?: number;
+        };
+        Rules: {
+            rules: components["schemas"]["Rule"][];
         };
         CreateEndpointRequest: {
             url: string;
@@ -1086,11 +1485,14 @@ export interface components {
             /** Format: date-time */
             nextAttemptAt?: string;
         };
+        AddAliasRequest: {
+            alias: string;
+        };
         CreateUserRequest: {
             email: string;
             fullName: string;
             /** @enum {string} */
-            role: "USER" | "APPROVER" | "ADMIN";
+            role: "ACCOUNTANT" | "APPROVER" | "ADMIN";
             password: string;
         };
         TeamMember: {
@@ -1099,7 +1501,7 @@ export interface components {
             email: string;
             fullName: string;
             /** @enum {string} */
-            role: "USER" | "APPROVER" | "ADMIN";
+            role: "ACCOUNTANT" | "APPROVER" | "ADMIN";
             enabled: boolean;
             /** Format: date-time */
             createdAt: string;
@@ -1167,27 +1569,27 @@ export interface components {
             warningCount: number;
             /** Format: date-time */
             createdAt: string;
+            /** @enum {string} */
+            duplicateStatus: "NONE" | "DUPLICATE" | "POSSIBLE_DUPLICATE";
+            vendorVerified: boolean;
+            /** @enum {string} */
+            source: "WEB" | "BATCH" | "EMAIL";
         };
         DecisionRequest: {
             comment?: string;
         };
-        EmailIngestStatus: {
-            enabled: boolean;
-            address?: string;
-            requireAuthResults: boolean;
-            recent: components["schemas"]["MailMessageDto"][];
+        DuplicateDecisionRequest: {
+            /** @enum {string} */
+            decision: "NOT_DUPLICATE" | "DUPLICATE";
+            comment?: string;
         };
-        MailMessageDto: {
-            /** Format: int64 */
-            id: number;
-            from?: string;
-            subject?: string;
-            status: string;
-            reason?: string;
-            /** Format: int32 */
-            invoicesCreated: number;
-            /** Format: date-time */
-            receivedAt: string;
+        BatchResult: {
+            created: components["schemas"]["InvoiceSummary"][];
+            skipped: components["schemas"]["ZipSkipped"][];
+        };
+        ZipSkipped: {
+            name: string;
+            reason: string;
         };
         CreateMemberRequest: {
             email: string;
@@ -1213,6 +1615,27 @@ export interface components {
             name: string;
             baseCurrency: string;
         };
+        Options: {
+            /** @enum {string} */
+            target: "XERO" | "QBO";
+            account: string;
+            taxCode?: string;
+            /** @enum {string} */
+            dateStyle: "DMY" | "MDY" | "ISO";
+        };
+        AccountingExportDto: {
+            /** Format: uuid */
+            batchId: string;
+            /** Format: int32 */
+            invoices: number;
+            skipped: components["schemas"]["ExportSkipped"][];
+        };
+        ExportSkipped: {
+            /** Format: uuid */
+            id: string;
+            label: string;
+            reason: string;
+        };
         SwitchOrganizationRequest: {
             /** Format: uuid */
             organizationId: string;
@@ -1229,7 +1652,7 @@ export interface components {
             email: string;
             fullName: string;
             /** @enum {string} */
-            role: "USER" | "APPROVER" | "ADMIN";
+            role: "ACCOUNTANT" | "APPROVER" | "ADMIN";
             /** Format: uuid */
             organizationId: string;
             organizationName: string;
@@ -1256,7 +1679,7 @@ export interface components {
         };
         UpdateUserRequest: {
             /** @enum {string} */
-            role?: "USER" | "APPROVER" | "ADMIN";
+            role?: "ACCOUNTANT" | "APPROVER" | "ADMIN";
             enabled?: boolean;
             fullName?: string;
         };
@@ -1297,6 +1720,16 @@ export interface components {
             /** Format: int32 */
             pageCount?: number;
         };
+        CorrectionDto: {
+            /** Format: int64 */
+            id: number;
+            field: string;
+            oldValue?: string;
+            newValue?: string;
+            userName?: string;
+            /** Format: date-time */
+            at: string;
+        };
         AuditEntryDto: {
             /** Format: int64 */
             id: number;
@@ -1312,6 +1745,16 @@ export interface components {
             };
             /** Format: date-time */
             createdAt: string;
+        };
+        QueueCounts: {
+            /** Format: int64 */
+            needsReview: number;
+            /** Format: int64 */
+            possibleDuplicate: number;
+            /** Format: int64 */
+            unverifiedVendor: number;
+            /** Format: int64 */
+            overdue: number;
         };
         FxStatus: {
             baseCurrency: string;
@@ -1347,12 +1790,27 @@ export interface components {
             clients: components["schemas"]["ClientRef"][];
             members: components["schemas"]["FirmMemberDto"][];
         };
+        PendingDto: {
+            /** Format: int64 */
+            approvedNotExported: number;
+        };
+        BatchDto: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            target: "XERO" | "QBO";
+            /** Format: int32 */
+            invoices: number;
+            createdByName?: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
         OrganizationOption: {
             /** Format: uuid */
             id: string;
             name: string;
             /** @enum {string} */
-            role: "USER" | "APPROVER" | "ADMIN";
+            role: "ACCOUNTANT" | "APPROVER" | "ADMIN";
             home: boolean;
             active: boolean;
         };
@@ -1473,6 +1931,32 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateVendorRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["VendorDto"];
+                };
+            };
+        };
+    };
     organization: {
         parameters: {
             query?: never;
@@ -1539,7 +2023,7 @@ export interface operations {
             };
         };
     };
-    update: {
+    update_1: {
         parameters: {
             query?: never;
             header?: never;
@@ -1582,6 +2066,30 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    policy: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PolicyRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["EmailIngestStatus"];
+                };
             };
         };
     };
@@ -1698,6 +2206,50 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    "*/*": components["schemas"]["Rules"];
+                };
+            };
+        };
+    };
+    replace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Rules"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["Rules"];
+                };
+            };
+        };
+    };
+    list_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
                     "*/*": components["schemas"]["EndpointDto"][];
                 };
             };
@@ -1772,7 +2324,55 @@ export interface operations {
             };
         };
     };
-    list_1: {
+    verify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["VendorDto"];
+                };
+            };
+        };
+    };
+    addAlias: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddAliasRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["VendorDto"];
+                };
+            };
+        };
+    };
+    list_2: {
         parameters: {
             query?: never;
             header?: never;
@@ -1854,7 +2454,7 @@ export interface operations {
             };
         };
     };
-    list_2: {
+    list_3: {
         parameters: {
             query?: never;
             header?: never;
@@ -1951,7 +2551,7 @@ export interface operations {
             };
         };
     };
-    list_3: {
+    list_4: {
         parameters: {
             query?: {
                 status?: ("UPLOADED" | "PROCESSING" | "EXTRACTED" | "NEEDS_REVIEW" | "VALIDATED" | "APPROVED" | "REJECTED" | "FAILED")[];
@@ -1963,6 +2563,7 @@ export interface operations {
                 minTotal?: number;
                 maxTotal?: number;
                 documentType?: "INVOICE" | "CREDIT_NOTE";
+                queue?: "NEEDS_REVIEW" | "POSSIBLE_DUPLICATE" | "UNVERIFIED_VENDOR" | "OVERDUE";
                 page?: number;
                 size?: number;
                 sort?: string;
@@ -2085,6 +2686,32 @@ export interface operations {
             };
         };
     };
+    decideDuplicate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DuplicateDecisionRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["InvoiceDetail"];
+                };
+            };
+        };
+    };
     approve: {
         parameters: {
             query?: never;
@@ -2107,6 +2734,33 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["InvoiceDetail"];
+                };
+            };
+        };
+    };
+    uploadZip: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["BatchResult"];
                 };
             };
         };
@@ -2263,6 +2917,30 @@ export interface operations {
             };
         };
     };
+    exportToAccounting: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Options"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AccountingExportDto"];
+                };
+            };
+        };
+    };
     switchOrganization: {
         parameters: {
             query?: never;
@@ -2403,7 +3081,7 @@ export interface operations {
             };
         };
     };
-    update_1: {
+    update_2: {
         parameters: {
             query?: never;
             header?: never;
@@ -2429,7 +3107,7 @@ export interface operations {
             };
         };
     };
-    update_2: {
+    update_3: {
         parameters: {
             query?: never;
             header?: never;
@@ -2497,7 +3175,29 @@ export interface operations {
             };
         };
     };
-    list_4: {
+    list_5: {
+        parameters: {
+            query?: {
+                status?: "UNVERIFIED" | "VERIFIED";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["VendorDto"][];
+                };
+            };
+        };
+    };
+    list_6: {
         parameters: {
             query?: never;
             header?: never;
@@ -2561,6 +3261,28 @@ export interface operations {
             };
         };
     };
+    corrections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CorrectionDto"][];
+                };
+            };
+        };
+    };
     audit: {
         parameters: {
             query?: never;
@@ -2579,6 +3301,26 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["AuditEntryDto"][];
+                };
+            };
+        };
+    };
+    queues: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["QueueCounts"];
                 };
             };
         };
@@ -2659,6 +3401,68 @@ export interface operations {
             };
             header?: never;
             path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": string;
+                };
+            };
+        };
+    };
+    pending: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PendingDto"];
+                };
+            };
+        };
+    };
+    batches: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["BatchDto"][];
+                };
+            };
+        };
+    };
+    batchFile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -2778,7 +3582,7 @@ export interface operations {
             };
         };
     };
-    list_5: {
+    list_7: {
         parameters: {
             query?: {
                 action?: string;
@@ -2912,6 +3716,52 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ByStatus"];
+                };
+            };
+        };
+    };
+    forget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                memoryId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["VendorDto"];
+                };
+            };
+        };
+    };
+    removeAlias: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                aliasId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["VendorDto"];
                 };
             };
         };

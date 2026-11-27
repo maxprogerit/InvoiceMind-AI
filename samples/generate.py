@@ -1,17 +1,23 @@
 """Generates the synthetic sample invoices and their ground truth.
 
-Deterministic (fixed seeds): re-running produces identical files. Run it in Docker so the fonts and
-poppler are present:
+Deterministic (fixed seeds, reportlab invariant mode): re-running produces the same documents. Run it in
+Docker so the fonts and poppler are present:
 
     docker build -t invoicemind-samples samples
     docker run --rm -v "$PWD/samples:/out" invoicemind-samples
+    docker run --rm -v "$PWD/samples:/out" invoicemind-samples python generate.py --e2e --demo   # also samples/e2e, samples/demo
 
-Every document is synthetic. Ground truth is what is PRINTED on the page (what an extractor should
-read), independent of whether the invoice is arithmetically valid.
+Every document here is SYNTHETIC: made-up companies, printed with a footer that says so, and labelled
+`"synthetic": true` in its ground truth. Real (redacted) invoices go to samples/real/ instead, see its README.
+Ground truth is what is PRINTED on the page (what an extractor should read), independent of whether the
+invoice is arithmetically valid. Money is written as decimal strings, never floats.
 """
 import io
 import json
+import os
 import random
+import re
+import sys
 from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
@@ -24,7 +30,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
 
-OUT = Path("/out")
+OUT = Path(os.environ.get("SAMPLES_OUT", "/out"))
 DEJAVU = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 DEJAVU_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 pdfmetrics.registerFont(TTFont("DejaVu", DEJAVU))
@@ -47,11 +53,11 @@ class Spec:
     date: tuple[int, int, int]
     due_days: int | None
     currency: str
-    items: list[tuple[str, int, str]]  # description, quantity, unit price
-    tax_rate: str  # "0", "0.19", ...
+    items: list[tuple]  # (description, quantity, unit price) or (..., tax rate) when rates differ per line
+    tax_rate: str  # "0", "0.19", ...: rate of every line that does not name its own
     number_style: str = "en"  # en: 1,234.56   de: 1.234,56   ru: 1 234,56
     date_style: str = "iso"  # iso | dmy_dot | long_en | us
-    render: str = "pdf"  # pdf | png | jpg
+    render: str = "pdf"  # pdf (text layer) | png | jpg (one scanned page) | scanpdf (every page scanned, no text layer)
     rotate: float = 0.0
     noise: float = 0.0
     blur: float = 0.0
@@ -61,6 +67,7 @@ class Spec:
     printed_total: str | None = None  # print a total that disagrees with the arithmetic (e2e fixture)
     credit_note: bool = False
     negative_print: bool = False  # credit note that prints its amounts with a minus sign (otherwise positive)
+    discount_pct: str | None = None  # discount printed in the totals block (not as a line), e.g. "0.05"
 
 
 def fmt_money(v: Decimal, style: str) -> str:
@@ -94,14 +101,42 @@ def add_days(d: tuple[int, int, int], n: int) -> tuple[int, int, int]:
     return (r.year, r.month, r.day)
 
 
-def truth(spec: Spec) -> dict:
-    lines = [(desc, qty, q(unit), q(q(unit) * qty)) for desc, qty, unit in spec.items]
-    subtotal = sum((l[3] for l in lines), Decimal("0"))
-    tax = q(subtotal * Decimal(spec.tax_rate))
+def rate_of(spec: Spec, item: tuple) -> str:
+    return item[3] if len(item) > 3 else spec.tax_rate
+
+
+def amounts(spec: Spec) -> dict:
+    """Everything the page prints, as Decimals: lines, line sum, discount, subtotal, one tax row per rate, total."""
+    lines = [(it[0], it[1], q(it[2]), q(q(it[2]) * it[1]), rate_of(spec, it)) for it in spec.items]
+    line_sum = sum((l[3] for l in lines), Decimal("0"))
+    discount = q(line_sum * Decimal(spec.discount_pct)) if spec.discount_pct else Decimal("0")
+    subtotal = line_sum - discount
+    bases: dict[str, Decimal] = {}
+    for l in lines:
+        bases[l[4]] = bases.get(l[4], Decimal("0")) + l[3]
+    if spec.discount_pct:
+        assert len(bases) == 1, "a totals-block discount is only generated with a single tax rate"
+        bases = {next(iter(bases)): subtotal}
+    tax_rows = [(rate, base, q(base * Decimal(rate))) for rate, base in sorted(bases.items(), key=lambda kv: -Decimal(kv[0]))]
+    tax = sum((t[2] for t in tax_rows), Decimal("0"))
     total = subtotal + tax
-    if spec.credit_note and spec.negative_print:  # ground truth is what is printed, sign included
-        lines = [(d, qty, -u, -t) for d, qty, u, t in lines]
-        subtotal, tax, total = -subtotal, -tax, -total
+    sign = -1 if spec.credit_note and spec.negative_print else 1  # ground truth is what is printed, sign included
+    return {
+        "lines": [(d, qty, sign * u, sign * t) for d, qty, u, t, _ in lines],
+        "line_sum": sign * line_sum,
+        "discount": sign * discount,
+        "subtotal": sign * subtotal,
+        "tax_rows": [(r, sign * b, sign * a) for r, b, a in tax_rows],
+        "tax": sign * tax,
+        "total": sign * total,
+    }
+
+
+def truth(spec: Spec) -> dict:
+    a = amounts(spec)
+    lines = [{"description": d, "quantity": qty, "unit_price": str(u), "total": str(t)} for d, qty, u, t in a["lines"]]
+    # multipage filler rows are printed, so they belong to the ground truth
+    lines += [{"description": f"Additional service item {i + 1:02d}", "quantity": 1, "unit_price": "0.00", "total": "0.00"} for i in range(spec.filler_items)]
     return {
         "document_type": "credit_note" if spec.credit_note else "invoice",
         "vendor": spec.vendor,
@@ -109,19 +144,41 @@ def truth(spec: Spec) -> dict:
         "invoice_date": iso(spec.date),
         "due_date": iso(add_days(spec.date, spec.due_days)) if spec.due_days is not None else None,
         "currency": spec.currency,
-        "subtotal": float(subtotal),
-        "tax": float(tax),
-        "total": float(total),
-        "line_items": [{"description": d, "quantity": qty, "unit_price": float(u), "total": float(t)} for d, qty, u, t in lines],
+        "subtotal": str(a["subtotal"]),
+        "tax": str(a["tax"]),
+        "total": str(spec.printed_total) if spec.printed_total else str(a["total"]),
+        "line_items": lines,
     }
+
+
+def tags(spec: Spec, pages: int) -> list[str]:
+    t = {"pdf": ["text-pdf"], "png": ["scan"], "jpg": ["scan"], "scanpdf": ["scan", "scanned-pdf"]}[spec.render][:]
+    if pages > 1:
+        t.append("multi-page")
+    if len({rate_of(spec, it) for it in spec.items}) > 1:
+        t.append("multi-tax")
+    if spec.discount_pct or (not spec.credit_note and any(Decimal(it[2]) < 0 for it in spec.items)):
+        t.append("discount")
+    if spec.credit_note:
+        t.append("credit-note")
+    if spec.injection:
+        t.append("prompt-injection")
+    if spec.number_style != "en":
+        t.append("decimal-comma")
+    return t
+
+
+def fmt_rate(rate: str, style: str) -> str:
+    s = format((Decimal(rate) * 100).normalize(), "f")
+    return s.replace(".", ",") if style in ("de", "ru") else s
 
 
 # ---------------------------------------------------------------- rendering
 LABELS = {
-    "classic": dict(title="INVOICE", no="Invoice No", date="Date", due="Due date", cols=("Description", "Qty", "Unit price", "Amount"), sub="Subtotal", tax="VAT", total="Total"),
-    "modern": dict(title="Invoice", no="Invoice #", date="Issued", due="Payment due", cols=("Item", "Qty", "Price", "Total"), sub="Subtotal", tax="Tax", total="Amount due"),
-    "german": dict(title="RECHNUNG", no="Rechnungsnummer", date="Rechnungsdatum", due="Zahlbar bis", cols=("Bezeichnung", "Menge", "Einzelpreis", "Gesamt"), sub="Zwischensumme", tax="MwSt", total="Gesamtbetrag"),
-    "russian": dict(title="СЧЁТ НА ОПЛАТУ", no="Счёт №", date="Дата", due="Оплатить до", cols=("Наименование", "Кол-во", "Цена", "Сумма"), sub="Итого без НДС", tax="НДС", total="Всего к оплате"),
+    "classic": dict(title="INVOICE", no="Invoice No", date="Date", due="Due date", cols=("Description", "Qty", "Unit price", "Amount"), sub="Subtotal", tax="VAT", total="Total", lines="Items total", disc="Discount", on="on"),
+    "modern": dict(title="Invoice", no="Invoice #", date="Issued", due="Payment due", cols=("Item", "Qty", "Price", "Total"), sub="Subtotal", tax="Tax", total="Amount due", lines="Items total", disc="Discount", on="on"),
+    "german": dict(title="RECHNUNG", no="Rechnungsnummer", date="Rechnungsdatum", due="Zahlbar bis", cols=("Bezeichnung", "Menge", "Einzelpreis", "Gesamt"), sub="Zwischensumme", tax="MwSt", total="Gesamtbetrag", lines="Summe Positionen", disc="Rabatt", on="auf"),
+    "russian": dict(title="СЧЁТ НА ОПЛАТУ", no="Счёт №", date="Дата", due="Оплатить до", cols=("Наименование", "Кол-во", "Цена", "Сумма"), sub="Итого без НДС", tax="НДС", total="Всего к оплате", lines="Сумма позиций", disc="Скидка", on="с суммы"),
 }
 
 
@@ -131,16 +188,15 @@ CREDIT_LABELS = {
 }
 
 
-def render_pdf(spec: Spec) -> bytes:
+def render_pdf(spec: Spec, label: bool = True) -> bytes:
     L = dict(LABELS[spec.layout])
     if spec.credit_note:
         L.update(CREDIT_LABELS[spec.layout])
     font, bold = ("DejaVu", "DejaVu-Bold") if spec.layout == "russian" else ("Helvetica", "Helvetica-Bold")
-    data = truth(spec)
-    if spec.printed_total:
-        data["total"] = float(spec.printed_total)
+    a = amounts(spec)
+    total = Decimal(spec.printed_total) if spec.printed_total else a["total"]
     buf = io.BytesIO()
-    c = canvas.Canvas(buf, pagesize=A4)
+    c = canvas.Canvas(buf, pagesize=A4, invariant=1)
     w, h = A4
 
     def money(v) -> str:
@@ -162,6 +218,15 @@ def render_pdf(spec: Spec) -> bytes:
         c.setFont(font, 9)
         c.drawString(40, h - 70, spec.address)
         return h - 110
+
+    def footer():
+        c.setFont(font, 8)
+        c.setFillColor(colors.HexColor("#555555"))
+        c.drawString(40, 60, "Bank: Example Bank AG · IBAN DE89 3704 0044 0532 0130 00 · BIC COBADEFFXXX")
+        c.drawString(40, 48, f"Payment terms and conditions apply. Customer no. 40{random.Random(spec.id).randint(1000, 9999)}")
+        if label:
+            c.drawString(40, 22, "Synthetic test document generated by InvoiceMind samples/generate.py. Not a real invoice.")
+        c.setFillColor(colors.black)
 
     y = page_header(True)
     c.setFont(bold, 20)
@@ -192,18 +257,19 @@ def render_pdf(spec: Spec) -> bytes:
         c.drawRightString(w - 46, yy, L["cols"][3])
         return yy - 22
 
+    def new_page():
+        footer()
+        c.showPage()
+        return page_header(False) - 10
+
     y = table_header(y)
     c.setFont(font, 10)
-    rows = data["line_items"] + [
-        {"description": f"Additional service item {i + 1:02d}", "quantity": 1, "unit_price": 0.0, "total": 0.0} for i in range(spec.filler_items)
+    rows = [{"description": d, "quantity": qty, "unit_price": u, "total": t} for d, qty, u, t in a["lines"]] + [
+        {"description": f"Additional service item {i + 1:02d}", "quantity": 1, "unit_price": 0, "total": 0} for i in range(spec.filler_items)
     ]
-    # filler rows are real printed rows, so ground truth must contain them too
-    data["line_items"] = rows
     for it in rows:
         if y < 120:
-            c.showPage()
-            y = page_header(False) - 10
-            y = table_header(y)
+            y = table_header(new_page())
             c.setFont(font, 10)
         c.drawString(46, y, it["description"][:52])
         c.drawRightString(330, y, str(it["quantity"]))
@@ -211,24 +277,31 @@ def render_pdf(spec: Spec) -> bytes:
         c.drawRightString(w - 46, y, money(it["total"]))
         y -= 17
     y -= 8
-    if y < 140:
-        c.showPage()
-        y = page_header(False) - 10
-    c.line(330, y + 10, w - 40, y + 10)
-    c.setFont(font, 10.5)
-    c.drawString(300, y - 6, L["sub"])
-    c.drawRightString(w - 46, y - 6, money(data["subtotal"]))
-    rate_label = f"{L['tax']} {int(Decimal(spec.tax_rate) * 100)}%" if Decimal(spec.tax_rate) else L["tax"]
-    c.drawString(300, y - 24, rate_label)
-    c.drawRightString(w - 46, y - 24, money(data["tax"]))
-    c.setFont(bold, 12.5)
-    c.drawString(300, y - 48, f"{L['total']} {spec.currency}")
-    c.drawRightString(w - 46, y - 48, money(data["total"]))
 
-    c.setFont(font, 8)
-    c.setFillColor(colors.HexColor("#555555"))
-    c.drawString(40, 60, "Bank: Example Bank AG · IBAN DE89 3704 0044 0532 0130 00 · BIC COBADEFFXXX")
-    c.drawString(40, 48, f"Payment terms and conditions apply. Customer no. 40{random.Random(spec.id).randint(1000, 9999)}")
+    several_rates = len(a["tax_rows"]) > 1
+    totals = []  # (label, amount, bold)
+    if spec.discount_pct:
+        totals += [(L["lines"], a["line_sum"], False), (f"{L['disc']} {fmt_rate(spec.discount_pct, spec.number_style)}%", -a["discount"], False)]
+    totals.append((L["sub"], a["subtotal"], False))
+    for rate, base, amount in a["tax_rows"]:
+        label_ = f"{L['tax']} {fmt_rate(rate, spec.number_style)}%" if Decimal(rate) else L["tax"]
+        if several_rates:
+            label_ += f" {L['on']} {money(base)}"
+        totals.append((label_, amount, False))
+    if y - 18 * len(totals) - 30 < 80:
+        y = new_page()
+    c.line(300, y + 10, w - 40, y + 10)
+    yy = y - 6
+    c.setFont(font, 10.5)
+    for text, value, _ in totals:
+        c.drawString(300 if not several_rates else 250, yy, text)
+        c.drawRightString(w - 46, yy, money(value))
+        yy -= 18
+    c.setFont(bold, 12.5)
+    c.drawString(300, yy - 6, f"{L['total']} {spec.currency}")
+    c.drawRightString(w - 46, yy - 6, money(total))
+
+    footer()
     if spec.injection:
         c.setFillColor(colors.HexColor("#777777"))
         c.setFont(font, 7)
@@ -236,6 +309,10 @@ def render_pdf(spec: Spec) -> bytes:
     c.showPage()
     c.save()
     return buf.getvalue()
+
+
+def page_count(pdf: bytes) -> int:
+    return len(re.findall(rb"/Type\s*/Page(?![s\w])", pdf))
 
 
 def degrade(png: Image.Image, spec: Spec) -> Image.Image:
@@ -298,37 +375,129 @@ SPECS = [
 ]
 
 
+
+def catalog(seed: str, n: int, rates: tuple[str, ...] | None = None) -> list[tuple]:
+    """n deterministic, distinct line items for the long multi-page invoices (real amounts, not zero filler)."""
+    goods = ["Copy paper A4 80g", "Ballpoint pens (box)", "Stapler heavy duty", "Toner cartridge cyan", "Toner cartridge magenta",
+             "Ring binder A4", "Sticky notes 76x76", "USB-C cable 2 m", "Wireless mouse", "Keyboard (DE layout)", "Monitor arm",
+             "Desk lamp LED", "Whiteboard markers", "Envelopes C4 (pack)", "Label printer tape", "Shredder bags", "Cleaning wipes",
+             "Coffee beans 1 kg", "Paper cups (100)", "Archive box", "Laminating pouches", "Document wallet", "Highlighters (set)",
+             "Notebook A5 dotted", "Cable ties (pack)", "HDMI adapter", "Headset USB", "Webcam HD", "Power strip 6-way",
+             "Ethernet cable 5 m", "Mouse pad", "Batteries AA (pack)", "Scissors", "Tape dispenser", "Name badges (50)",
+             "Hanging folders", "Desk organiser", "Clipboard A4", "Calculator", "Hole punch", "Rubber bands", "Correction tape",
+             "Glue stick", "Index tabs", "Letter tray", "Pencil sharpener", "Ruler 30 cm", "Drawing pins"]
+    rnd = random.Random(seed)
+    picked = rnd.sample(goods, n)
+    out = []
+    for i, d in enumerate(picked):
+        unit = f"{rnd.randint(150, 9000) / 100:.2f}"
+        qty = rnd.randint(1, 12)
+        out.append((d, qty, unit, rates[i % len(rates)]) if rates else (d, qty, unit))
+    return out
+
+
+# 19-32: added for the stage-8 evaluation set (multi-tax, discounts, long multi-page, scanned pages and scanned PDFs)
+SPECS += [
+    Spec("19-multitax-de", "german", "Feinkost Albrecht GmbH", "Viktualienmarkt 2, 80331 München", "FA-2026-3318", (2026, 7, 6), 14, "EUR",
+         [("Feinkostkorb Premium", 6, "48.90", "0.07"), ("Präsentkarton mit Druck", 6, "6.50", "0.19"), ("Lieferung und Aufbau", 1, "85.00", "0.19"),
+          ("Olivenöl extra vergine 0,5 l", 12, "11.20", "0.07")], "0.19", number_style="de", date_style="dmy_dot"),
+    Spec("20-multitax-uk-zero", "classic", "Kestrel Learning Ltd", "4 Wharf Street, Bristol BS1 4RD, United Kingdom", "KL-20931", (2026, 6, 23), 30, "GBP",
+         [("Printed course handbooks", 40, "14.50", "0"), ("Online course licences", 40, "35.00", "0.20"), ("Trainer day rate", 2, "650.00", "0.20")],
+         "0.20", date_style="long_en"),
+    Spec("21-multitax-scan", "german", "Hofladen Brenner", "Am Mühlbach 7, 79098 Freiburg", "HB-0457", (2026, 8, 12), 10, "EUR",
+         [("Bio-Äpfel (kg)", 25, "3.40", "0.07"), ("Apfelsaft naturtrüb (Kiste)", 4, "17.80", "0.19"), ("Pfand Kiste", 4, "3.30", "0.19")],
+         "0.07", number_style="de", date_style="dmy_dot", render="png", rotate=0.8, noise=0.002),
+    Spec("22-discount-line-usd", "classic", "Bluefin Web Studio LLC", "77 Harbor Way, Boston, MA 02110", "BWS-1180", (2026, 5, 29), 30, "USD",
+         [("Website redesign (fixed fee)", 1, "8400.00"), ("Content migration (hours)", 16, "95.00"), ("Loyalty discount 10% on redesign", 1, "-840.00")],
+         "0.0625", date_style="us"),
+    Spec("23-rabatt-line-de", "german", "Druckerei Hansen OHG", "Speicherstadt 12, 20457 Hamburg", "DH-26-0712", (2026, 4, 17), 21, "EUR",
+         [("Flyer DIN A5, 4/4-farbig (1.000 Stk.)", 5, "129.00"), ("Plakate DIN A1", 20, "18.40"), ("Rabatt 5 % Mengenstaffel", 1, "-50.65")],
+         "0.19", number_style="de", date_style="dmy_dot"),
+    Spec("24-discount-totals", "modern", "Northgate Facility Services", "21 Commerce Park, Dublin D12 Y8K3, Ireland", "NFS-77402", (2026, 9, 1), 30, "EUR",
+         [("Office cleaning September", 1, "2150.00"), ("Window cleaning (external)", 1, "480.00"), ("Washroom supplies", 1, "196.40")],
+         "0.23", date_style="long_en", discount_pct="0.05"),
+    Spec("25-multipage-long", "classic", "Bürobedarf Zentrale GmbH", "Gutenbergstrasse 30, 60327 Frankfurt", "BZ-2026-10456", (2026, 10, 2), 30, "EUR",
+         catalog("25", 46), "0.19"),
+    Spec("26-multipage-multitax", "german", "Gastro-Großhandel Petersen KG", "Großmarkt 1, 50968 Köln", "GP-88123", (2026, 9, 18), 14, "EUR",
+         catalog("26", 34, ("0.07", "0.19")), "0.19", number_style="de", date_style="dmy_dot"),
+    Spec("27-scanned-pdf-multipage", "classic", "Thornbury Stationers Ltd", "18 High Street, Oxford OX1 4AH, United Kingdom", "TS-55120", (2026, 8, 4), 30, "GBP",
+         catalog("27", 32), "0.20", date_style="long_en", render="scanpdf", rotate=0.5, noise=0.001),
+    Spec("28-scan-heavy-rotation", "modern", "Redwood Equipment Rentals", "2900 Industrial Pkwy, Sacramento, CA 95815", "RER-40981", (2026, 7, 21), 15, "USD",
+         [("Scissor lift rental (week)", 2, "690.00"), ("Delivery and pickup", 1, "180.00"), ("Damage waiver", 2, "55.00")],
+         "0.0875", date_style="us", render="jpg", rotate=2.6, noise=0.004, blur=0.7),
+    Spec("29-russian-scan", "russian", "ООО «Техносервис»", "Санкт-Петербург, Невский пр., д. 44", "ТС-2026/0981", (2026, 6, 9), 10, "RUB",
+         [("Ремонт серверного оборудования", 1, "64000.00"), ("Замена блока питания", 2, "8900.00"), ("Выезд инженера", 1, "3500.00")],
+         "0.20", number_style="ru", date_style="dmy_dot", render="png", rotate=-0.7, noise=0.002),
+    Spec("30-multitax-rabatt", "german", "Bioland Hof Wiesner", "Feldweg 3, 93047 Regensburg", "BW-2026-061", (2026, 9, 30), 14, "EUR",
+         [("Gemüsekisten Abo (Woche)", 4, "32.50", "0.07"), ("Eier Bio (10 Stk.)", 30, "4.90", "0.07"), ("Kühltransport", 4, "18.00", "0.19"),
+          ("Treuerabatt Gemüsekisten", 1, "-13.00", "0.07")], "0.07", number_style="de", date_style="dmy_dot"),
+    Spec("31-scanned-pdf-chf", "modern", "Seeblick Consulting AG", "Quai 14, 6004 Luzern, Switzerland", "SBC-2026-219", (2026, 10, 14), 30, "CHF",
+         [("Strategy workshop (day)", 2, "2400.00"), ("Preparation and report", 1, "1800.00"), ("Travel expenses (flat)", 1, "260.00")],
+         "0.081", render="scanpdf", rotate=-0.6, noise=0.002, blur=0.4),
+    Spec("32-multitax-sek", "modern", "Fjällbacka Event AB", "Strandvägen 9, 114 56 Stockholm, Sweden", "FE-9921", (2026, 11, 3), 30, "SEK",
+         [("Conference venue hire", 1, "42000.00", "0.25"), ("Catering lunch (per guest)", 120, "245.00", "0.12"), ("Event app licence", 1, "6500.00", "0.25")],
+         "0.25"),
+]
+
+
 def main():
     inv_dir, gt_dir, e2e_dir = OUT / "invoices", OUT / "ground_truth", OUT / "e2e"
     for d in (inv_dir, gt_dir, e2e_dir):
         d.mkdir(parents=True, exist_ok=True)
     for spec in SPECS:
         pdf = render_pdf(spec)
+        pages = page_count(pdf)
         data = truth(spec)
-        # multipage filler rows are printed, so they belong to the ground truth (rebuilt like render_pdf does)
-        if spec.filler_items:
-            data["line_items"] += [{"description": f"Additional service item {i + 1:02d}", "quantity": 1, "unit_price": 0.0, "total": 0.0} for i in range(spec.filler_items)]
         if spec.render == "pdf":
-            (inv_dir / f"{spec.id}.pdf").write_bytes(pdf)
-            kind = "pdf"
+            name = f"{spec.id}.pdf"
+            (inv_dir / name).write_bytes(pdf)
+        elif spec.render == "scanpdf":  # every page rasterised and degraded: a PDF without a text layer
+            images = [degrade(page, spec) for page in convert_from_bytes(pdf, dpi=150)]
+            name = f"{spec.id}.pdf"
+            images[0].save(inv_dir / name, "PDF", resolution=150, save_all=True, append_images=images[1:])
         else:
-            page = convert_from_bytes(pdf, dpi=170)[0]
-            img = degrade(page, spec)
+            assert pages == 1, f"{spec.id}: an image holds one page"
+            img = degrade(convert_from_bytes(pdf, dpi=170)[0], spec)
+            name = f"{spec.id}.{spec.render}"
             if spec.render == "png":
-                img.save(inv_dir / f"{spec.id}.png")
+                img.save(inv_dir / name)
             else:
-                img.save(inv_dir / f"{spec.id}.jpg", quality=62)
-            kind = spec.render
-        meta = {"file": f"{spec.id}.{kind}", "layout": spec.layout, "kind": "text-pdf" if kind == "pdf" else "scan", "adversarial": bool(spec.injection)}
-        (gt_dir / f"{spec.id}.json").write_text(json.dumps({"meta": meta, "expected": data}, ensure_ascii=False, indent=2), encoding="utf-8")
-        print("generated", spec.id, kind)
+                img.save(inv_dir / name, quality=62)
+        kind = {"pdf": "text-pdf", "scanpdf": "scanned-pdf"}.get(spec.render, "scan")
+        meta = {"file": name, "layout": spec.layout, "kind": kind, "adversarial": bool(spec.injection), "synthetic": True,
+                "pages": pages, "tags": tags(spec, pages)}
+        (gt_dir / f"{spec.id}.json").write_text(json.dumps({"meta": meta, "expected": data}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print("generated", spec.id, name, pages, "page(s)", meta["tags"])
 
+    if "--demo" in sys.argv:
+        write_demo(OUT / "demo")
+    if "--e2e" not in sys.argv:
+        return
     # Fixtures for the UI end-to-end tests (the rule-based test double understands this English "classic" layout)
     items = [("Consulting services", 10, "100.00"), ("Hosting", 1, "200.00")]
     for name, number, printed in (("e2e-valid", "E2E-1001", None), ("e2e-mismatch", "E2E-1002", "1500.00")):
         spec = Spec(name, "classic", "E2E Fixtures GmbH", "Testweg 1, 10115 Berlin", number, (2026, 3, 14), 30, "EUR", items, "0.19", printed_total=printed)
-        (e2e_dir / f"{name}.pdf").write_bytes(render_pdf(spec))
+        (e2e_dir / f"{name}.pdf").write_bytes(render_pdf(spec, label=False))
     print("e2e fixtures written")
+
+
+# The README walk-through (scripts/demo-flow.cjs): English "classic" layout, ISO dates, so the offline test double
+# reads them too. The e-mailed invoice prints a total with two digits swapped (1,457.60 instead of 1,475.60).
+DEMO = [
+    Spec("demo-email-invoice", "classic", "Brightline Office Supplies Ltd", "12 Canal Street, Manchester M1 3HW, United Kingdom", "BOS-2291",
+         (2026, 11, 20), 30, "EUR", [("Ergonomic office chair", 4, "245.00"), ("Standing desk frame", 1, "260.00")], "0.19", printed_total="1457.60"),
+    Spec("demo-hosting", "classic", "Harbor Cloud Hosting BV", "Keizersgracht 210, 1016 DZ Amsterdam, Netherlands", "HCH-7781",
+         (2026, 11, 18), 14, "EUR", [("Dedicated servers (annual)", 2, "3600.00"), ("Managed backup (annual)", 1, "980.00")], "0.21"),
+    Spec("demo-courier", "classic", "Metro Courier Services", "Unit 4, Riverside Park, Leeds LS11 5JX, United Kingdom", "MCS-10442",
+         (2026, 11, 21), 7, "EUR", [("Same-day courier", 3, "12.50")], "0.20"),
+]
+
+
+def write_demo(out: Path) -> None:
+    out.mkdir(parents=True, exist_ok=True)
+    for spec in DEMO:
+        (out / f"{spec.id}.pdf").write_bytes(render_pdf(spec))
+    print("demo documents written to", out)
 
 
 if __name__ == "__main__":

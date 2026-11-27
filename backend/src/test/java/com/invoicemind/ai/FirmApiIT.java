@@ -101,6 +101,7 @@ class FirmApiIT extends AbstractIntegrationTest {
     awaitStatus(inOne, flagged, "NEEDS_REVIEW");
     awaitStatus(inOne, failed, "FAILED");
     for (UUID id : List.of(approvedEur, approvedUsd)) {
+      api.verifyVendorOf(approver.token(), id);
       assertThat(api.post("/api/v1/invoices/" + id + "/approve", approver.token(), Map.of("comment", "ok")).status()).isEqualTo(200);
     }
     UUID other = upload(inTwo, scenario("EUR", "7.00", today, false));
@@ -186,7 +187,7 @@ class FirmApiIT extends AbstractIntegrationTest {
     UUID two = createClient(admin, "Client Two", "EUR");
     String email = "bob-" + UUID.randomUUID() + "@firm.test";
     assertThat(api.post("/api/v1/firm/members", admin.token(), Map.of("email", email, "fullName", "Bob", "password", TestApi.PASSWORD,
-        "firmRole", "ACCOUNTANT", "access", List.of(Map.of("organizationId", one, "role", "USER")))).status()).isEqualTo(201);
+        "firmRole", "ACCOUNTANT", "access", List.of(Map.of("organizationId", one, "role", "ACCOUNTANT")))).status()).isEqualTo(201);
     UUID bob = memberId(admin, email);
     Session bobSession = api.login(email, TestApi.PASSWORD);
 
@@ -221,7 +222,7 @@ class FirmApiIT extends AbstractIntegrationTest {
     assertThat(api.delete("/api/v1/firm/members/" + admin.userId(), admin.token()).status()).isEqualTo(400);
     // a duplicate e-mail is a conflict, a client listed twice a bad request
     assertThat(api.post("/api/v1/firm/members", admin.token(), Map.of("email", admin.email(), "fullName", "Dup", "password", TestApi.PASSWORD,
-        "firmRole", "ACCOUNTANT", "access", List.of(Map.of("organizationId", one, "role", "USER")))).status()).isEqualTo(409);
+        "firmRole", "ACCOUNTANT", "access", List.of(Map.of("organizationId", one, "role", "ACCOUNTANT")))).status()).isEqualTo(409);
   }
 
   @Test

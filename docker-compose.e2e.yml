@@ -1,9 +1,9 @@
-# UI end-to-end overlay (CI and local): swaps the OpenAI-backed ai-service for the test double in
-# e2e/fake-ai (real OCR, deterministic rule-based extraction) and publishes the app on 127.0.0.1.
+# UI end-to-end overlay (CI and local): swaps the OpenAI-backed extract-service for the test double in
+# e2e/fake-ai (real OCR, deterministic rule-based extraction) and publishes the backend on 127.0.0.1.
 #   docker compose -f docker-compose.yml -f docker-compose.e2e.yml up --build -d
 # Never use this overlay for real deployments.
 services:
-  ai-service:
+  extract-service:
     build:
       context: .
       dockerfile: e2e/fake-ai/Dockerfile

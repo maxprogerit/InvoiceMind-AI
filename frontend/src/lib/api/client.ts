@@ -122,15 +122,12 @@ export async function fetchBlob(path: string): Promise<{ blob: Blob; filename?: 
 }
 
 /** Multipart upload with real progress events (fetch cannot report upload progress). */
-export function uploadInvoice(
-  file: File,
-  onProgress: (fraction: number) => void,
-  signal?: AbortSignal,
-): Promise<{ id: string }> {
+/** Multipart POST of one file with upload progress (XHR: fetch cannot report upload progress). */
+function postFile<T>(path: string, expected: number, file: File, onProgress: (fraction: number) => void, signal?: AbortSignal): Promise<T> {
   const send = (token: string | null) =>
     new Promise<{ status: number; body: string }>((resolve, reject) => {
       const xhr = new XMLHttpRequest();
-      xhr.open("POST", "/api/v1/invoices");
+      xhr.open("POST", path);
       if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
       xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
       xhr.onload = () => resolve({ status: xhr.status, body: xhr.responseText });
@@ -145,7 +142,7 @@ export function uploadInvoice(
   return (async () => {
     let res = await send(await getValidToken());
     if (res.status === 401 && (await refreshSession())) res = await send(useAuth.getState().token);
-    if (res.status !== 202) {
+    if (res.status !== expected) {
       let body: Partial<ErrorBody> = {};
       try {
         body = JSON.parse(res.body) as Partial<ErrorBody>;
@@ -155,8 +152,22 @@ export function uploadInvoice(
       const message = body.message ?? (res.status === 413 ? "The file is too large (max 15 MB)" : "Upload failed");
       throw new ApiError(res.status, body.code ?? "upload_failed", message);
     }
-    return JSON.parse(res.body) as { id: string };
+    return JSON.parse(res.body) as T;
   })();
+}
+
+export function uploadInvoice(file: File, onProgress: (fraction: number) => void, signal?: AbortSignal): Promise<{ id: string }> {
+  return postFile<{ id: string }>("/api/v1/invoices", 202, file, onProgress, signal);
+}
+
+export interface ZipResult {
+  created: { id: string; originalFilename: string }[];
+  skipped: { name: string; reason: string }[];
+}
+
+/** A .zip of invoices: every PDF/image in it becomes an invoice; the rest is listed with the reason. */
+export function uploadZip(file: File, onProgress: (fraction: number) => void, signal?: AbortSignal): Promise<ZipResult> {
+  return postFile<ZipResult>("/api/v1/invoices/zip", 200, file, onProgress, signal);
 }
 
 export function downloadBlob(blob: Blob, filename: string) {

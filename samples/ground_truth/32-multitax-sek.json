@@ -1,0 +1,45 @@
+{
+  "meta": {
+    "file": "32-multitax-sek.pdf",
+    "layout": "modern",
+    "kind": "text-pdf",
+    "adversarial": false,
+    "synthetic": true,
+    "pages": 1,
+    "tags": [
+      "text-pdf",
+      "multi-tax"
+    ]
+  },
+  "expected": {
+    "document_type": "invoice",
+    "vendor": "Fjällbacka Event AB",
+    "invoice_number": "FE-9921",
+    "invoice_date": "2026-11-03",
+    "due_date": "2026-12-03",
+    "currency": "SEK",
+    "subtotal": "77900.00",
+    "tax": "15653.00",
+    "total": "93553.00",
+    "line_items": [
+      {
+        "description": "Conference venue hire",
+        "quantity": 1,
+        "unit_price": "42000.00",
+        "total": "42000.00"
+      },
+      {
+        "description": "Catering lunch (per guest)",
+        "quantity": 120,
+        "unit_price": "245.00",
+        "total": "29400.00"
+      },
+      {
+        "description": "Event app licence",
+        "quantity": 1,
+        "unit_price": "6500.00",
+        "total": "6500.00"
+      }
+    ]
+  }
+}

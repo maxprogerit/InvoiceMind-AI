@@ -4,16 +4,19 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.invoicemind.ai.ai.AiClient;
 import com.invoicemind.ai.ai.AiClientException;
-import com.invoicemind.ai.ai.AiDtos.ExtractResponse;
+import com.invoicemind.ai.ai.AiDtos.InvoiceResult;
 import com.invoicemind.ai.ai.AiDtos.Extraction;
 import com.invoicemind.ai.ai.AiDtos.OcrResponse;
 import com.invoicemind.ai.audit.AuditService;
 import com.invoicemind.ai.invoice.DocumentType;
+import com.invoicemind.ai.invoice.InvoiceDecisions;
 import com.invoicemind.ai.invoice.InvoiceEntity;
 import com.invoicemind.ai.invoice.InvoiceRepository;
 import com.invoicemind.ai.invoice.InvoiceStatus;
 import com.invoicemind.ai.invoice.LineItemEntity;
-import com.invoicemind.ai.invoice.VendorService;
+import com.invoicemind.ai.vendor.VendorEntity;
+import com.invoicemind.ai.vendor.VendorService;
+import com.invoicemind.ai.vendor.memory.VendorMemoryService;
 import com.invoicemind.ai.notification.NotificationService;
 import com.invoicemind.ai.storage.FileStorage;
 import com.invoicemind.ai.user.Role;
@@ -43,7 +46,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * The invoice pipeline: claim -> OCR -> LLM extraction -> deterministic validation.
  * Each stage commits in its own short transaction; no transaction is open during HTTP calls.
- * Everything coming back from the ai-service is treated as untrusted input.
+ * Everything coming back from the extract-service is treated as untrusted input. Driven by {@link ProcessingWorker}.
  */
 @Slf4j
 @Service
@@ -54,8 +57,19 @@ public class ProcessingService {
 
   private static final int MAX_OCR_CHARS = 200_000;
 
+  /** What the worker should do with the job after one attempt. */
+  public record Outcome(Kind kind, String detail) {
+    public enum Kind { DONE, RETRY, FAILED }
+
+    static Outcome done() { return new Outcome(Kind.DONE, null); }
+    static Outcome retry(String why) { return new Outcome(Kind.RETRY, why); }
+    static Outcome failed(String why) { return new Outcome(Kind.FAILED, why); }
+  }
+
   private final InvoiceRepository invoices;
   private final VendorService vendors;
+  private final VendorMemoryService memory;
+  private final InvoiceDecisions decisions;
   private final UserOrgAccessRepository access;
   private final FileStorage storage;
   private final AiClient ai;
@@ -68,12 +82,16 @@ public class ProcessingService {
   private final Clock clock;
   private final TransactionTemplate tx;
 
-  public ProcessingService(InvoiceRepository invoices, VendorService vendors, UserOrgAccessRepository access,
+  public ProcessingService(InvoiceRepository invoices, VendorService vendors, VendorMemoryService memory,
+                           InvoiceDecisions decisions,
+                           UserOrgAccessRepository access,
                            FileStorage storage, AiClient ai, ValidationService validation, AuditService audit,
                            StatusPublisher status, NotificationService notifications, WebhookOutbox webhooks,
                            ObjectMapper mapper, Clock clock, PlatformTransactionManager txManager) {
     this.invoices = invoices;
     this.vendors = vendors;
+    this.memory = memory;
+    this.decisions = decisions;
     this.access = access;
     this.storage = storage;
     this.ai = ai;
@@ -87,44 +105,123 @@ public class ProcessingService {
     this.tx = new TransactionTemplate(txManager);
   }
 
-  /** Idempotent: a duplicate Kafka delivery finds the invoice already claimed and returns. */
-  public void process(UUID invoiceId) {
+  /**
+   * One attempt at processing the invoice. Idempotent: an invoice that is not waiting (already processed,
+   * deleted, or retried by hand) is skipped. Transient failures of the AI service (timeouts, 5xx) are retried
+   * by the job queue with backoff unless this is the last attempt; anything else fails the invoice at once.
+   */
+  public Outcome process(UUID invoiceId, boolean lastAttempt) {
     Integer claimed = tx.execute(s -> invoices.claimForProcessing(invoiceId, Instant.now(clock)));
     if (claimed == null || claimed == 0) {
       log.info("Invoice {} is not waiting for processing, skipping", invoiceId);
-      return;
+      return Outcome.done();
     }
     InvoiceHandle handle = tx.execute(s -> {
       InvoiceEntity i = invoices.findById(invoiceId).orElseThrow();
       audit.log(i.getOrganizationId(), null, "PROCESSING_STARTED", AuditService.INVOICE, i.getId(), null);
       status.publish(i);
-      return new InvoiceHandle(i.getStorageKey(), i.getOriginalFilename());
+      return new InvoiceHandle(i.getStorageKey(), i.getOriginalFilename(), i.getOrganizationId(), i.getFileSha256(),
+          i.getCreatedAt());
     });
 
     try {
+      // File-level duplicate: an identical file that was already extracted is never sent to the model again.
+      Reuse reuse = tx.execute(s -> findReusable(invoiceId, handle));
+      if (reuse != null && reuse.source() != null) {
+        storeExtraction(invoiceId, reuse.source());
+        markReused(invoiceId, reuse.sourceId());
+        finishValidation(invoiceId);
+        return Outcome.done();
+      }
+      if (reuse != null && reuse.waitForEarlier() && !lastAttempt) {
+        log.info("Invoice {}: an identical file is still being processed, waiting for its result", invoiceId);
+        resetForRetry(invoiceId);
+        return Outcome.retry("waiting for the identical file " + reuse.sourceId());
+      }
+
       byte[] file = storage.read(handle.storageKey());
-      OcrResponse ocr = ai.ocr(file, handle.filename());
-      if (ocr.text() == null || ocr.text().isBlank()) {
+      InvoiceResult result = ai.processInvoice(file, handle.filename());
+      if (result.ocr() == null || result.ocr().text() == null || result.ocr().text().isBlank()) {
         throw new ProcessingException("No text could be read from the document");
       }
-      ExtractResponse extraction = ai.extract(ocr.text());
-      if (extraction.extraction() == null) throw new ProcessingException("The AI service returned no extraction");
-      storeExtraction(invoiceId, ocr, extraction);
+      if (result.extraction() == null) throw new ProcessingException("The extraction service returned no extraction");
+      storeExtraction(invoiceId, result);
       finishValidation(invoiceId);
+      return Outcome.done();
     } catch (AiClientException e) {
+      if (e.retryable() && !lastAttempt) {
+        log.warn("Transient AI service failure for invoice {} ({}), will retry", invoiceId, e.code());
+        resetForRetry(invoiceId);
+        return Outcome.retry(e.code() + ": " + e.getMessage());
+      }
       fail(invoiceId, e.getMessage(), e.code());
+      return Outcome.failed(e.code());
     } catch (ProcessingException e) {
       fail(invoiceId, e.getMessage(), "processing_error");
+      return Outcome.failed("processing_error");
     } catch (RuntimeException e) {
       log.error("Unexpected failure while processing invoice {}", invoiceId, e);
       fail(invoiceId, "Unexpected processing error", "internal_error");
+      return Outcome.failed("internal_error");
     }
   }
 
-  private record InvoiceHandle(String storageKey, String filename) {}
+  /** Puts an invoice that was being processed back to UPLOADED so the next attempt can claim it. */
+  public void resetForRetry(UUID invoiceId) {
+    tx.executeWithoutResult(s -> invoices.findById(invoiceId).ifPresent(inv -> {
+      if (inv.getStatus() == InvoiceStatus.PROCESSING) {
+        inv.setStatus(InvoiceStatus.UPLOADED);
+        invoices.saveAndFlush(inv);
+        status.publish(inv);
+      }
+    }));
+  }
+
+  private record InvoiceHandle(String storageKey, String filename, UUID organizationId, String sha256, Instant createdAt) {}
+
+  /** {@code source} set: reuse that result; {@code waitForEarlier}: the identical file is still in flight. */
+  private record Reuse(UUID sourceId, InvoiceResult source, boolean waitForEarlier) {}
+
+  private static final java.util.Set<InvoiceStatus> REUSABLE = java.util.EnumSet.of(InvoiceStatus.EXTRACTED,
+      InvoiceStatus.NEEDS_REVIEW, InvoiceStatus.VALIDATED, InvoiceStatus.APPROVED, InvoiceStatus.REJECTED);
+  private static final java.util.Set<InvoiceStatus> IN_FLIGHT = java.util.EnumSet.of(InvoiceStatus.UPLOADED,
+      InvoiceStatus.PROCESSING);
+
+  private Reuse findReusable(UUID invoiceId, InvoiceHandle h) {
+    if (h.sha256() == null) return null;
+    for (InvoiceEntity earlier : invoices.findEarlierSameFile(h.organizationId(), invoiceId, h.sha256(), REUSABLE, h.createdAt())) {
+      if (earlier.getExtractionJson() != null && earlier.getOcrText() != null) {
+        return new Reuse(earlier.getId(), storedResult(earlier), false);
+      }
+    }
+    return invoices.findEarlierSameFile(h.organizationId(), invoiceId, h.sha256(), IN_FLIGHT, h.createdAt()).stream()
+        .findFirst().map(e -> new Reuse(e.getId(), null, true)).orElse(null);
+  }
+
+  /** The earlier invoice's stored model output, as if the service had just returned it (no tokens, no cost). */
+  private InvoiceResult storedResult(InvoiceEntity source) {
+    var ocr = new OcrResponse(source.getOcrText(), List.of(), source.getOcrPageCount() == null ? 0 : source.getOcrPageCount(),
+        source.getOcrConfidence() == null ? 0 : source.getOcrConfidence().doubleValue(), source.getOcrEngine(),
+        source.getContentType());
+    Extraction extraction = mapper.convertValue(source.getExtractionJson(), Extraction.class);
+    var validation = source.getExtractValidation() == null ? null
+        : mapper.convertValue(source.getExtractValidation(), com.invoicemind.ai.ai.AiDtos.ExtractValidation.class);
+    var usage = new com.invoicemind.ai.ai.AiDtos.Usage(source.getLlmModel(), 0, 0, BigDecimal.ZERO, 0);
+    return new InvoiceResult(source.getTextSource(), ocr, extraction, validation, source.isInjectionSuspected(), usage);
+  }
+
+  private void markReused(UUID invoiceId, UUID sourceId) {
+    tx.executeWithoutResult(s -> invoices.findById(invoiceId).ifPresent(inv -> {
+      inv.setReusedFrom(sourceId);
+      invoices.saveAndFlush(inv);
+      audit.log(inv.getOrganizationId(), null, "EXTRACTION_REUSED", AuditService.INVOICE, inv.getId(),
+          Map.of("from", sourceId.toString(), "reason", "identical file (same SHA-256), model not called"));
+    }));
+  }
 
   // ------------------------------------------------------------- stage 1
-  private void storeExtraction(UUID id, OcrResponse ocr, ExtractResponse response) {
+  private void storeExtraction(UUID id, InvoiceResult response) {
+    OcrResponse ocr = response.ocr();
     runWithVendorRetry(() -> tx.executeWithoutResult(s -> {
       InvoiceEntity inv = invoices.findById(id).orElseThrow(() -> new ProcessingException("Invoice was deleted"));
       Extraction e = response.extraction();
@@ -133,12 +230,17 @@ public class ProcessingService {
       inv.setOcrEngine(ocr.engine());
       inv.setOcrConfidence(BigDecimal.valueOf(clamp01(ocr.confidence())).setScale(4, RoundingMode.HALF_UP));
       inv.setOcrPageCount(ocr.pageCount());
+      inv.setTextSource(textSource(response.source()));
+      inv.setExtractValidation(response.validation() == null ? null
+          : mapper.convertValue(response.validation(), new TypeReference<Map<String, Object>>() {}));
 
       DocumentType type = DocumentType.parse(e.documentType());
       inv.setDocumentType(type);
       String vendorName = trimToNull(e.vendor(), 300);
       inv.setVendorName(vendorName);
-      inv.setVendorId(vendors.findOrCreate(inv.getOrganizationId(), vendorName));
+      inv.setVendorTaxId(VendorEntity.normalizeTaxId(e.vendorTaxId()));
+      VendorService.Match vendor = vendors.match(inv.getOrganizationId(), vendorName, e.vendorTaxId(), currency(e.currency()));
+      inv.setVendorId(vendor == null ? null : vendor.vendorId());
       inv.setInvoiceNumber(trimToNull(e.invoiceNumber(), 100));
       inv.setInvoiceDate(parseDate(e.invoiceDate()));
       inv.setDueDate(parseDate(e.dueDate()));
@@ -147,6 +249,8 @@ public class ProcessingService {
       inv.setTax(type.signed(money(e.tax())));
       inv.setTotal(type.signed(money(e.total())));
       inv.replaceLineItems(lineItems(e, type));
+      // deterministic defaults learned from earlier corrections of this vendor (currency, terms, category)
+      memory.apply(inv, vendor == null ? null : vendor.matchedBy(), vendorName);
 
       inv.setFieldConfidence(confidenceMap(e));
       inv.setModelNeedsReview(e.needsReview());
@@ -158,7 +262,7 @@ public class ProcessingService {
         inv.setLlmModel(truncate(response.usage().model(), 100));
         inv.setInputTokens(response.usage().inputTokens());
         inv.setOutputTokens(response.usage().outputTokens());
-        inv.setCostUsd(BigDecimal.valueOf(response.usage().costUsd()).setScale(6, RoundingMode.HALF_UP));
+        inv.setCostUsd(response.usage().costUsd() == null ? null : response.usage().costUsd().setScale(6, RoundingMode.HALF_UP));
       }
       inv.setStatus(InvoiceStatus.EXTRACTED);
       invoices.saveAndFlush(inv);
@@ -189,6 +293,8 @@ public class ProcessingService {
       webhooks.invoiceEvent(next == InvoiceStatus.NEEDS_REVIEW ? "invoice.needs_review" : "invoice.validated", inv);
       notifyAfterProcessing(inv, next);
       status.publish(inv);
+      validation.recheckNewerOfSameVendor(inv).forEach(status::publish);
+      decisions.autoApproveIfEligible(inv);
     });
   }
 
@@ -232,11 +338,12 @@ public class ProcessingService {
     }));
   }
 
-  public void markFailedFromDeadLetter(UUID id) {
-    fail(id, "Processing was aborted after repeated infrastructure errors; please retry", "dead_letter");
+  // ------------------------------------------------------------- helpers
+  /** Only the three documented values are stored; anything else from the service is dropped. */
+  static String textSource(String source) {
+    return source != null && java.util.Set.of("text_layer", "ocr", "mixed").contains(source) ? source : null;
   }
 
-  // ------------------------------------------------------------- helpers
   /** Two invoices for a brand-new vendor processed concurrently race on the unique index; retry once. */
   private void runWithVendorRetry(Runnable work) {
     try {

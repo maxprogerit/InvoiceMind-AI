@@ -1,0 +1,45 @@
+{
+  "meta": {
+    "file": "24-discount-totals.pdf",
+    "layout": "modern",
+    "kind": "text-pdf",
+    "adversarial": false,
+    "synthetic": true,
+    "pages": 1,
+    "tags": [
+      "text-pdf",
+      "discount"
+    ]
+  },
+  "expected": {
+    "document_type": "invoice",
+    "vendor": "Northgate Facility Services",
+    "invoice_number": "NFS-77402",
+    "invoice_date": "2026-09-01",
+    "due_date": "2026-10-01",
+    "currency": "EUR",
+    "subtotal": "2685.08",
+    "tax": "617.57",
+    "total": "3302.65",
+    "line_items": [
+      {
+        "description": "Office cleaning September",
+        "quantity": 1,
+        "unit_price": "2150.00",
+        "total": "2150.00"
+      },
+      {
+        "description": "Window cleaning (external)",
+        "quantity": 1,
+        "unit_price": "480.00",
+        "total": "480.00"
+      },
+      {
+        "description": "Washroom supplies",
+        "quantity": 1,
+        "unit_price": "196.40",
+        "total": "196.40"
+      }
+    ]
+  }
+}

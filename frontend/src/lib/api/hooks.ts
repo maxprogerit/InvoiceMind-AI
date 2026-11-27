@@ -32,6 +32,12 @@ import {
   type Summary,
   type TeamMember,
   type UpdateInvoiceRequest,
+  type Correction,
+  type QueueCounts,
+  type ReviewQueue,
+  type Vendor,
+  type VendorStatus,
+  type DuplicateDecision,
   type VolumeByDay,
   type WebhookDelivery,
   type WebhookEndpoint,
@@ -42,6 +48,7 @@ import { useLive } from "@/lib/ws/live-store";
 export interface InvoiceFilters {
   status?: InvoiceStatus[];
   documentType?: DocumentType;
+  queue?: ReviewQueue;
   q?: string;
   vendor?: string;
   currency?: string;
@@ -67,6 +74,16 @@ export function useInvoices(filters: InvoiceFilters, options?: { enabled?: boole
     placeholderData: keepPreviousData,
   });
 }
+
+/** How many invoices wait in each review queue; refreshed with the invoice list. */
+export const useQueueCounts = () =>
+  useQuery({ queryKey: ["invoices", "queues"], queryFn: () => unwrap(api.GET("/api/v1/invoices/queues")) as Promise<QueueCounts> });
+
+export const useCorrections = (id: string) =>
+  useQuery({
+    queryKey: ["invoice", id, "corrections"],
+    queryFn: () => unwrap(api.GET("/api/v1/invoices/{id}/corrections", { params: { path: { id } } })) as Promise<Correction[]>,
+  });
 
 export function useInvoice(id: string | undefined) {
   const connected = useLive((s) => s.connected);
@@ -143,6 +160,21 @@ export function useDecision(id: string, kind: "approve" | "reject") {
           ? api.POST("/api/v1/invoices/{id}/approve", { params: { path: { id } }, body: { comment } })
           : api.POST("/api/v1/invoices/{id}/reject", { params: { path: { id } }, body: { comment } }),
       ) as Promise<InvoiceDetail>,
+    onSuccess: (data) => {
+      qc.setQueryData(["invoice", id], data);
+      invalidate(id);
+      void qc.invalidateQueries({ queryKey: ["invoice", id, "audit"] });
+    },
+  });
+}
+
+/** NOT_DUPLICATE: a separate bill (re-validated); DUPLICATE: reject it as a copy of the earlier invoice. */
+export function useDuplicateDecision(id: string) {
+  const invalidate = useInvalidateInvoices();
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { decision: DuplicateDecision; comment?: string }) =>
+      unwrap(api.POST("/api/v1/invoices/{id}/duplicate-decision", { params: { path: { id } }, body })) as Promise<InvoiceDetail>,
     onSuccess: (data) => {
       qc.setQueryData(["invoice", id], data);
       invalidate(id);
@@ -432,6 +464,15 @@ export const useEmailIngest = (enabled = true) =>
     refetchInterval: 15_000, // new mail shows up without a reload
   });
 
+export function useEmailPolicy() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (acceptFrom: "ANYONE" | "USERS") =>
+      unwrap(api.PUT("/api/v1/ingest/email/policy", { body: { acceptFrom } })) as Promise<EmailIngestStatus>,
+    onSuccess: (data) => qc.setQueryData(["ingest", "email"], data),
+  });
+}
+
 export function useRotateEmailAddress() {
   const qc = useQueryClient();
   return useMutation({
@@ -557,5 +598,97 @@ export function useRemoveFirmMember() {
   return useMutation({
     mutationFn: (userId: string) => unwrap(api.DELETE("/api/v1/firm/members/{userId}", { params: { path: { userId } } })),
     onSuccess: invalidate,
+  });
+}
+
+// ----------------------------------------------------------------- vendors
+export const useVendors = (status?: VendorStatus) =>
+  useQuery({
+    queryKey: ["vendors", status ?? "all"],
+    queryFn: () => unwrap(api.GET("/api/v1/vendors", { params: { query: status ? { status } : {} } })) as Promise<Vendor[]>,
+  });
+
+/** Vendor changes re-check open invoices on the server, so invoices are refetched too. */
+function useVendorMutation<T>(fn: (arg: T) => Promise<unknown>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["vendors"] });
+      void qc.invalidateQueries({ queryKey: ["invoices"] });
+      void qc.invalidateQueries({ queryKey: ["invoice"] });
+    },
+  });
+}
+
+export const useVerifyVendor = () =>
+  useVendorMutation((id: string) => unwrap(api.POST("/api/v1/vendors/{id}/verify", { params: { path: { id } } })));
+
+export const useUpdateVendor = () =>
+  useVendorMutation(({ id, ...body }: { id: string; name: string; taxId?: string; defaultCurrency?: string; paymentTermsDays?: number }) =>
+    unwrap(api.PUT("/api/v1/vendors/{id}", { params: { path: { id } }, body })),
+  );
+
+export const useAddAlias = () =>
+  useVendorMutation(({ id, alias }: { id: string; alias: string }) =>
+    unwrap(api.POST("/api/v1/vendors/{id}/aliases", { params: { path: { id } }, body: { alias } })),
+  );
+
+export const useForgetMemory = () =>
+  useVendorMutation(({ id, memoryId }: { id: string; memoryId: number }) =>
+    unwrap(api.DELETE("/api/v1/vendors/{id}/memory/{memoryId}", { params: { path: { id, memoryId } } })),
+  );
+
+export const useRemoveAlias = () =>
+  useVendorMutation(({ id, aliasId }: { id: string; aliasId: number }) =>
+    unwrap(api.DELETE("/api/v1/vendors/{id}/aliases/{aliasId}", { params: { path: { id, aliasId } } })),
+  );
+
+// ---------------------------------------------------------- approval rules
+export type ApprovalRule = { currency: string; autoApproveBelow?: number; twoApproversAbove?: number };
+
+export const useApprovalRules = () =>
+  useQuery({ queryKey: ["approval-rules"], queryFn: () => unwrap(api.GET("/api/v1/approval-rules")) as Promise<{ rules: ApprovalRule[] }> });
+
+export function useSaveApprovalRules() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (rules: ApprovalRule[]) => unwrap(api.PUT("/api/v1/approval-rules", { body: { rules } })),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["approval-rules"] });
+      void qc.invalidateQueries({ queryKey: ["invoice"] });
+    },
+  });
+}
+
+// ------------------------------------------------------ accounting export
+export const useAccountingPending = () =>
+  useQuery({
+    queryKey: ["accounting", "pending"],
+    queryFn: () => unwrap(api.GET("/api/v1/export/accounting/pending")) as Promise<{ approvedNotExported: number }>,
+  });
+
+export const useAccountingBatches = () =>
+  useQuery({
+    queryKey: ["accounting", "batches"],
+    queryFn: () =>
+      unwrap(api.GET("/api/v1/export/accounting/batches")) as Promise<
+        { id: string; target: "XERO" | "QBO"; invoices: number; createdByName?: string; createdAt: string }[]
+      >,
+  });
+
+export function useAccountingExport() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { target: "XERO" | "QBO"; account: string; taxCode?: string; dateStyle: "DMY" | "MDY" | "ISO" }) =>
+      unwrap(api.POST("/api/v1/export/accounting", { body })) as Promise<{
+        batchId: string;
+        invoices: number;
+        skipped: { id: string; label: string; reason: string }[];
+      }>,
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["accounting"] });
+      void qc.invalidateQueries({ queryKey: ["invoices"] });
+    },
   });
 }

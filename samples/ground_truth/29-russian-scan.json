@@ -1,0 +1,45 @@
+{
+  "meta": {
+    "file": "29-russian-scan.png",
+    "layout": "russian",
+    "kind": "scan",
+    "adversarial": false,
+    "synthetic": true,
+    "pages": 1,
+    "tags": [
+      "scan",
+      "decimal-comma"
+    ]
+  },
+  "expected": {
+    "document_type": "invoice",
+    "vendor": "ООО «Техносервис»",
+    "invoice_number": "ТС-2026/0981",
+    "invoice_date": "2026-06-09",
+    "due_date": "2026-06-19",
+    "currency": "RUB",
+    "subtotal": "85300.00",
+    "tax": "17060.00",
+    "total": "102360.00",
+    "line_items": [
+      {
+        "description": "Ремонт серверного оборудования",
+        "quantity": 1,
+        "unit_price": "64000.00",
+        "total": "64000.00"
+      },
+      {
+        "description": "Замена блока питания",
+        "quantity": 2,
+        "unit_price": "8900.00",
+        "total": "17800.00"
+      },
+      {
+        "description": "Выезд инженера",
+        "quantity": 1,
+        "unit_price": "3500.00",
+        "total": "3500.00"
+      }
+    ]
+  }
+}

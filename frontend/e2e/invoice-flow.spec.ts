@@ -6,20 +6,34 @@ const SAMPLES = path.resolve(__dirname, "../../samples/invoices");
 const suffix = Math.random().toString(36).slice(2, 8);
 const PASSWORD = "Passw0rd!long";
 
+/** New vendors are created unverified and block approval until a person confirms them once. */
+async function confirmVendorIfNeeded(page: Page) {
+  await expect(page.getByText("Processing", { exact: true }).first()).toBeVisible();
+  const button = page.getByRole("button", { name: "Confirm vendor" });
+  if (await button.count()) {
+    await button.click();
+    await expect(button).toHaveCount(0);
+  }
+}
+
 /**
  * One fresh organisation per run, so the test is repeatable and never collides with duplicate detection.
- * The ai-service in this stack is the rule-based test double (docker-compose.e2e.yml): real OCR, no LLM.
+ * The extract-service in this stack is the rule-based test double (docker-compose.e2e.yml): real OCR, no LLM.
  */
 test.describe.serial("invoice lifecycle in the browser", () => {
   let page: Page;
   const adminEmail = `admin-${suffix}@e2e.example.com`;
   const userEmail = `user-${suffix}@e2e.example.com`;
+  const approverEmail = `approver-${suffix}@e2e.example.com`;
+  // nobody approves their own upload: the admin uploads, an approver (in a second browser context) approves
+  let approverPage: Page;
 
   test.beforeAll(async ({ browser }) => {
     page = await browser.newPage();
   });
   test.afterAll(async () => {
     await page.close();
+    await approverPage?.close();
   });
 
   test("registers a new organisation and lands on an empty invoice list", async () => {
@@ -32,6 +46,25 @@ test.describe.serial("invoice lifecycle in the browser", () => {
     await page.waitForURL("**/invoices");
     await expect(page.getByText("Upload your first invoice")).toBeVisible();
     await expect(page.getByRole("link", { name: /Approvals/ })).toBeVisible(); // first user is the admin
+  });
+
+  test("the admin adds an approver, who signs in in another browser", async ({ browser }) => {
+    await page.goto("/team");
+    await page.getByRole("button", { name: /Add member/ }).first().click();
+    await page.fill("#m-name", "Ada Approver");
+    await page.fill("#m-email", approverEmail);
+    await page.getByRole("dialog").getByRole("combobox").click();
+    await page.getByRole("option", { name: "Approver" }).click();
+    await page.fill("#m-pass", PASSWORD);
+    await page.getByRole("dialog").getByRole("button", { name: "Add member" }).click();
+    await expect(page.getByText(approverEmail)).toBeVisible();
+
+    approverPage = await (await browser.newContext()).newPage();
+    await approverPage.goto("/login");
+    await approverPage.fill("#email", approverEmail);
+    await approverPage.fill("#password", PASSWORD);
+    await approverPage.click("button[type=submit]");
+    await approverPage.waitForURL("**/invoices");
   });
 
   test("uploading shows live pipeline progress and the right outcome per document", async () => {
@@ -64,14 +97,33 @@ test.describe.serial("invoice lifecycle in the browser", () => {
     await expect(page.getByRole("button", { name: "Approve" })).toHaveCount(0); // not approvable while invalid
     await page.fill("#f-total", "1428.00");
     await page.getByRole("button", { name: /Save & revalidate/ }).click();
-    await expect(page.getByText("Saved. All checks passed")).toBeVisible();
 
-    await page.getByRole("button", { name: "Approve" }).click();
-    await page.getByRole("dialog").locator("textarea").fill("Checked against the contract");
-    await page.getByRole("dialog").getByRole("button", { name: "Approve" }).click();
-    await expect(page.getByText("Invoice approved")).toBeVisible();
-    await expect(page.getByText("Checked against the contract").first()).toBeVisible(); // shown in the processing card and the history
-    await expect(page.getByText("Fields corrected")).toBeVisible(); // audit history
+    await expect(page.getByText("Saved, but some checks still fail").or(page.getByText("Saved. All checks passed"))).toBeVisible();
+    const detail = page.url();
+
+    // E2E-1002 now matches E2E-1001: same vendor, same total, same date, another number. Whichever of the two was
+    // uploaded later is flagged as a possible duplicate, and a person decides.
+    await page.goto("/invoices");
+    await page.locator("tbody tr", { hasText: "possible duplicate" }).click();
+    await page.getByRole("link", { name: /Review & edit/ }).click();
+    await expect(page.getByRole("alert").getByText(/Possible duplicate of/)).toBeVisible(); // banner + the finding itself
+    await expect(page.getByRole("button", { name: "Approve" })).toHaveCount(0);
+    await page.fill("#dup-comment", "Two separate engagements");
+    await page.getByRole("button", { name: "It is a separate invoice" }).click();
+    await expect(page.getByText("Marked as a separate invoice")).toBeVisible();
+
+    await page.goto(detail);
+    await confirmVendorIfNeeded(page);
+    await expect(page.getByText("Approval: You cannot approve an invoice you uploaded yourself.")).toBeVisible();
+
+    await approverPage.goto(detail);
+    await expect(approverPage.getByText(/Approvals 0 of 1/)).toBeVisible();
+    await approverPage.getByRole("button", { name: "Approve" }).click();
+    await approverPage.getByRole("dialog").locator("textarea").fill("Checked against the contract");
+    await approverPage.getByRole("dialog").getByRole("button", { name: "Approve" }).click();
+    await expect(approverPage.getByText("Invoice approved")).toBeVisible();
+    await expect(approverPage.getByText("Checked against the contract").first()).toBeVisible(); // processing card and history
+    await expect(approverPage.getByText("Fields corrected")).toBeVisible(); // audit history
   });
 
   test("approvals queue, analytics and exports reflect what happened", async () => {
@@ -91,6 +143,29 @@ test.describe.serial("invoice lifecycle in the browser", () => {
     expect(Buffer.concat(chunks).subarray(0, 2).toString()).toBe("PK"); // a real zip/xlsx container
   });
 
+  test("review queues, vendors and vendor memory", async () => {
+    await page.goto("/invoices");
+    await expect(page.getByRole("tab", { name: /Possible duplicate/ })).toBeVisible();
+    await page.getByRole("tab", { name: /Needs review/ }).click();
+    await expect(page.getByText("This queue is empty.")).toBeVisible(); // everything so far was decided
+
+    // a person sets the expense category on E2E-1001; it becomes a rule of the vendor
+    await page.getByRole("tab", { name: /Needs review/ }).click(); // back to all invoices
+    await page.locator("tbody tr", { hasText: "E2E-1001" }).click();
+    await page.getByRole("link", { name: /Review & edit/ }).click();
+    await page.waitForURL(/\/invoices\/[0-9a-f-]{36}$/);
+    await page.fill("#f-expenseCategory", "Consulting");
+    await page.getByRole("button", { name: /Save & revalidate/ }).click();
+    await expect(page.getByText("Corrections", { exact: true })).toBeVisible();
+
+    await page.goto("/vendors");
+    const row = page.locator("tbody tr", { hasText: "E2E Fixtures GmbH" });
+    await expect(row.getByText("confirmed")).toBeVisible();
+    await row.getByRole("button", { name: /Edit/ }).click();
+    await expect(page.getByRole("dialog").getByText("Expense category → Consulting")).toBeVisible();
+    await page.keyboard.press("Escape");
+  });
+
   test("a rules document explains why an invoice was flagged, with its source", async () => {
     await page.goto("/knowledge");
     await expect(page.getByText(/No documents yet/)).toBeVisible();
@@ -100,7 +175,7 @@ test.describe.serial("invoice lifecycle in the browser", () => {
     await page.getByRole("dialog").getByRole("button", { name: "Add document" }).click();
     await expect(page.getByText("1 passages")).toBeVisible();
 
-    // the same mismatching document again: a flagged duplicate that needs review
+    // the same mismatching document again: an identical file, so its result is reused (no second extraction)
     await page.goto("/upload");
     await page.setInputFiles("input[type=file]", path.join(FIXTURES, "e2e-mismatch.pdf"));
     await page.getByRole("link", { name: /Review now/ }).click();
@@ -122,9 +197,11 @@ test.describe.serial("invoice lifecycle in the browser", () => {
     await expect(page.locator("#f-invoiceNumber")).toHaveValue("NL-CN-0031");
     await expect(page.getByText("Credit note number")).toBeVisible();
 
-    await page.getByRole("button", { name: "Approve" }).click();
-    await page.getByRole("dialog").getByRole("button", { name: "Approve" }).click();
-    await expect(page.getByText("Invoice approved")).toBeVisible();
+    await confirmVendorIfNeeded(page);
+    await approverPage.goto(page.url());
+    await approverPage.getByRole("button", { name: "Approve" }).click();
+    await approverPage.getByRole("dialog").getByRole("button", { name: "Approve" }).click();
+    await expect(approverPage.getByText("Invoice approved")).toBeVisible();
 
     await page.goto("/invoices");
     const row = page.locator("tbody tr", { hasText: "NL-CN-0031" });
@@ -184,7 +261,29 @@ test.describe.serial("invoice lifecycle in the browser", () => {
     await expect(page.getByText(/No webhooks yet/)).toBeVisible();
   });
 
-  test("an admin adds a plain user, who sees a restricted application", async () => {
+  test("approved invoices go to accounting once, as a Xero bill import", async () => {
+    await page.goto("/export");
+    await expect(page.getByText(/approved invoices? waiting/)).toBeVisible();
+    await page.fill("#acct-account", "429");
+    const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Export to Xero" }).click()]);
+    expect(download.suggestedFilename()).toMatch(/^xero-bills-.*\.csv$/);
+    const chunks: Buffer[] = [];
+    for await (const chunk of await download.createReadStream()) chunks.push(chunk as Buffer);
+    expect(Buffer.concat(chunks).toString().split("\n")[0]).toContain("*ContactName");
+    await expect(page.getByText("No approved invoices are waiting.")).toBeVisible(); // marked: not exported twice
+  });
+
+  test("a .zip upload imports every document in it and explains what it skipped", async () => {
+    await page.goto("/upload");
+    await page.setInputFiles("input[type=file]", path.join(FIXTURES, "e2e-batch.zip"));
+    const rows = page.locator("ul[aria-label=Uploads] > li");
+    await expect(rows.filter({ hasText: "03-german-eur.pdf" })).toBeVisible();
+    await expect(rows.filter({ hasText: "06-german-no-tax.pdf" })).toBeVisible();
+    await expect(rows.filter({ hasText: "readme.txt" }).getByText(/Only PDF/)).toBeVisible();
+    await expect(rows.filter({ hasText: "from e2e-batch.zip" }).first()).toBeVisible();
+  });
+
+  test("an admin adds an accountant, who reviews everything but approves nothing", async () => {
     await page.goto("/team");
     await page.getByRole("button", { name: /Add member/ }).first().click();
     await page.fill("#m-name", "Una User");
@@ -202,7 +301,11 @@ test.describe.serial("invoice lifecycle in the browser", () => {
 
     await expect(page.getByRole("link", { name: "Team" })).toHaveCount(0);
     await expect(page.getByRole("link", { name: /Approvals/ })).toHaveCount(0);
-    await expect(page.getByText("Nothing here yet")).toBeVisible(); // sees none of the admin's invoices
+    await expect(page.locator("tbody tr", { hasText: "E2E-1001" })).toBeVisible(); // the organisation's invoices
+    await page.locator("tbody tr", { hasText: "E2E-1001" }).click();
+    await page.getByRole("link", { name: /Review & edit/ }).click();
+    await expect(page.getByRole("button", { name: /Save & revalidate/ })).toBeVisible(); // can review and correct
+    await expect(page.getByRole("button", { name: "Approve" })).toHaveCount(0); // cannot decide
     await page.goto("/team");
     await page.waitForURL("**/invoices"); // route guard
   });

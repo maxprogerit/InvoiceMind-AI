@@ -68,7 +68,7 @@ class FirmMigrationIT {
     assertThat(jdbc.queryForObject("select count(*) from user_org_access a join users u on u.id = a.user_id "
         + "where a.organization_id = u.organization_id and a.role = u.role", Integer.class)).isEqualTo(5);
     assertThat(roleOf(jdbc, acmeApprover, acme)).isEqualTo("APPROVER");
-    assertThat(roleOf(jdbc, acmeUser, acme)).isEqualTo("USER");
+    assertThat(roleOf(jdbc, acmeUser, acme)).isEqualTo("ACCOUNTANT"); // USER was renamed by V13
 
     // the admins (and only they) become FIRM_ADMIN of their firm of one
     List<Map<String, Object>> members = jdbc.queryForList("select firm_id, user_id, firm_role from firm_members");

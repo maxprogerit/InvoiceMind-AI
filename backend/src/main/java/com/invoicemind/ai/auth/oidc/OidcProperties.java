@@ -27,7 +27,7 @@ public record OidcProperties(
     @DefaultValue("true") boolean requireEmailVerified,
     /** Organisation id new users are created in; empty disables just-in-time provisioning. */
     @DefaultValue("") String autoProvisionOrganizationId,
-    @DefaultValue("USER") String defaultRole,
+    @DefaultValue("ACCOUNTANT") String defaultRole,
     /** E-mail domains allowed to be provisioned (and nothing else); required for provisioning. */
     @DefaultValue({}) List<String> allowedEmailDomains) {
 

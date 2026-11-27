@@ -13,9 +13,10 @@ app:
     root: ${java.io.tmpdir}/invoicemind-it-storage
   ai:
     token: test-token
-    retry-attempts: 2
-    retry-initial-backoff-ms: 20
-    circuit-failure-rate: 100
+    read-timeout-ms: 10000
+  processing:
+    poll-interval: PT0.1S
+    retry-base: PT0.2S
   rate-limit:
     auth-per-minute: 100000
     refresh-per-minute: 100000
@@ -36,6 +37,11 @@ app:
     retry-after-minutes: 0   # tests flip the fake rate source on and off
   seed:
     demo-password: ""
+  batch:
+    max-entries: 5
+    max-total-bytes: 3000000   # small, so the zip-bomb test stays fast
+  reminders:
+    cron: "-"            # the tests call sendDigest() themselves
 
 management:
   tracing:
@@ -49,6 +55,5 @@ management:
 
 logging:
   level:
-    org.apache.kafka: ERROR
     org.testcontainers: WARN
     com.zaxxer.hikari: WARN

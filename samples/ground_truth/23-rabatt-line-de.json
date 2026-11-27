@@ -1,0 +1,46 @@
+{
+  "meta": {
+    "file": "23-rabatt-line-de.pdf",
+    "layout": "german",
+    "kind": "text-pdf",
+    "adversarial": false,
+    "synthetic": true,
+    "pages": 1,
+    "tags": [
+      "text-pdf",
+      "discount",
+      "decimal-comma"
+    ]
+  },
+  "expected": {
+    "document_type": "invoice",
+    "vendor": "Druckerei Hansen OHG",
+    "invoice_number": "DH-26-0712",
+    "invoice_date": "2026-04-17",
+    "due_date": "2026-05-08",
+    "currency": "EUR",
+    "subtotal": "962.35",
+    "tax": "182.85",
+    "total": "1145.20",
+    "line_items": [
+      {
+        "description": "Flyer DIN A5, 4/4-farbig (1.000 Stk.)",
+        "quantity": 5,
+        "unit_price": "129.00",
+        "total": "645.00"
+      },
+      {
+        "description": "Plakate DIN A1",
+        "quantity": 20,
+        "unit_price": "18.40",
+        "total": "368.00"
+      },
+      {
+        "description": "Rabatt 5 % Mengenstaffel",
+        "quantity": 1,
+        "unit_price": "-50.65",
+        "total": "-50.65"
+      }
+    ]
+  }
+}

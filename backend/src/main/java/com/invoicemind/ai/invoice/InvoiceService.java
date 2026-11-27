@@ -6,14 +6,22 @@ import com.invoicemind.ai.common.ApiException;
 import com.invoicemind.ai.common.PageResponse;
 import com.invoicemind.ai.config.AppProperties;
 import com.invoicemind.ai.firm.FirmService;
+import com.invoicemind.ai.invoice.InvoiceDtos.CorrectionDto;
 import com.invoicemind.ai.invoice.InvoiceDtos.DecisionRequest;
+import com.invoicemind.ai.invoice.InvoiceDtos.DuplicateDecision;
+import com.invoicemind.ai.invoice.InvoiceDtos.DuplicateDecisionRequest;
 import com.invoicemind.ai.invoice.InvoiceDtos.InvoiceDetail;
 import com.invoicemind.ai.invoice.InvoiceDtos.InvoiceSummary;
 import com.invoicemind.ai.invoice.InvoiceDtos.LineItemDto;
 import com.invoicemind.ai.invoice.InvoiceDtos.OcrTextResponse;
+import com.invoicemind.ai.invoice.InvoiceDtos.QueueCounts;
 import com.invoicemind.ai.invoice.InvoiceDtos.UpdateInvoiceRequest;
+import com.invoicemind.ai.vendor.VendorEntity;
+import com.invoicemind.ai.vendor.VendorService;
+import com.invoicemind.ai.vendor.memory.VendorMemoryService;
 import com.invoicemind.ai.notification.NotificationService;
-import com.invoicemind.ai.processing.ProcessingQueue.InvoiceQueuedEvent;
+import com.invoicemind.ai.processing.ProcessingJobQueue;
+import com.invoicemind.ai.processing.TraceContextCodec;
 import com.invoicemind.ai.processing.StatusPublisher;
 import com.invoicemind.ai.ratelimit.RateLimiter;
 import com.invoicemind.ai.security.AuthPrincipal;
@@ -36,7 +44,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -65,19 +72,26 @@ public class InvoiceService {
   private final NotificationService notifications;
   private final WebhookOutbox webhooks;
   private final RateLimiter rateLimiter;
-  private final ApplicationEventPublisher events;
+  private final ProcessingJobQueue jobs;
+  private final InvoiceDecisions decisions;
+  private final InvoiceCorrectionRepository corrections;
+  private final VendorMemoryService vendorMemory;
+  private final TraceContextCodec traces;
   private final AppProperties props;
   private final Clock clock;
   private final FirmService firms;
 
   // ------------------------------------------------------------------ upload
   @Transactional // the delegate below is a self-call, so this method must open the transaction itself
-  public InvoiceSummary upload(MultipartFile file, AuthPrincipal me) { return upload(file, me, "web"); }
+  public InvoiceSummary upload(MultipartFile file, AuthPrincipal me) { return upload(file, me, InvoiceSource.WEB, null); }
 
-  /** {@code source} ("web", "email") is recorded in the audit trail so it is clear how a document arrived. */
+  /**
+   * {@code source} is stored on the invoice and in the audit trail, so it is clear how a document arrived;
+   * {@code sourceEmail} is the sender of an e-mailed one. Batch and e-mail intake are rate-limited by their callers.
+   */
   @Transactional
-  public InvoiceSummary upload(MultipartFile file, AuthPrincipal me, String source) {
-    rateLimiter.check("upload", me.userId().toString(), props.rateLimit().uploadPerMinute());
+  public InvoiceSummary upload(MultipartFile file, AuthPrincipal me, InvoiceSource source, String sourceEmail) {
+    if (source == InvoiceSource.WEB) rateLimiter.check("upload", me.userId().toString(), props.rateLimit().uploadPerMinute());
     ValidatedFile vf = fileValidator.validate(file);
     firms.assertUploadAllowed(me);  // the firm's monthly document limit, summed over all of its clients
 
@@ -89,13 +103,15 @@ public class InvoiceService {
     inv.setContentType(vf.contentType());
     inv.setFileSize(vf.data().length);
     inv.setFileSha256(vf.sha256());
+    inv.setSource(source);
+    inv.setSourceEmail(sourceEmail);
     inv = invoices.saveAndFlush(inv);
     inv.setStorageKey(storage.store(me.organizationId(), inv.getId(), vf.extension(), vf.data()));
 
     audit.log(me.organizationId(), me.userId(), "INVOICE_UPLOADED", AuditService.INVOICE, inv.getId(),
-        Map.of("filename", vf.safeName(), "bytes", vf.data().length, "sha256", vf.sha256().substring(0, 16), "source", source));
+        Map.of("filename", vf.safeName(), "bytes", vf.data().length, "sha256", vf.sha256().substring(0, 16), "source", source.name().toLowerCase(Locale.ROOT)));
     status.publish(inv);
-    events.publishEvent(new InvoiceQueuedEvent(inv.getId(), inv.getOrganizationId())); // -> Kafka after commit
+    jobs.enqueue(inv.getId(), traces.current(), props.processing().maxAttempts()); // same transaction as the row
     return mapper.toSummary(inv, nameOf(me));
   }
 
@@ -105,6 +121,18 @@ public class InvoiceService {
     Page<InvoiceEntity> result = invoices.findAll(filter.toSpec(me.organizationId(), scopeOf(me)),
         PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 100), parseSort(sort)));
     return PageResponse.of(result, mapper.toSummaries(result.getContent()));
+  }
+
+  public java.time.LocalDate today() {
+    return java.time.LocalDate.now(clock);
+  }
+
+  @Transactional(readOnly = true)
+  public QueueCounts queueCounts(AuthPrincipal me) {
+    java.util.function.Function<ReviewQueue, Long> count = q ->
+        invoices.count(InvoiceFilter.queue(q, today()).toSpec(me.organizationId(), scopeOf(me)));
+    return new QueueCounts(count.apply(ReviewQueue.NEEDS_REVIEW), count.apply(ReviewQueue.POSSIBLE_DUPLICATE),
+        count.apply(ReviewQueue.UNVERIFIED_VENDOR), count.apply(ReviewQueue.OVERDUE));
   }
 
   /** All matching invoices for export, newest first, capped to keep memory bounded. */
@@ -134,6 +162,15 @@ public class InvoiceService {
   }
 
   @Transactional(readOnly = true)
+  public List<CorrectionDto> corrections(UUID id, AuthPrincipal me) {
+    load(id, me); // authorisation check
+    List<InvoiceCorrectionEntity> rows = corrections.findByInvoiceIdOrderByCreatedAtAscIdAsc(id);
+    Map<UUID, String> names = mapper.names(rows.stream().map(InvoiceCorrectionEntity::getUserId).filter(Objects::nonNull).toList());
+    return rows.stream().map(c -> new CorrectionDto(c.getId(), c.getField(), c.getOldValue(), c.getNewValue(),
+        c.getUserId() == null ? null : names.getOrDefault(c.getUserId(), "Unknown"), c.getCreatedAt())).toList();
+  }
+
+  @Transactional(readOnly = true)
   public List<AuditEntryDto> trail(UUID id, AuthPrincipal me) {
     load(id, me); // authorisation check
     return audit.trailFor(me.organizationId(), AuditService.INVOICE, id);
@@ -151,45 +188,64 @@ public class InvoiceService {
     }
 
     Map<String, Object> changes = new LinkedHashMap<>();
+    List<String[]> rows = new ArrayList<>(); // field, before, after: one correction row each
+    VendorMemoryService.Before snapshot = VendorMemoryService.Before.of(inv);
     DocumentType type = req.documentType() == null ? inv.getDocumentType() : req.documentType();
-    track(changes, "documentType", inv.getDocumentType(), type);
+    track(changes, rows, "documentType", inv.getDocumentType(), type);
     inv.setDocumentType(type);
     String vendor = blankToNull(req.vendorName());
-    track(changes, "vendorName", inv.getVendorName(), vendor);
+    track(changes, rows, "vendorName", inv.getVendorName(), vendor);
     inv.setVendorName(vendor);
-    inv.setVendorId(vendors.findOrCreate(inv.getOrganizationId(), vendor));
+    String taxId = req.vendorTaxId() == null ? inv.getVendorTaxId() : VendorEntity.normalizeTaxId(req.vendorTaxId());
+    track(changes, rows, "vendorTaxId", inv.getVendorTaxId(), taxId);
+    inv.setVendorTaxId(taxId);
+    VendorService.Match match = vendors.match(inv.getOrganizationId(), vendor, taxId, inv.getCurrency());
+    inv.setVendorId(match == null ? null : match.vendorId());
     String number = blankToNull(req.invoiceNumber());
-    track(changes, "invoiceNumber", inv.getInvoiceNumber(), number);
+    track(changes, rows, "invoiceNumber", inv.getInvoiceNumber(), number);
     inv.setInvoiceNumber(number);
-    track(changes, "invoiceDate", inv.getInvoiceDate(), req.invoiceDate());
+    track(changes, rows, "invoiceDate", inv.getInvoiceDate(), req.invoiceDate());
     inv.setInvoiceDate(req.invoiceDate());
-    track(changes, "dueDate", inv.getDueDate(), req.dueDate());
+    track(changes, rows, "dueDate", inv.getDueDate(), req.dueDate());
     inv.setDueDate(req.dueDate());
     String currency = blankToNull(req.currency()) == null ? null : req.currency().trim().toUpperCase(Locale.ROOT);
-    track(changes, "currency", inv.getCurrency(), currency);
+    track(changes, rows, "currency", inv.getCurrency(), currency);
     inv.setCurrency(currency);
     // a credit note is stored negative whichever sign the reviewer typed (type.signed is the identity for invoices)
-    track(changes, "subtotal", inv.getSubtotal(), type.signed(req.subtotal()));
+    track(changes, rows, "subtotal", inv.getSubtotal(), type.signed(req.subtotal()));
     inv.setSubtotal(type.signed(req.subtotal()));
-    track(changes, "tax", inv.getTax(), type.signed(req.tax()));
+    track(changes, rows, "tax", inv.getTax(), type.signed(req.tax()));
     inv.setTax(type.signed(req.tax()));
-    track(changes, "total", inv.getTotal(), type.signed(req.total()));
+    track(changes, rows, "total", inv.getTotal(), type.signed(req.total()));
     inv.setTotal(type.signed(req.total()));
 
+    String category = req.expenseCategory() == null ? inv.getExpenseCategory() : blankToNull(req.expenseCategory());
+    track(changes, rows, "expenseCategory", inv.getExpenseCategory(), category);
+    inv.setExpenseCategory(category);
+
     List<LineItemEntity> items = toLineItems(req.lineItems(), type);
-    if (!sameLines(inv.getLineItems(), items)) changes.put("lineItems", items.size() + " line(s) edited");
+    if (!sameLines(inv.getLineItems(), items)) {
+      changes.put("lineItems", items.size() + " line(s) edited");
+      rows.add(new String[] {"lineItems", inv.getLineItems().size() + " line(s)", items.size() + " line(s)"});
+    }
     inv.replaceLineItems(items);
 
     InvoiceStatus before = inv.getStatus();
     inv.setHumanReviewed(true);
     InvoiceStatus next = validation.revalidate(inv);
-    track(changes, "status", inv.getStatus(), next);
+    if (next != inv.getStatus()) changes.put("status", inv.getStatus() + " -> " + next);
     inv.setStatus(next);
     invoices.saveAndFlush(inv);
     if (next != before) webhooks.invoiceEvent(next == InvoiceStatus.VALIDATED ? "invoice.validated" : "invoice.needs_review", inv);
 
+    for (String[] r : rows) corrections.save(new InvoiceCorrectionEntity(inv, r[0], r[1], r[2], me.userId()));
+    if (!rows.isEmpty()) decisions.resetApprovals(inv, me.userId());
+    List<String> learned = vendorMemory.learn(inv, snapshot, me.userId());
+    if (!learned.isEmpty()) changes.put("vendorMemoryLearned", learned);
     audit.log(me.organizationId(), me.userId(), "INVOICE_CORRECTED", AuditService.INVOICE, inv.getId(), changes);
     status.publish(inv);
+    validation.recheckNewerOfSameVendor(inv).forEach(status::publish);
+    decisions.autoApproveIfEligible(inv);
     return mapper.toDetail(inv, me);
   }
 
@@ -198,14 +254,8 @@ public class InvoiceService {
   public InvoiceDetail approve(UUID id, DecisionRequest req, AuthPrincipal me) {
     InvoiceEntity inv = load(id, me);
     requireReviewer(me);
-    if (inv.getStatus() != InvoiceStatus.VALIDATED) {
-      throw ApiException.conflict("invoice_not_approvable",
-          "Only validated invoices can be approved (current status: " + inv.getStatus() + ")");
-    }
-    if (me.role() == Role.APPROVER && inv.getUploadedBy().equals(me.userId())) {
-      throw ApiException.forbidden("You cannot approve an invoice you uploaded yourself");
-    }
-    return decide(inv, InvoiceStatus.APPROVED, "INVOICE_APPROVED", req, me);
+    decisions.approve(inv, req == null ? null : blankToNull(req.comment()), me);
+    return mapper.toDetail(inv, me);
   }
 
   @Transactional
@@ -219,34 +269,49 @@ public class InvoiceService {
     if (req == null || req.comment() == null || req.comment().trim().length() < 3) {
       throw ApiException.badRequest("comment_required", "A comment explaining the rejection is required");
     }
-    return decide(inv, InvoiceStatus.REJECTED, "INVOICE_REJECTED", req, me);
+    decisions.reject(inv, blankToNull(req.comment()), me.userId());
+    return mapper.toDetail(inv, me);
   }
 
-  private InvoiceDetail decide(InvoiceEntity inv, InvoiceStatus target, String action, DecisionRequest req,
-                               AuthPrincipal me) {
-    String comment = req == null ? null : blankToNull(req.comment());
-    InvoiceStatus from = inv.getStatus();
-    inv.setStatus(target);
-    inv.setDecidedBy(me.userId());
-    inv.setDecidedAt(Instant.now(clock));
-    inv.setDecisionComment(comment);
-    invoices.saveAndFlush(inv);
-
-    Map<String, Object> details = new LinkedHashMap<>();
-    details.put("from", from.name());
-    details.put("to", target.name());
-    if (comment != null) details.put("comment", comment);
-    audit.log(me.organizationId(), me.userId(), action, AuditService.INVOICE, inv.getId(), details);
-    webhooks.invoiceEvent(target == InvoiceStatus.APPROVED ? "invoice.approved" : "invoice.rejected", inv);
-
-    String label = inv.displayLabel();
-    if (!inv.getUploadedBy().equals(me.userId())) {
-      boolean approved = target == InvoiceStatus.APPROVED;
-      notifications.notify(inv.getOrganizationId(), inv.getUploadedBy(), approved ? "APPROVED" : "REJECTED",
-          approved ? "Invoice approved" : "Invoice rejected",
-          label + (approved ? " was approved." : " was rejected" + (comment == null ? "." : ": " + comment)), inv.getId());
+  /**
+   * A person decides about a POSSIBLE_DUPLICATE: NOT_DUPLICATE clears the finding for this invoice (it is
+   * re-validated and the decision is audited); DUPLICATE rejects it as a duplicate of the earlier invoice.
+   * An exact DUPLICATE cannot be cleared: delete or reject it.
+   */
+  @Transactional
+  public InvoiceDetail decideDuplicate(UUID id, DuplicateDecisionRequest req, AuthPrincipal me) {
+    InvoiceEntity inv = load(id, me);
+    if (!InvoiceMapper.permissions(inv, me, true, java.util.Set.of()).canDecideDuplicate()) {
+      throw inv.getDuplicateStatus() == DuplicateStatus.DUPLICATE
+          ? ApiException.conflict("exact_duplicate", "An exact duplicate cannot be marked as a separate invoice")
+          : inv.getDuplicateStatus() != DuplicateStatus.POSSIBLE_DUPLICATE
+              ? ApiException.conflict("not_a_possible_duplicate", "This invoice is not flagged as a possible duplicate")
+              : ApiException.forbidden("You cannot decide on this invoice");
     }
-    status.publish(inv);
+    String comment = req.comment() == null ? null : blankToNull(req.comment());
+    UUID original = inv.getDuplicateOf();
+    Map<String, Object> details = new LinkedHashMap<>();
+    details.put("decision", req.decision().name());
+    if (original != null) details.put("duplicateOf", original.toString());
+    if (comment != null) details.put("comment", comment);
+
+    if (req.decision() == DuplicateDecision.NOT_DUPLICATE) {
+      inv.setDuplicateClearedBy(me.userId());
+      inv.setDuplicateClearedAt(Instant.now(clock));
+      InvoiceStatus next = validation.revalidate(inv);
+      inv.setStatus(next);
+      invoices.saveAndFlush(inv);
+      audit.log(me.organizationId(), me.userId(), "DUPLICATE_CLEARED", AuditService.INVOICE, inv.getId(), details);
+      status.publish(inv);
+      decisions.autoApproveIfEligible(inv);
+      return mapper.toDetail(inv, me);
+    }
+    String reason = "Duplicate of " + (original == null ? "an earlier invoice"
+        : invoices.findById(original).map(InvoiceEntity::displayLabel).orElse("an earlier invoice"))
+        + (comment == null ? "" : ": " + comment);
+    audit.log(me.organizationId(), me.userId(), "DUPLICATE_CONFIRMED", AuditService.INVOICE, inv.getId(), details);
+    inv.setDuplicateStatus(DuplicateStatus.DUPLICATE);
+    decisions.reject(inv, reason, me.userId());
     return mapper.toDetail(inv, me);
   }
 
@@ -263,7 +328,7 @@ public class InvoiceService {
     invoices.saveAndFlush(inv);
     audit.log(me.organizationId(), me.userId(), "PROCESSING_RETRIED", AuditService.INVOICE, inv.getId(), null);
     status.publish(inv);
-    events.publishEvent(new InvoiceQueuedEvent(inv.getId(), inv.getOrganizationId()));
+    jobs.enqueue(inv.getId(), traces.current(), props.processing().maxAttempts());
     return mapper.toDetail(inv, me);
   }
 
@@ -286,13 +351,15 @@ public class InvoiceService {
   /** Tenant isolation + ownership in one place. Unknown and foreign ids are indistinguishable (404). */
   InvoiceEntity load(UUID id, AuthPrincipal me) {
     return invoices.findByIdAndOrganizationId(id, me.organizationId())
-        .filter(i -> me.role().isReviewer() || i.getUploadedBy().equals(me.userId()))
         .orElseThrow(() -> ApiException.notFound("Invoice"));
   }
 
-  /** USER sees only own uploads; reviewers see the whole organisation. */
+  /**
+   * Every role sees the whole organisation (accountants review everything that comes in, including invoices that
+   * arrived by e-mail). Kept as the single place a narrower scope would be introduced; null means "no narrowing".
+   */
   public static UUID scopeOf(AuthPrincipal me) {
-    return me.role().isReviewer() ? null : me.userId();
+    return null;
   }
 
   private static void requireReviewer(AuthPrincipal me) {
@@ -339,10 +406,13 @@ public class InvoiceService {
     return true;
   }
 
-  private static void track(Map<String, Object> changes, String field, Object before, Object after) {
+  private static void track(Map<String, Object> changes, List<String[]> rows, String field, Object before, Object after) {
     boolean same = before instanceof BigDecimal a && after instanceof BigDecimal b ? a.compareTo(b) == 0
         : Objects.equals(before, after);
-    if (!same) changes.put(field, display(before) + " -> " + display(after));
+    if (!same) {
+      changes.put(field, display(before) + " -> " + display(after));
+      rows.add(new String[] {field, before == null ? null : display(before), after == null ? null : display(after)});
+    }
   }
 
   private static String display(Object v) {

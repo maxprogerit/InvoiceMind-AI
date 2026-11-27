@@ -1,6 +1,6 @@
 package com.invoicemind.ai.ai;
 
-/** Failure talking to the ai-service. The message is safe to show to end users. */
+/** Failure talking to the extract-service. The message is safe to show to end users. */
 public class AiClientException extends RuntimeException {
   private final int status;
   private final String code;

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { msUntilExpiry, useAuth } from "./store";
 
-const user = { id: "u", email: "a@b.io", fullName: "A", role: "USER", organizationId: "o", organizationName: "O" } as const;
+const user = { id: "u", email: "a@b.io", fullName: "A", role: "ACCOUNTANT", organizationId: "o", organizationName: "O" } as const;
 
 describe("auth store", () => {
   beforeEach(() => useAuth.setState({ status: "idle", token: null, user: null, signedOut: false }));

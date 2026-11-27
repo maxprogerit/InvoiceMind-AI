@@ -1,0 +1,45 @@
+{
+  "meta": {
+    "file": "22-discount-line-usd.pdf",
+    "layout": "classic",
+    "kind": "text-pdf",
+    "adversarial": false,
+    "synthetic": true,
+    "pages": 1,
+    "tags": [
+      "text-pdf",
+      "discount"
+    ]
+  },
+  "expected": {
+    "document_type": "invoice",
+    "vendor": "Bluefin Web Studio LLC",
+    "invoice_number": "BWS-1180",
+    "invoice_date": "2026-05-29",
+    "due_date": "2026-06-28",
+    "currency": "USD",
+    "subtotal": "9080.00",
+    "tax": "567.50",
+    "total": "9647.50",
+    "line_items": [
+      {
+        "description": "Website redesign (fixed fee)",
+        "quantity": 1,
+        "unit_price": "8400.00",
+        "total": "8400.00"
+      },
+      {
+        "description": "Content migration (hours)",
+        "quantity": 16,
+        "unit_price": "95.00",
+        "total": "1520.00"
+      },
+      {
+        "description": "Loyalty discount 10% on redesign",
+        "quantity": 1,
+        "unit_price": "-840.00",
+        "total": "-840.00"
+      }
+    ]
+  }
+}

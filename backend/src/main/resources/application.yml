@@ -24,23 +24,16 @@ spring:
       hibernate.jdbc.time_zone: UTC
   flyway:
     enabled: true
-  data:
-    redis:
-      host: ${SPRING_DATA_REDIS_HOST:localhost}
-      port: ${SPRING_DATA_REDIS_PORT:6379}
-  kafka:
-    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
-    producer:
-      acks: all
-      properties:
-        enable.idempotence: true
-    consumer:
-      auto-offset-reset: earliest
-      enable-auto-commit: false
-    template:
-      observation-enabled: true   # the trace context travels in the Kafka record headers
-    listener:
-      observation-enabled: true
+  mail:                                    # outgoing mail (due-date reminders); empty host = no reminders
+    host: ${SMTP_HOST:}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USER:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail.smtp.auth: ${SMTP_AUTH:false}
+      mail.smtp.starttls.enable: ${SMTP_STARTTLS:false}
+      mail.smtp.connectiontimeout: 10000
+      mail.smtp.timeout: 10000
   servlet:
     multipart:
       max-file-size: 15MB
@@ -66,16 +59,13 @@ management:
     health:
       probes:
         enabled: true
-  health:
-    redis:
-      enabled: true
 
 logging:
   structured:
     format:
       console: ${LOG_FORMAT:}
   level:
-    org.apache.kafka: WARN
+    root: INFO
 
 springdoc:
   swagger-ui:
@@ -102,20 +92,18 @@ app:
       secret-key: ${S3_SECRET_KEY:}
       path-style: ${S3_PATH_STYLE:false} # true for MinIO
       create-bucket: ${S3_CREATE_BUCKET:false}
-  ai:
+  ai:                                      # the internal extract-service
     base-url: ${APP_AI_BASE_URL:http://localhost:8000}
     token: ${APP_AI_TOKEN}
     connect-timeout-ms: 5000
-    ocr-timeout-ms: 120000
-    extract-timeout-ms: 120000
-    retry-attempts: 3
-    retry-initial-backoff-ms: 1000
-    circuit-failure-rate: 50
-    circuit-open-seconds: 30
-  processing:
-    topic: invoice.uploaded
+    read-timeout-ms: 240000                # OCR of a multi-page scan plus the model call
+  processing:                              # Postgres job queue (processing_jobs), see ProcessingWorker
+    worker-enabled: ${APP_PROCESSING_WORKER_ENABLED:true}
+    concurrency: ${APP_PROCESSING_CONCURRENCY:3}
+    poll-interval: ${APP_PROCESSING_POLL_INTERVAL:PT1S}
+    retry-base: ${APP_PROCESSING_RETRY_BASE:PT10S}
+    max-attempts: 5
     stuck-after-minutes: 10
-    requeue-uploaded-after-minutes: 2
   rate-limit:
     auth-per-minute: 20     # login/register per IP (credential stuffing)
     refresh-per-minute: 300 # every page load refreshes the session; tokens are 256-bit, so this only protects the DB
@@ -156,3 +144,14 @@ app:
     retry-after-minutes: 15
   seed:
     demo-password: ${APP_DEMO_PASSWORD:}
+  batch:                                   # .zip upload limits (sizes are counted while unpacking)
+    max-entries: ${BATCH_MAX_ENTRIES:50}
+    max-total-bytes: ${BATCH_MAX_TOTAL_BYTES:209715200}
+  duplicates:
+    window-days: ${DUPLICATE_WINDOW_DAYS:7}   # same vendor + total within this many days = possible duplicate
+  reminders:                               # daily digest of overdue invoices and invoices due soon
+    enabled: ${REMINDERS_ENABLED:true}
+    cron: ${REMINDERS_CRON:0 37 5 * * *}     # UTC
+    days-ahead: ${REMINDERS_DAYS_AHEAD:3}
+    from: ${MAIL_FROM:invoicemind@localhost}
+    public-url: ${APP_PUBLIC_URL:http://localhost}

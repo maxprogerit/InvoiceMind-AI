@@ -24,7 +24,7 @@ import { useAuth } from "@/lib/auth/store";
 
 const NONE = "NONE";
 const ROLES: { id: Role; label: string }[] = [
-  { id: "USER", label: "User" },
+  { id: "ACCOUNTANT", label: "Accountant" },
   { id: "APPROVER", label: "Approver" },
   { id: "ADMIN", label: "Admin" },
 ];
@@ -35,7 +35,7 @@ const schema = z.object({
   password: z.string().min(10, "At least 10 characters").regex(/[A-Za-z]/, "Include a letter").regex(/\d/, "Include a digit"),
   firmRole: z.enum(["ACCOUNTANT", "FIRM_ADMIN"]),
   homeClient: z.string().min(1, "Choose a client"),
-  role: z.enum(["USER", "APPROVER", "ADMIN"]),
+  role: z.enum(["ACCOUNTANT", "APPROVER", "ADMIN"]),
 });
 
 function AddMember({ clients, open, onOpenChange }: { clients: ClientRef[]; open: boolean; onOpenChange: (o: boolean) => void }) {

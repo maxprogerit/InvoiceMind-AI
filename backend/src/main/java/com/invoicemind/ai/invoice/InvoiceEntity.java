@@ -38,6 +38,8 @@ public class InvoiceEntity {
   @Enumerated(EnumType.STRING)
   private DocumentType documentType = DocumentType.INVOICE;
   private String vendorName;
+  /** The seller's tax / VAT id as extracted (normalised); used to match the vendor. */
+  private String vendorTaxId;
   private String invoiceNumber;
   private LocalDate invoiceDate;
   private LocalDate dueDate;
@@ -63,6 +65,36 @@ public class InvoiceEntity {
   private Integer ocrPageCount;
   @JdbcTypeCode(SqlTypes.JSON)
   private Map<String, Object> extractionJson;
+  // duplicate detection (see DuplicateStatus)
+  @Enumerated(EnumType.STRING)
+  private DuplicateStatus duplicateStatus = DuplicateStatus.NONE;
+  private UUID duplicateOf;
+  private UUID duplicateClearedBy;
+  private Instant duplicateClearedAt;
+  /** Extraction copied from this earlier invoice with the identical file: the model was not called again. */
+  private UUID reusedFrom;
+
+  /** Handed to accounting (Xero / QuickBooks export); such an invoice is not exported again and no longer "overdue" here. */
+  private Instant exportedAt;
+  private UUID exportBatchId;
+  /** How the document arrived: WEB (single upload), BATCH (zip) or EMAIL. */
+  @Enumerated(EnumType.STRING)
+  private InvoiceSource source = InvoiceSource.WEB;
+  /** The sender of an e-mailed invoice (untrusted, shown for information). */
+  private String sourceEmail;
+  /** Approved by the system under the approval rules (small amount, every check passed). */
+  private boolean autoApproved;
+  /** Expense category for the accounting export; may be pre-filled from vendor memory. */
+  private String expenseCategory;
+  /** What vendor memory filled in: [{field, value, extracted, memoryId}]. */
+  @JdbcTypeCode(SqlTypes.JSON)
+  private List<Map<String, Object>> memoryApplied;
+
+  /** How the text was obtained: text_layer, ocr or mixed (per page). */
+  private String textSource;
+  /** The extract-service's own first-pass validation ({status, issues}); the Java validator decides the status. */
+  @JdbcTypeCode(SqlTypes.JSON)
+  private Map<String, Object> extractValidation;
   private String llmModel;
   private Integer inputTokens;
   private Integer outputTokens;

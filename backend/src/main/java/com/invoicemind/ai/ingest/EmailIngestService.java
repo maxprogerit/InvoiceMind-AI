@@ -5,6 +5,8 @@ import com.invoicemind.ai.common.ApiException;
 import com.invoicemind.ai.config.AppProperties;
 import com.invoicemind.ai.invoice.InvoiceDtos.InvoiceSummary;
 import com.invoicemind.ai.invoice.InvoiceService;
+import com.invoicemind.ai.invoice.InvoiceSource;
+import com.invoicemind.ai.user.Role;
 import com.invoicemind.ai.security.AuthPrincipal;
 import com.invoicemind.ai.firm.OrgAccessService;
 import com.invoicemind.ai.user.OrganizationEntity;
@@ -44,13 +46,20 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
 
 /**
- * Polls the IMAP mailbox and turns attachments into invoices through the same upload path as the web UI, so file
- * sniffing, size limits, the active-content scan, hashing, Kafka processing and the approval workflow all apply.
+ * Polls the IMAP mailbox and turns PDF and image attachments into invoices through the same upload path as the web UI,
+ * so file sniffing, size limits, the active-content scan, hashing, the job queue and the approval workflow all apply.
  *
- * <p>A message is accepted only if (1) it was addressed to {@code <mailbox>+<token>@<domain>} of a known organisation and
- * (2) its sender is an enabled user of that organisation (optionally also proven by the mail server's
- * Authentication-Results). The document is attributed to that user and goes to review like any other upload; nothing
- * is ever approved automatically. Every message, accepted or not, is written to {@code email_ingest_log}.
+ * <ul>
+ *   <li>Routing: a message to {@code <mailbox>+<token>@<domain>} lands in the organisation that owns the token.</li>
+ *   <li>Senders: per organisation, ANYONE (vendors; the invoice is attributed to the "E-mail intake" service account,
+ *       or to the sender if that is a user) or USERS (only its users; others are rejected). The sender is stored on
+ *       the invoice. E-mailed invoices are never approved automatically.</li>
+ *   <li>The body is untrusted: text parts and forwarded messages are ignored and never reach the model; only the
+ *       attachments do, and only after the file checks.</li>
+ *   <li>Idempotent by Message-ID: the message is claimed in {@code email_ingest_log} before anything is stored, and
+ *       flagged as read only after its documents are queued. A message that failed for a transient reason stays
+ *       unread and is tried again by the next poll.</li>
+ * </ul>
  */
 @Slf4j
 @Service
@@ -70,6 +79,7 @@ public class EmailIngestService {
   private final UserRepository users;
   private final OrgAccessService orgAccess;
   private final InvoiceService invoices;
+  private final IntakeAccounts intake;
   private final AuditService audit;
   private final NamedParameterJdbcTemplate jdbc;
 
@@ -91,12 +101,13 @@ public class EmailIngestService {
           try {
             verdict = handle(message);
           } catch (RuntimeException | MessagingException | IOException e) {
-            log.warn("Could not process a mail message: {}", e.toString());
-            verdict = Verdict.rejected(null, "The message could not be processed");
+            // transient (database, storage, mailbox): leave it unread, the next poll tries again
+            log.warn("Could not process a mail message, will retry: {}", e.toString());
+            continue;
           }
           if ("ACCEPTED".equals(verdict.status())) accepted++;
           else rejected++;
-          message.setFlag(Flags.Flag.SEEN, true); // handled either way; the log table makes the outcome visible
+          message.setFlag(Flags.Flag.SEEN, true); // only now: its documents are stored and queued (or it was refused)
         }
       } finally {
         folder.close(false);
@@ -113,15 +124,27 @@ public class EmailIngestService {
     String messageId = messageId(message);
     String from = sender(message);
     String subject = clean(message.getSubject(), 200);
-    if (alreadyLogged(messageId)) return new Verdict(null, "REJECTED", "duplicate", 0); // not logged twice
+    // claim the Message-ID first: a message that reappears (or a crash after storing) is never imported twice
+    int claimed = jdbc.update("""
+        insert into email_ingest_log (message_id, from_address, subject, status)
+        values (:mid, :from, :subject, 'PROCESSING') on conflict (message_id) do nothing""",
+        new MapSqlParameterSource("mid", messageId).addValue("from", from).addValue("subject", subject));
+    if (claimed == 0) return new Verdict(null, "REJECTED", "duplicate", 0); // already handled: nothing new
 
-    Verdict verdict = evaluate(message, from);
+    Verdict verdict;
+    try {
+      verdict = evaluate(message, from);
+    } catch (RuntimeException | MessagingException | IOException e) {
+      // release the claim so the next poll can try again (the message stays unread)
+      jdbc.update("delete from email_ingest_log where message_id = :mid and status = 'PROCESSING'",
+          new MapSqlParameterSource("mid", messageId));
+      throw e;
+    }
     jdbc.update("""
-        insert into email_ingest_log (organization_id, message_id, from_address, subject, status, reason, invoices_created)
-        values (:org, :mid, :from, :subject, :status, :reason, :created) on conflict (message_id) do nothing""",
+        update email_ingest_log set organization_id = :org, status = :status, reason = :reason, invoices_created = :created
+        where message_id = :mid""",
         new MapSqlParameterSource().addValue("org", verdict.organizationId()).addValue("mid", messageId)
-            .addValue("from", from).addValue("subject", subject).addValue("status", verdict.status())
-            .addValue("reason", verdict.reason()).addValue("created", verdict.created()));
+            .addValue("status", verdict.status()).addValue("reason", verdict.reason()).addValue("created", verdict.created()));
     return verdict;
   }
 
@@ -133,9 +156,12 @@ public class EmailIngestService {
     UUID orgId = org.get().getId();
 
     if (from == null) return Verdict.rejected(orgId, "The message has no sender");
-    // a sender qualifies when they may work in this organisation (own user, accountant with access, firm admin)
+    // a sender who may work in this organisation (own user, accountant with access, firm admin) is credited; anyone
+    // else only when the organisation accepts mail from anyone (vendors), through its intake account
     Optional<UserEntity> user = users.findByEmailIgnoreCase(from).filter(u -> u.isEnabled() && orgAccess.contextFor(u, orgId).isPresent());
-    if (user.isEmpty()) return Verdict.rejected(orgId, "The sender is not a user of this organisation");
+    if (user.isEmpty() && org.get().getIngestAcceptFrom() == IngestPolicy.USERS) {
+      return Verdict.rejected(orgId, "The sender is not a user of this organisation");
+    }
     if (props.requireAuthResults() && !senderAuthenticated(message)) {
       return Verdict.rejected(orgId, "The sender could not be verified (no dkim=pass or spf=pass from the mail server)");
     }
@@ -144,20 +170,21 @@ public class EmailIngestService {
     collect(message, attachments);
     if (attachments.isEmpty()) return Verdict.rejected(orgId, "The message has no attachment");
 
-    UserEntity u = user.get();
-    AuthPrincipal principal = new AuthPrincipal(u.getId(), orgId, u.getEmail(), orgAccess.contextFor(u, orgId).orElseThrow().role());
+    UserEntity u = user.orElseGet(() -> intake.forOrganization(orgId));
+    AuthPrincipal principal = user.isPresent()
+        ? new AuthPrincipal(u.getId(), orgId, u.getEmail(), orgAccess.contextFor(u, orgId).orElseThrow().role())
+        : new AuthPrincipal(u.getId(), orgId, u.getEmail(), Role.ACCOUNTANT);
     int created = 0;
     List<String> problems = new ArrayList<>();
     List<UUID> ids = new ArrayList<>();
     for (Attachment a : attachments.subList(0, Math.min(attachments.size(), props.maxAttachments()))) {
       try {
-        InvoiceSummary summary = invoices.upload(new BytesMultipartFile(a.filename(), a.data()), principal, "email");
+        InvoiceSummary summary = invoices.upload(new BytesMultipartFile(a.filename(), a.data()), principal,
+            InvoiceSource.EMAIL, from);
         ids.add(summary.id());
         created++;
       } catch (ApiException e) {
         problems.add(truncate(a.filename(), 60) + ": " + e.getMessage());
-      } catch (RuntimeException e) {
-        problems.add(truncate(a.filename(), 60) + ": could not be stored");
       }
     }
     if (attachments.size() > props.maxAttachments()) {
@@ -243,12 +270,6 @@ public class EmailIngestService {
   }
 
   // ---------------------------------------------------------------- helpers
-  private boolean alreadyLogged(String messageId) {
-    Integer n = jdbc.queryForObject("select count(*) from email_ingest_log where message_id = :id",
-        new MapSqlParameterSource("id", messageId), Integer.class);
-    return n != null && n > 0;
-  }
-
   /** The Message-ID header, or a hash of the headers that identify the message when a sender omitted it. */
   private static String messageId(MimeMessage message) throws MessagingException {
     String id = message.getMessageID();

@@ -6,12 +6,15 @@ import { useParams, useRouter } from "next/navigation";
 import { useState } from "react";
 import { toast } from "sonner";
 
+import { ApprovalProgress } from "@/components/invoices/approval-progress";
 import { AuditTimeline } from "@/components/invoices/audit-timeline";
+import { CorrectionsCard } from "@/components/invoices/corrections-card";
 import { DecisionDialog } from "@/components/invoices/decision-dialog";
 import { DocumentViewer } from "@/components/invoices/document-viewer";
 import { IssuesPanel } from "@/components/invoices/issues-panel";
 import { ExplainPanel } from "@/components/knowledge/explain-panel";
 import { PipelineStepper } from "@/components/invoices/pipeline-stepper";
+import { ApprovalBlocked, DuplicateBanner, VendorBanner } from "@/components/invoices/trust-banners";
 import { ReviewForm } from "@/components/invoices/review-form";
 import { StatusBadge } from "@/components/invoices/status-badge";
 import { Button } from "@/components/ui/button";
@@ -22,7 +25,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ApiError } from "@/lib/api/client";
 import { useDeleteInvoice, useInvoice, useOcrText, useRetry } from "@/lib/api/hooks";
 import type { InvoiceDetail } from "@/lib/api/types";
-import { formatBytes, formatDateTime, formatDuration, formatPercent } from "@/lib/format";
+import { extractCheckLabel, formatBytes, formatDateTime, formatDuration, formatPercent, textSourceLabel } from "@/lib/format";
 
 function Meta({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -41,10 +44,13 @@ function ProcessingCard({ inv }: { inv: InvoiceDetail }) {
         <Meta label="File">{inv.originalFilename}</Meta>
         <Meta label="Size">{formatBytes(inv.fileSize)}</Meta>
         <Meta label="Uploaded by">{inv.uploadedByName}</Meta>
+        <Meta label="Arrived via">{inv.source === "EMAIL" ? `e-mail from ${inv.sourceEmail ?? "unknown"}` : inv.source === "BATCH" ? "zip upload" : "upload"}</Meta>
         <Meta label="Uploaded">{formatDateTime(inv.createdAt)}</Meta>
         <Meta label="Read with">
           {inv.ocr.engine ? `${inv.ocr.engine} · ${inv.ocr.pageCount ?? "?"} p · ${formatPercent(Number(inv.ocr.confidence ?? 0))}` : "—"}
         </Meta>
+        <Meta label="Text from">{textSourceLabel(inv.ocr.source)}</Meta>
+        <Meta label="Service pre-check">{extractCheckLabel(inv.extractCheck)}</Meta>
         <Meta label="AI model">{inv.usage.model ?? "—"}</Meta>
         <Meta label="Tokens">{inv.usage.inputTokens != null ? `${inv.usage.inputTokens} in · ${inv.usage.outputTokens} out` : "—"}</Meta>
         <Meta label="AI cost">{inv.usage.costUsd != null ? `$${Number(inv.usage.costUsd).toFixed(5)}` : "—"}</Meta>
@@ -152,7 +158,11 @@ export default function InvoiceDetailPage() {
           <strong>Processing failed.</strong> {inv.failureReason ?? "Unknown error."} {p.canRetry && "You can retry once the problem is resolved."}
         </div>
       )}
-      {inv.status === "VALIDATED" && !p.canApprove && p.canEdit && (
+      <DuplicateBanner invoice={inv} />
+      <VendorBanner invoice={inv} />
+      <ApprovalProgress invoice={inv} />
+      <ApprovalBlocked invoice={inv} />
+      {inv.status === "VALIDATED" && !p.canApprove && !p.approvalBlockedReason && p.canEdit && (
         <p className="mb-6 text-sm text-muted">This invoice passed all checks and is waiting for an approver.</p>
       )}
 
@@ -182,6 +192,7 @@ export default function InvoiceDetailPage() {
           <IssuesPanel invoice={inv} />
           <ExplainPanel invoice={inv} />
           <ReviewForm invoice={inv} />
+          <CorrectionsCard invoiceId={inv.id} />
           <ProcessingCard inv={inv} />
           <AuditTimeline invoiceId={inv.id} />
         </div>

@@ -20,30 +20,20 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
-      # Integration tests start real Postgres, Kafka and Redis containers (Docker is available on the runner).
+      # Integration tests start a real Postgres (pgvector) container through Testcontainers.
       - name: mvn verify
         working-directory: backend
         run: mvn -B verify
 
-  ai-service:
-    name: ai-service (pytest with real Tesseract + Poppler)
+  extract-service:
+    name: extract-service (pytest with real Tesseract + Poppler)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Build the test image
-        run: docker build --target test -t invoicemind-ai-test ai-service
-      - name: Run pytest
-        run: docker run --rm invoicemind-ai-test pytest -q -rs
-
-  ai-service-paddle:
-    name: ai-service with PaddleOCR (pytest, optional engine)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build the test image with PaddleOCR
-        run: docker build --build-arg WITH_PADDLE=1 --target test -t invoicemind-ai-paddle-test ai-service
-      - name: Run the PaddleOCR tests
-        run: docker run --rm invoicemind-ai-paddle-test pytest -q -rs tests/test_paddle.py
+        run: docker build --target test -t invoicemind-extract-test extract-service
+      - name: Run pytest (the model is a fake; the live smoke test is opt-in; samples/ for the evaluation-set checks)
+        run: docker run --rm -v "$PWD/samples:/samples:ro" -e SAMPLES_DIR=/samples invoicemind-extract-test pytest -q -rs
 
   frontend:
     name: Frontend (lint, typecheck, unit tests, build)
@@ -69,7 +59,7 @@ jobs:
   e2e:
     name: End-to-end (browser tests on the full stack)
     runs-on: ubuntu-latest
-    needs: [backend, ai-service, frontend]
+    needs: [backend, extract-service, frontend]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -77,7 +67,7 @@ jobs:
           node-version: "22"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-      - name: Start the stack with the offline AI test double
+      - name: Start the stack with the offline extraction test double
         # No OpenAI key in CI: the overlay swaps in e2e/fake-ai (real OCR, rule-based extraction).
         run: |
           cp .env.example .env

@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { InvoiceFiltersBar } from "@/components/invoices/invoice-filters";
 import { InvoicePreviewCard } from "@/components/invoices/invoice-preview-card";
 import { InvoiceTable } from "@/components/invoices/invoice-table";
+import { QueueTabs } from "@/components/invoices/queue-tabs";
 import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -55,6 +56,7 @@ export default function InvoicesPage() {
 
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.55fr)_minmax(340px,1fr)]">
         <Card className="overflow-hidden">
+          <QueueTabs value={filters.queue} onChange={(queue) => setFilters((f) => ({ ...f, page: 0, queue }))} />
           <InvoiceFiltersBar value={filters} onChange={setFilters} />
           <InvoiceTable
             page={query.data}
@@ -65,7 +67,9 @@ export default function InvoicesPage() {
             onSelect={(i) => setSelectedId(i.id)}
             onPage={(page) => setFilters((f) => ({ ...f, page }))}
             emptyHint={
-              filters.q || filters.status?.length || filters.documentType || filters.from || filters.to ? (
+              filters.queue ? (
+                "This queue is empty."
+              ) : filters.q || filters.status?.length || filters.documentType || filters.from || filters.to ? (
                 "No invoices match these filters."
               ) : (
                 <>

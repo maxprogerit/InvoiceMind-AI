@@ -82,7 +82,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     String destination = accessor.getDestination();
     if ("/user/queue/invoices".equals(destination) || "/user/queue/notifications".equals(destination)) return;
     AuthPrincipal p = user.auth();
-    if (destination != null && destination.equals(REVIEWERS_TOPIC.formatted(p.organizationId())) && p.role().isReviewer()) return;
+    // every role of the organisation works on all of its invoices (accountants review, approvers decide)
+    if (destination != null && destination.equals(REVIEWERS_TOPIC.formatted(p.organizationId()))) return;
     throw new MessagingException("Forbidden destination");
   }
 }

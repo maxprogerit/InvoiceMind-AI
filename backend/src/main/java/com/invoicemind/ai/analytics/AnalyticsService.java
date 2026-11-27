@@ -37,7 +37,6 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 public class AnalyticsService {
   private final NamedParameterJdbcTemplate jdbc;
-  private final AnalyticsCache cache;
   private final Clock clock;
   private final ExchangeRateService fx;
 
@@ -287,8 +286,9 @@ public class AnalyticsService {
     return fallback == null ? "USD" : fallback;
   }
 
+  /** Aggregations run directly against indexed columns; the Redis cache in front of them was removed (V9). */
   private <T> T cached(AuthPrincipal me, String name, TypeReference<T> type, java.util.function.Supplier<T> compute) {
-    return cache.get(me.organizationId(), scope(me), name, type, compute);
+    return compute.get();
   }
 
   private UUID scope(AuthPrincipal me) { return InvoiceService.scopeOf(me); }

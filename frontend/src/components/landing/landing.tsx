@@ -35,7 +35,7 @@ const ALSO = [
   ],
   ["Policy questions", "Upload your rules and ask why an invoice was flagged. The answer cites the passages it came from."],
   ["Analytics", "Spend by vendor and month, review rate, processing time and AI cost."],
-  ["Integrations", "Optional: signed webhooks, an IMAP mailbox, OIDC single sign-on, S3 storage, OpenTelemetry tracing, PaddleOCR."],
+  ["Integrations", "Optional: signed webhooks, an IMAP mailbox, OIDC single sign-on, S3 storage, OpenTelemetry tracing."],
 ] as const;
 
 const SAMPLE_FIELDS = [

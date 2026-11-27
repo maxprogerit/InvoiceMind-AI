@@ -3,7 +3,13 @@
     "file": "06-german-no-tax.pdf",
     "layout": "german",
     "kind": "text-pdf",
-    "adversarial": false
+    "adversarial": false,
+    "synthetic": true,
+    "pages": 1,
+    "tags": [
+      "text-pdf",
+      "decimal-comma"
+    ]
   },
   "expected": {
     "document_type": "invoice",
@@ -12,21 +18,21 @@
     "invoice_date": "2026-06-02",
     "due_date": "2026-06-12",
     "currency": "EUR",
-    "subtotal": 1810.0,
-    "tax": 0.0,
-    "total": 1810.0,
+    "subtotal": "1810.00",
+    "tax": "0.00",
+    "total": "1810.00",
     "line_items": [
       {
         "description": "Jahresabschluss 2025",
         "quantity": 1,
-        "unit_price": 1450.0,
-        "total": 1450.0
+        "unit_price": "1450.00",
+        "total": "1450.00"
       },
       {
         "description": "Beratung (Stunden)",
         "quantity": 3,
-        "unit_price": 120.0,
-        "total": 360.0
+        "unit_price": "120.00",
+        "total": "360.00"
       }
     ]
   }

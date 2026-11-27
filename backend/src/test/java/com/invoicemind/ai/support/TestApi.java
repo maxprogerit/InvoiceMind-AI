@@ -55,6 +55,17 @@ public final class TestApi {
 
   public Resp get(String path, String token) { return call(HttpMethod.GET, path, token, null, null); }
 
+  /**
+   * Confirms the vendor the invoice was matched to (vendors are created UNVERIFIED and block approval until a person
+   * confirms them). Does nothing when the invoice is not visible to {@code token} or has no vendor.
+   */
+  public void verifyVendorOf(String token, Object invoiceId) {
+    Resp inv = get("/api/v1/invoices/" + invoiceId, token);
+    if (inv.status() != 200 || !inv.json().path("vendor").hasNonNull("id")) return;
+    Resp r = post("/api/v1/vendors/" + inv.json().path("vendor").path("id").asText() + "/verify", token, null);
+    if (r.status() != 200) throw new AssertionError("verify vendor -> " + r.status() + " " + r.text());
+  }
+
   public Resp post(String path, String token, Object body) { return call(HttpMethod.POST, path, token, body, null); }
 
   public Resp put(String path, String token, Object body) { return call(HttpMethod.PUT, path, token, body, null); }
@@ -76,12 +87,16 @@ public final class TestApi {
   public Resp upload(String token, byte[] content, String filename) { return upload(token, content, filename, Map.of()); }
 
   public Resp upload(String token, byte[] content, String filename, Map<String, String> headers) {
+    return upload(token, content, filename, headers, "/api/v1/invoices");
+  }
+
+  public Resp upload(String token, byte[] content, String filename, Map<String, String> headers, String path) {
     MultipartBodyBuilder b = new MultipartBodyBuilder();
     b.part("file", new ByteArrayResource(content) {
       @Override
       public String getFilename() { return filename; }
     }).contentType(MediaType.APPLICATION_OCTET_STREAM);
-    var spec = client.post().uri("/api/v1/invoices").contentType(MediaType.MULTIPART_FORM_DATA).body(b.build());
+    var spec = client.post().uri(path).contentType(MediaType.MULTIPART_FORM_DATA).body(b.build());
     if (token != null) spec = spec.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);
     for (var e : headers.entrySet()) spec = spec.header(e.getKey(), e.getValue());
     return spec.exchange((req, res) -> new Resp(res.getStatusCode().value(), res.getBody().readAllBytes(),
