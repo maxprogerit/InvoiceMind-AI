@@ -27,7 +27,8 @@ Things the code cannot do for you. Tick them in order.
 - [ ] Empty `DEMO_PASSWORD` for a real organisation, or keep a separate public demo instance with it set.
 - [ ] A mailbox with plus-addressing for e-mail intake (`MAIL_*`), SMTP for reminders (`SMTP_*`).
 - [ ] Backups of the `postgres_data` and `storage_data` volumes.
-- [ ] Push the branch, let `.github/workflows/ci.yml` run on GitHub once and fix whatever differs from local runs.
+- [x] CI ran green on GitHub for PR #1 (backend, extract-service, frontend, end-to-end).
+- [ ] GitGuardian: mark incident 38111022 (dev default password in the imported InvoiceExtract history) as a false positive / test credential in its dashboard.
 
 ## 4. Screenshots
 

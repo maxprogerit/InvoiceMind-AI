@@ -19,7 +19,7 @@ and tested offline, but the measurement itself has not been made · `MISSING` no
 | Demo flow e-mail → review → approve → export | `scripts/demo-flow.cjs` on the local stack with a GreenMail IMAP mailbox: the supplier's mail became an invoice (*Arrived via e-mail*), the wrong total was flagged by code, corrected, approved under the EUR rule (one approver; 9,897.80 EUR needed two; 45 EUR was automatic), exported to Xero once. The README screenshots come from this run |
 | Network isolation | nginx and the frontend cannot resolve `extract-service`; a request without the service token gets 401 |
 | Behaviour with no OpenAI key | the extract-service answers 503 `llm_not_configured`, the invoice ends `FAILED` with that message; nothing is invented |
-| **Not done here** | no run against the real OpenAI API since the merge (no key in this environment); CI has not run on GitHub; no deployment |
+| **Not done here** | no run against the real OpenAI API since the merge (no key in this environment); no deployment |
 
 ## Features
 
@@ -52,7 +52,7 @@ and tested offline, but the measurement itself has not been made · `MISSING` no
 | S3 storage | WORKS against SeaweedFS, UNVERIFIED against AWS | `S3FileStorageIT`, `S3PipelineIT` |
 | OpenTelemetry tracing | WORKS | `TracingIT` (the traceparent stored on the job reaches the extract-service call), `test_tracing.py` |
 | Evaluation harness | WORKS (offline), **NOT RUN with the model** | 32 synthetic documents with ground truth; `test_eval_metrics.py` (21 tests); smoke run with the test double passes end to end |
-| CI workflow | UNVERIFIED | `.github/workflows/ci.yml`; every command in it was run locally, it has not run on GitHub |
+| CI workflow | WORKS | `.github/workflows/ci.yml` on GitHub for PR #1 (2026-11-27): backend, extract-service, frontend and end-to-end jobs all green. GitGuardian flagged a development default password (`POSTGRES_PASSWORD:-invoice`) in the imported InvoiceExtract history; the file was deleted in stage 1 |
 
 ### Firms: what is and is not verified
 
