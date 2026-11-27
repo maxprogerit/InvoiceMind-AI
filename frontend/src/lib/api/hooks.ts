@@ -32,6 +32,9 @@ import {
   type Summary,
   type TeamMember,
   type UpdateInvoiceRequest,
+  type Correction,
+  type QueueCounts,
+  type ReviewQueue,
   type Vendor,
   type VendorStatus,
   type DuplicateDecision,
@@ -45,6 +48,7 @@ import { useLive } from "@/lib/ws/live-store";
 export interface InvoiceFilters {
   status?: InvoiceStatus[];
   documentType?: DocumentType;
+  queue?: ReviewQueue;
   q?: string;
   vendor?: string;
   currency?: string;
@@ -70,6 +74,16 @@ export function useInvoices(filters: InvoiceFilters, options?: { enabled?: boole
     placeholderData: keepPreviousData,
   });
 }
+
+/** How many invoices wait in each review queue; refreshed with the invoice list. */
+export const useQueueCounts = () =>
+  useQuery({ queryKey: ["invoices", "queues"], queryFn: () => unwrap(api.GET("/api/v1/invoices/queues")) as Promise<QueueCounts> });
+
+export const useCorrections = (id: string) =>
+  useQuery({
+    queryKey: ["invoice", id, "corrections"],
+    queryFn: () => unwrap(api.GET("/api/v1/invoices/{id}/corrections", { params: { path: { id } } })) as Promise<Correction[]>,
+  });
 
 export function useInvoice(id: string | undefined) {
   const connected = useLive((s) => s.connected);
@@ -609,6 +623,11 @@ export const useUpdateVendor = () =>
 export const useAddAlias = () =>
   useVendorMutation(({ id, alias }: { id: string; alias: string }) =>
     unwrap(api.POST("/api/v1/vendors/{id}/aliases", { params: { path: { id } }, body: { alias } })),
+  );
+
+export const useForgetMemory = () =>
+  useVendorMutation(({ id, memoryId }: { id: string; memoryId: number }) =>
+    unwrap(api.DELETE("/api/v1/vendors/{id}/memory/{memoryId}", { params: { path: { id, memoryId } } })),
   );
 
 export const useRemoveAlias = () =>

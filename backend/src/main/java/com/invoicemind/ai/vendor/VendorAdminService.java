@@ -11,6 +11,9 @@ import com.invoicemind.ai.user.UserEntity;
 import com.invoicemind.ai.user.UserRepository;
 import com.invoicemind.ai.validation.ValidationService;
 import com.invoicemind.ai.vendor.VendorDtos.AliasDto;
+import com.invoicemind.ai.vendor.VendorDtos.MemoryDto;
+import com.invoicemind.ai.vendor.memory.VendorMemoryEntity;
+import com.invoicemind.ai.vendor.memory.VendorMemoryRepository;
 import com.invoicemind.ai.vendor.VendorDtos.UpdateVendorRequest;
 import com.invoicemind.ai.vendor.VendorDtos.VendorDto;
 import java.time.Clock;
@@ -38,6 +41,7 @@ public class VendorAdminService {
   private final ValidationService validation;
   private final StatusPublisher status;
   private final AuditService audit;
+  private final VendorMemoryRepository memory;
   private final Clock clock;
 
   @Transactional(readOnly = true)
@@ -48,13 +52,18 @@ public class VendorAdminService {
             Collectors.mapping(a -> new AliasDto(a.getId(), a.getAlias()), Collectors.toList())));
     Map<UUID, Long> counts = new HashMap<>();
     for (Object[] row : invoices.countByVendor(org)) counts.put((UUID) row[0], (Long) row[1]);
-    Map<UUID, String> names = users.findAllById(vendors.findByOrganizationIdOrderByNameAsc(org).stream()
-            .map(VendorEntity::getVerifiedBy).filter(Objects::nonNull).distinct().toList()).stream()
+    List<VendorMemoryEntity> learned = memory.findByOrganizationId(org);
+    List<UUID> people = java.util.stream.Stream.concat(
+        vendors.findByOrganizationIdOrderByNameAsc(org).stream().map(VendorEntity::getVerifiedBy),
+        learned.stream().map(VendorMemoryEntity::getLearnedBy)).filter(Objects::nonNull).distinct().toList();
+    Map<UUID, String> names = users.findAllById(people).stream()
         .collect(Collectors.toMap(UserEntity::getId, UserEntity::getFullName));
+    Map<UUID, List<MemoryDto>> memoryByVendor = learned.stream().collect(Collectors.groupingBy(
+        VendorMemoryEntity::getVendorId, Collectors.mapping(m -> memoryDto(m, names), Collectors.toList())));
     return vendors.findByOrganizationIdOrderByNameAsc(org).stream()
         .filter(v -> filter == null || v.getStatus() == filter)
-        .map(v -> toDto(v, byVendor.getOrDefault(v.getId(), List.of()), counts.getOrDefault(v.getId(), 0L),
-            v.getVerifiedBy() == null ? null : names.get(v.getVerifiedBy())))
+        .map(v -> toDto(v, byVendor.getOrDefault(v.getId(), List.of()), memoryByVendor.getOrDefault(v.getId(), List.of()),
+            counts.getOrDefault(v.getId(), 0L), v.getVerifiedBy() == null ? null : names.get(v.getVerifiedBy())))
         .toList();
   }
 
@@ -125,6 +134,23 @@ public class VendorAdminService {
     return one(v, me);
   }
 
+  /** Forgets one learned default; the next invoice of the vendor is no longer changed by it. */
+  @Transactional
+  public VendorDto forget(UUID id, long memoryId, AuthPrincipal me) {
+    VendorEntity v = load(id, me);
+    VendorMemoryEntity m = memory.findByIdAndVendorId(memoryId, v.getId()).orElseThrow(() -> ApiException.notFound("Memory entry"));
+    memory.delete(m);
+    switch (m.getField()) {
+      case PAYMENT_TERMS -> v.setPaymentTermsDays(null);
+      case CATEGORY -> v.setDefaultCategory(null);
+      case CURRENCY -> { /* the default currency stays: it is also vendor master data */ }
+    }
+    vendors.save(v);
+    audit.log(me.organizationId(), me.userId(), "VENDOR_MEMORY_FORGOTTEN", AuditService.VENDOR, v.getId(),
+        Map.of("field", m.getField().name(), "value", m.getValue(), "whenExtracted", String.valueOf(m.getWhenExtracted())));
+    return one(v, me);
+  }
+
   /** Confirming a vendor removes the "unverified vendor" finding from its open invoices at once. */
   private void recheckOpenInvoices(VendorEntity v) {
     for (InvoiceEntity inv : invoices.findByOrganizationIdAndVendorIdAndStatusIn(v.getOrganizationId(), v.getId(),
@@ -144,12 +170,23 @@ public class VendorAdminService {
         .map(a -> new AliasDto(a.getId(), a.getAlias())).toList();
     long count = invoices.countByVendor(me.organizationId()).stream().filter(r -> v.getId().equals(r[0]))
         .mapToLong(r -> (Long) r[1]).sum();
-    String verifiedBy = v.getVerifiedBy() == null ? null : users.findById(v.getVerifiedBy()).map(UserEntity::getFullName).orElse(null);
-    return toDto(v, list, count, verifiedBy);
+    List<VendorMemoryEntity> learned = memory.findByVendorIdOrderByFieldAscLearnedAtDesc(v.getId());
+    List<UUID> people = java.util.stream.Stream.concat(java.util.stream.Stream.of(v.getVerifiedBy()),
+        learned.stream().map(VendorMemoryEntity::getLearnedBy)).filter(Objects::nonNull).distinct().toList();
+    Map<UUID, String> names = users.findAllById(people).stream().collect(Collectors.toMap(UserEntity::getId, UserEntity::getFullName));
+    return toDto(v, list, learned.stream().map(m -> memoryDto(m, names)).toList(), count,
+        v.getVerifiedBy() == null ? null : names.get(v.getVerifiedBy()));
   }
 
-  private static VendorDto toDto(VendorEntity v, List<AliasDto> aliases, long count, String verifiedBy) {
-    return new VendorDto(v.getId(), v.getName(), v.getTaxId(), v.getDefaultCurrency(), v.getStatus(), verifiedBy,
-        v.getVerifiedAt(), aliases, count, v.getCreatedAt());
+  private static MemoryDto memoryDto(VendorMemoryEntity m, Map<UUID, String> names) {
+    return new MemoryDto(m.getId(), m.getField().name(), m.getWhenExtracted(), m.getValue(),
+        m.getLearnedBy() == null ? null : names.get(m.getLearnedBy()), m.getLearnedAt(), m.getTimesApplied(),
+        m.getLearnedFromInvoice());
+  }
+
+  private static VendorDto toDto(VendorEntity v, List<AliasDto> aliases, List<MemoryDto> learned, long count,
+                                 String verifiedBy) {
+    return new VendorDto(v.getId(), v.getName(), v.getTaxId(), v.getDefaultCurrency(), v.getPaymentTermsDays(),
+        v.getDefaultCategory(), v.getStatus(), verifiedBy, v.getVerifiedAt(), aliases, learned, count, v.getCreatedAt());
   }
 }

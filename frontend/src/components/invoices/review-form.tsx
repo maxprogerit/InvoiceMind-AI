@@ -27,6 +27,7 @@ const schema = z.object({
   documentType: z.enum(["INVOICE", "CREDIT_NOTE"]),
   vendorName: z.string().max(300),
   vendorTaxId: z.string().max(60),
+  expenseCategory: z.string().max(100),
   invoiceNumber: z.string().max(100),
   invoiceDate: isoDate,
   dueDate: isoDate,
@@ -48,6 +49,7 @@ function toForm(inv: InvoiceDetail): FormValues {
     documentType: inv.documentType,
     vendorName: inv.vendorName ?? "",
     vendorTaxId: inv.vendorTaxId ?? "",
+    expenseCategory: inv.expenseCategory ?? "",
     invoiceNumber: inv.invoiceNumber ?? "",
     invoiceDate: inv.invoiceDate ?? "",
     dueDate: inv.dueDate ?? "",
@@ -72,6 +74,7 @@ function toRequest(v: FormValues, version: number): UpdateInvoiceRequest {
     vendorName: v.vendorName.trim() || undefined,
     // an empty string clears the tax id on the server; the vendor is matched again from name and tax id
     vendorTaxId: v.vendorTaxId.trim(),
+    expenseCategory: v.expenseCategory.trim(),
     invoiceNumber: v.invoiceNumber.trim() || undefined,
     invoiceDate: v.invoiceDate || undefined,
     dueDate: v.dueDate || undefined,
@@ -96,6 +99,12 @@ const CONFIDENCE_KEY: Partial<Record<keyof FormValues, string>> = {
   total: "total",
 };
 
+/** Suggestions only: any category can be typed; vendor memory remembers the one chosen per vendor. */
+const CATEGORIES = ["Software subscriptions", "Hosting", "Consulting", "Office supplies", "Travel", "Marketing", "Utilities", "Rent", "Equipment"];
+
+// invoice.memoryApplied field -> form field
+const MEMORY_FIELD: Record<string, keyof FormValues> = { currency: "currency", dueDate: "dueDate", expenseCategory: "expenseCategory", vendor: "vendorName" };
+
 const CURRENCIES = ["EUR", "USD", "GBP", "CHF", "PLN", "CZK", "SEK", "NOK", "DKK", "UAH", "TRY", "JPY", "CNY", "CAD", "AUD"];
 
 // -------------------------------------------------------------- component
@@ -119,6 +128,17 @@ export function ReviewForm({ invoice }: { invoice: InvoiceDetail }) {
       syncedVersion.current = invoice.version;
     }
   }, [invoice, form]);
+
+  // fields vendor memory filled in, and what the document said (cleared once a person reviewed the invoice)
+  const memoryFor = useMemo(() => {
+    const map = new Map<string, { value: string; extracted?: string | null }>();
+    if (invoice.humanReviewed) return map;
+    for (const m of invoice.memoryApplied) {
+      const field = MEMORY_FIELD[m.field];
+      if (field) map.set(field, { value: m.value, extracted: m.extracted });
+    }
+    return map;
+  }, [invoice.memoryApplied, invoice.humanReviewed]);
 
   const issuesFor = useMemo(() => {
     const map = new Map<string, "ERROR" | "WARNING">();
@@ -165,6 +185,7 @@ export function ReviewForm({ invoice }: { invoice: InvoiceDetail }) {
     listId?: string;
   }) => {
     const issue = issuesFor.get(name);
+    const remembered = memoryFor.get(name);
     const confidence = invoice.fieldConfidence?.[CONFIDENCE_KEY[name] ?? ""];
     const lowConfidence = !invoice.humanReviewed && confidence != null && confidence < 0.6;
     const tone = issue === "ERROR" ? "bad" : issue === "WARNING" || lowConfidence ? "warn" : null;
@@ -175,7 +196,15 @@ export function ReviewForm({ invoice }: { invoice: InvoiceDetail }) {
           <Label htmlFor={`f-${name}`} className="mb-0">
             {label}
           </Label>
-          {confidence != null && !invoice.humanReviewed && (
+          {remembered && (
+            <span
+              className="rounded border border-info/40 bg-info/10 px-1.5 font-mono text-[10px] text-info"
+              title={`Filled in from vendor memory (a rule learned from an earlier correction)${remembered.extracted ? `; the document said ${remembered.extracted}` : "; the document had no value"}`}
+            >
+              from vendor memory
+            </span>
+          )}
+          {confidence != null && !invoice.humanReviewed && !remembered && (
             <span
               className={cn("flex items-center gap-1 font-mono text-[10px]", lowConfidence ? "text-warn" : "text-dim")}
               title="How sure the AI was about this value"
@@ -199,6 +228,8 @@ export function ReviewForm({ invoice }: { invoice: InvoiceDetail }) {
       </div>
     );
   };
+
+  const categoryField = renderField({ name: "expenseCategory", label: "Expense category", placeholder: "e.g. Software, Office supplies", listId: "categories" });
 
   const cell = (i: number, key: "quantity" | "unitPrice" | "total" | "description") => {
     const msg = errors.lineItems?.[i]?.[key]?.message;
@@ -269,6 +300,12 @@ export function ReviewForm({ invoice }: { invoice: InvoiceDetail }) {
             {renderField({ name: "invoiceDate", label: "Invoice date", type: "date", mono: true })}
             {renderField({ name: "dueDate", label: "Due date", type: "date", mono: true })}
           </div>
+          {categoryField}
+          <datalist id="categories">
+            {CATEGORIES.map((c) => (
+              <option key={c} value={c} />
+            ))}
+          </datalist>
           <datalist id="currencies">
             {CURRENCIES.map((c) => (
               <option key={c} value={c} />

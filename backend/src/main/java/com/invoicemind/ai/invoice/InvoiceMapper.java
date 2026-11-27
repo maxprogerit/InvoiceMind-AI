@@ -6,6 +6,7 @@ import com.invoicemind.ai.invoice.InvoiceDtos.InvoiceDetail;
 import com.invoicemind.ai.invoice.InvoiceDtos.InvoiceSummary;
 import com.invoicemind.ai.invoice.InvoiceDtos.IssueDto;
 import com.invoicemind.ai.invoice.InvoiceDtos.LineItemDto;
+import com.invoicemind.ai.invoice.InvoiceDtos.MemoryAppliedDto;
 import com.invoicemind.ai.invoice.InvoiceDtos.OcrInfo;
 import com.invoicemind.ai.invoice.InvoiceDtos.Permissions;
 import com.invoicemind.ai.invoice.InvoiceDtos.UsageInfo;
@@ -80,6 +81,7 @@ public class InvoiceMapper {
         i.getVendorTaxId(),
         vendor == null ? null : new VendorRef(vendor.getId(), vendor.getName(), vendor.getTaxId(), vendor.getStatus().name()),
         duplicate,
+        i.getExpenseCategory(), memoryApplied(i),
         i.getFieldConfidence(), i.getModelReviewReasons(), i.isInjectionSuspected(), i.isHumanReviewed(),
         new OcrInfo(i.getOcrEngine(), i.getOcrConfidence(), i.getOcrPageCount(), i.getTextSource()), extractCheck(i),
         new UsageInfo(i.getLlmModel(), i.getInputTokens(), i.getOutputTokens(), i.getCostUsd()),
@@ -92,6 +94,13 @@ public class InvoiceMapper {
         i.getIssues().stream().map(x -> new IssueDto(x.getCode(), x.getSeverity(), x.getField(), x.getMessage(),
             x.getRelatedInvoiceId())).toList(),
         permissions(i, viewer, vendorVerified), i.getCreatedAt(), i.getUpdatedAt(), i.getVersion());
+  }
+
+  static List<MemoryAppliedDto> memoryApplied(InvoiceEntity i) {
+    if (i.getMemoryApplied() == null) return List.of();
+    return i.getMemoryApplied().stream().map(m -> new MemoryAppliedDto(String.valueOf(m.get("field")),
+        String.valueOf(m.get("value")), m.get("extracted") == null ? null : String.valueOf(m.get("extracted")),
+        m.get("memoryId") instanceof Number n ? n.longValue() : null)).toList();
   }
 
   static ExtractCheck extractCheck(InvoiceEntity i) {

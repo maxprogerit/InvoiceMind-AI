@@ -38,6 +38,11 @@ public class VendorController {
     return service.addAlias(id, request.alias(), CurrentUser.get());
   }
 
+  @DeleteMapping("/{id}/memory/{memoryId}")
+  public VendorDto forget(@PathVariable UUID id, @PathVariable long memoryId) {
+    return service.forget(id, memoryId, CurrentUser.get());
+  }
+
   @DeleteMapping("/{id}/aliases/{aliasId}")
   public VendorDto removeAlias(@PathVariable UUID id, @PathVariable long aliasId) {
     return service.removeAlias(id, aliasId, CurrentUser.get());

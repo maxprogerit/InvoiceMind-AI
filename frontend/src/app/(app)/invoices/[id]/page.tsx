@@ -7,6 +7,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { AuditTimeline } from "@/components/invoices/audit-timeline";
+import { CorrectionsCard } from "@/components/invoices/corrections-card";
 import { DecisionDialog } from "@/components/invoices/decision-dialog";
 import { DocumentViewer } from "@/components/invoices/document-viewer";
 import { IssuesPanel } from "@/components/invoices/issues-panel";
@@ -188,6 +189,7 @@ export default function InvoiceDetailPage() {
           <IssuesPanel invoice={inv} />
           <ExplainPanel invoice={inv} />
           <ReviewForm invoice={inv} />
+          <CorrectionsCard invoiceId={inv.id} />
           <ProcessingCard inv={inv} />
           <AuditTimeline invoiceId={inv.id} />
         </div>

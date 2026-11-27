@@ -116,6 +116,29 @@ test.describe.serial("invoice lifecycle in the browser", () => {
     expect(Buffer.concat(chunks).subarray(0, 2).toString()).toBe("PK"); // a real zip/xlsx container
   });
 
+  test("review queues, vendors and vendor memory", async () => {
+    await page.goto("/invoices");
+    await expect(page.getByRole("tab", { name: /Possible duplicate/ })).toBeVisible();
+    await page.getByRole("tab", { name: /Needs review/ }).click();
+    await expect(page.getByText("This queue is empty.")).toBeVisible(); // everything so far was decided
+
+    // a person sets the expense category on E2E-1001; it becomes a rule of the vendor
+    await page.getByRole("tab", { name: /Needs review/ }).click(); // back to all invoices
+    await page.locator("tbody tr", { hasText: "E2E-1001" }).click();
+    await page.getByRole("link", { name: /Review & edit/ }).click();
+    await page.waitForURL(/\/invoices\/[0-9a-f-]{36}$/);
+    await page.fill("#f-expenseCategory", "Consulting");
+    await page.getByRole("button", { name: /Save & revalidate/ }).click();
+    await expect(page.getByText("Corrections", { exact: true })).toBeVisible();
+
+    await page.goto("/vendors");
+    const row = page.locator("tbody tr", { hasText: "E2E Fixtures GmbH" });
+    await expect(row.getByText("confirmed")).toBeVisible();
+    await row.getByRole("button", { name: /Edit/ }).click();
+    await expect(page.getByRole("dialog").getByText("Expense category → Consulting")).toBeVisible();
+    await page.keyboard.press("Escape");
+  });
+
   test("a rules document explains why an invoice was flagged, with its source", async () => {
     await page.goto("/knowledge");
     await expect(page.getByText(/No documents yet/)).toBeVisible();

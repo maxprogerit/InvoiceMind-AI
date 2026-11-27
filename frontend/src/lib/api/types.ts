@@ -28,6 +28,12 @@ export type CreatedWebhook = S["CreatedEndpointDto"];
 export type WebhookDelivery = S["DeliveryDto"];
 export type ManualRate = S["ManualRate"];
 export type Vendor = S["VendorDto"];
+export type VendorMemory = S["MemoryDto"];
+export type Correction = S["CorrectionDto"];
+export type QueueCounts = S["QueueCounts"];
+export type MemoryApplied = S["MemoryAppliedDto"];
+/** Work queues of the review screen (filters on the invoice list). */
+export type ReviewQueue = "NEEDS_REVIEW" | "POSSIBLE_DUPLICATE" | "UNVERIFIED_VENDOR" | "OVERDUE";
 export type VendorStatus = Vendor["status"];
 export type DuplicateInfo = S["DuplicateInfo"];
 export type DuplicateDecision = S["DuplicateDecisionRequest"]["decision"];

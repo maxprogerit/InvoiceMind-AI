@@ -40,6 +40,16 @@ public final class InvoiceDtos {
   public record DuplicateInfo(@NotNull DuplicateStatus status, UUID ofId, String ofLabel, String ofStatus,
                               String clearedByName, Instant clearedAt, UUID reusedFrom) {}
 
+  /** A value vendor memory filled in: {@code extracted} is what the document said (null: nothing). */
+  public record MemoryAppliedDto(@NotNull String field, @NotNull String value, String extracted, Long memoryId) {}
+
+  /** One field a person changed. */
+  public record CorrectionDto(@NotNull Long id, @NotNull String field, String oldValue, String newValue,
+                              String userName, @NotNull Instant at) {}
+
+  public record QueueCounts(@NotNull long needsReview, @NotNull long possibleDuplicate, @NotNull long unverifiedVendor,
+                            @NotNull long overdue) {}
+
   public enum DuplicateDecision { NOT_DUPLICATE, DUPLICATE }
 
   public record DuplicateDecisionRequest(@NotNull DuplicateDecision decision, @Size(max = 1000) String comment) {}
@@ -71,6 +81,7 @@ public final class InvoiceDtos {
       String vendorName, String invoiceNumber, LocalDate invoiceDate, LocalDate dueDate, String currency,
       BigDecimal subtotal, BigDecimal tax, BigDecimal total,
       String vendorTaxId, VendorRef vendor, @NotNull DuplicateInfo duplicate,
+      String expenseCategory, @NotNull List<MemoryAppliedDto> memoryApplied,
       Map<String, Double> fieldConfidence, List<String> modelReviewReasons, @NotNull boolean injectionSuspected,
       @NotNull boolean humanReviewed, @NotNull OcrInfo ocr, ExtractCheck extractCheck, @NotNull UsageInfo usage, Long processingMs,
       String failureReason,
@@ -94,6 +105,8 @@ public final class InvoiceDtos {
       @Digits(integer = 12, fraction = 2) @DecimalMin("-999999999999.99") @DecimalMax("999999999999.99") BigDecimal tax,
       @Digits(integer = 12, fraction = 2) @DecimalMin("-999999999999.99") @DecimalMax("999999999999.99") BigDecimal total,
       @Valid @Size(max = 500) List<LineItemDto> lineItems,
+      /** Omitted (null) keeps the current category; an empty string clears it. */
+      @Size(max = 100) String expenseCategory,
       Long version) {}
 
   public record DecisionRequest(@Size(max = 2000) String comment) {}

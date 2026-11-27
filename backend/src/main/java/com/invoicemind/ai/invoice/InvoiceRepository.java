@@ -15,6 +15,8 @@ public interface InvoiceRepository extends JpaRepository<InvoiceEntity, UUID>, J
 
   Optional<InvoiceEntity> findByIdAndOrganizationId(UUID id, UUID organizationId);
 
+  long countByVendorId(UUID vendorId);
+
   List<InvoiceEntity> findByOrganizationIdAndVendorIdAndStatusIn(UUID organizationId, UUID vendorId,
                                                                  Collection<InvoiceStatus> statuses);
 

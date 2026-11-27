@@ -22,7 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 @RequiredArgsConstructor
 public class VendorService {
-  public enum MatchedBy { TAX_ID, NAME, CREATED }
+  public enum MatchedBy { TAX_ID, NAME, ALIAS, CREATED }
 
   public record Match(UUID vendorId, MatchedBy matchedBy) {}
 
@@ -55,7 +55,7 @@ public class VendorService {
             v.setTaxId(taxId);
             vendors.saveAndFlush(v);
           }
-          return new Match(v.getId(), MatchedBy.NAME);
+          return new Match(v.getId(), normalized.equals(v.getNormalizedName()) ? MatchedBy.NAME : MatchedBy.ALIAS);
         }
       }
     }

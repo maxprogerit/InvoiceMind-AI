@@ -2,11 +2,13 @@ package com.invoicemind.ai.invoice;
 
 import com.invoicemind.ai.audit.AuditService.AuditEntryDto;
 import com.invoicemind.ai.common.PageResponse;
+import com.invoicemind.ai.invoice.InvoiceDtos.CorrectionDto;
 import com.invoicemind.ai.invoice.InvoiceDtos.DecisionRequest;
 import com.invoicemind.ai.invoice.InvoiceDtos.DuplicateDecisionRequest;
 import com.invoicemind.ai.invoice.InvoiceDtos.InvoiceDetail;
 import com.invoicemind.ai.invoice.InvoiceDtos.InvoiceSummary;
 import com.invoicemind.ai.invoice.InvoiceDtos.OcrTextResponse;
+import com.invoicemind.ai.invoice.InvoiceDtos.QueueCounts;
 import com.invoicemind.ai.invoice.InvoiceDtos.UpdateInvoiceRequest;
 import com.invoicemind.ai.security.CurrentUser;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -53,11 +55,19 @@ public class InvoiceController {
       @RequestParam(required = false) BigDecimal minTotal,
       @RequestParam(required = false) BigDecimal maxTotal,
       @RequestParam(required = false) DocumentType documentType,
+      @RequestParam(required = false) ReviewQueue queue,
       @RequestParam(defaultValue = "0") int page,
       @RequestParam(defaultValue = "20") int size,
       @RequestParam(required = false) String sort) {
-    var filter = new InvoiceFilter(status, q, vendor, currency, from, to, minTotal, maxTotal, documentType);
+    var filter = new InvoiceFilter(status, q, vendor, currency, from, to, minTotal, maxTotal, documentType, queue,
+        service.today());
     return service.list(filter, CurrentUser.get(), page, size, sort);
+  }
+
+  /** How many invoices wait in each review queue (same visibility rules as the list). */
+  @GetMapping("/queues")
+  public QueueCounts queues() {
+    return service.queueCounts(CurrentUser.get());
   }
 
   @GetMapping("/{id}")
@@ -73,6 +83,11 @@ public class InvoiceController {
   @GetMapping("/{id}/ocr-text")
   public OcrTextResponse ocrText(@PathVariable UUID id) {
     return service.ocrText(id, CurrentUser.get());
+  }
+
+  @GetMapping("/{id}/corrections")
+  public List<CorrectionDto> corrections(@PathVariable UUID id) {
+    return service.corrections(id, CurrentUser.get());
   }
 
   @GetMapping("/{id}/audit")

@@ -6,6 +6,7 @@ import com.invoicemind.ai.common.ApiException;
 import com.invoicemind.ai.common.PageResponse;
 import com.invoicemind.ai.config.AppProperties;
 import com.invoicemind.ai.firm.FirmService;
+import com.invoicemind.ai.invoice.InvoiceDtos.CorrectionDto;
 import com.invoicemind.ai.invoice.InvoiceDtos.DecisionRequest;
 import com.invoicemind.ai.invoice.InvoiceDtos.DuplicateDecision;
 import com.invoicemind.ai.invoice.InvoiceDtos.DuplicateDecisionRequest;
@@ -13,9 +14,11 @@ import com.invoicemind.ai.invoice.InvoiceDtos.InvoiceDetail;
 import com.invoicemind.ai.invoice.InvoiceDtos.InvoiceSummary;
 import com.invoicemind.ai.invoice.InvoiceDtos.LineItemDto;
 import com.invoicemind.ai.invoice.InvoiceDtos.OcrTextResponse;
+import com.invoicemind.ai.invoice.InvoiceDtos.QueueCounts;
 import com.invoicemind.ai.invoice.InvoiceDtos.UpdateInvoiceRequest;
 import com.invoicemind.ai.vendor.VendorEntity;
 import com.invoicemind.ai.vendor.VendorService;
+import com.invoicemind.ai.vendor.memory.VendorMemoryService;
 import com.invoicemind.ai.notification.NotificationService;
 import com.invoicemind.ai.processing.ProcessingJobQueue;
 import com.invoicemind.ai.processing.TraceContextCodec;
@@ -70,6 +73,8 @@ public class InvoiceService {
   private final WebhookOutbox webhooks;
   private final RateLimiter rateLimiter;
   private final ProcessingJobQueue jobs;
+  private final InvoiceCorrectionRepository corrections;
+  private final VendorMemoryService vendorMemory;
   private final TraceContextCodec traces;
   private final AppProperties props;
   private final Clock clock;
@@ -112,6 +117,18 @@ public class InvoiceService {
     return PageResponse.of(result, mapper.toSummaries(result.getContent()));
   }
 
+  public java.time.LocalDate today() {
+    return java.time.LocalDate.now(clock);
+  }
+
+  @Transactional(readOnly = true)
+  public QueueCounts queueCounts(AuthPrincipal me) {
+    java.util.function.Function<ReviewQueue, Long> count = q ->
+        invoices.count(InvoiceFilter.queue(q, today()).toSpec(me.organizationId(), scopeOf(me)));
+    return new QueueCounts(count.apply(ReviewQueue.NEEDS_REVIEW), count.apply(ReviewQueue.POSSIBLE_DUPLICATE),
+        count.apply(ReviewQueue.UNVERIFIED_VENDOR), count.apply(ReviewQueue.OVERDUE));
+  }
+
   /** All matching invoices for export, newest first, capped to keep memory bounded. */
   @Transactional(readOnly = true)
   public List<InvoiceEntity> listForExport(InvoiceFilter filter, AuthPrincipal me, int max) {
@@ -139,6 +156,15 @@ public class InvoiceService {
   }
 
   @Transactional(readOnly = true)
+  public List<CorrectionDto> corrections(UUID id, AuthPrincipal me) {
+    load(id, me); // authorisation check
+    List<InvoiceCorrectionEntity> rows = corrections.findByInvoiceIdOrderByCreatedAtAscIdAsc(id);
+    Map<UUID, String> names = mapper.names(rows.stream().map(InvoiceCorrectionEntity::getUserId).filter(Objects::nonNull).toList());
+    return rows.stream().map(c -> new CorrectionDto(c.getId(), c.getField(), c.getOldValue(), c.getNewValue(),
+        c.getUserId() == null ? null : names.getOrDefault(c.getUserId(), "Unknown"), c.getCreatedAt())).toList();
+  }
+
+  @Transactional(readOnly = true)
   public List<AuditEntryDto> trail(UUID id, AuthPrincipal me) {
     load(id, me); // authorisation check
     return audit.trailFor(me.organizationId(), AuditService.INVOICE, id);
@@ -156,47 +182,59 @@ public class InvoiceService {
     }
 
     Map<String, Object> changes = new LinkedHashMap<>();
+    List<String[]> rows = new ArrayList<>(); // field, before, after: one correction row each
+    VendorMemoryService.Before snapshot = VendorMemoryService.Before.of(inv);
     DocumentType type = req.documentType() == null ? inv.getDocumentType() : req.documentType();
-    track(changes, "documentType", inv.getDocumentType(), type);
+    track(changes, rows, "documentType", inv.getDocumentType(), type);
     inv.setDocumentType(type);
     String vendor = blankToNull(req.vendorName());
-    track(changes, "vendorName", inv.getVendorName(), vendor);
+    track(changes, rows, "vendorName", inv.getVendorName(), vendor);
     inv.setVendorName(vendor);
     String taxId = req.vendorTaxId() == null ? inv.getVendorTaxId() : VendorEntity.normalizeTaxId(req.vendorTaxId());
-    track(changes, "vendorTaxId", inv.getVendorTaxId(), taxId);
+    track(changes, rows, "vendorTaxId", inv.getVendorTaxId(), taxId);
     inv.setVendorTaxId(taxId);
     VendorService.Match match = vendors.match(inv.getOrganizationId(), vendor, taxId, inv.getCurrency());
     inv.setVendorId(match == null ? null : match.vendorId());
     String number = blankToNull(req.invoiceNumber());
-    track(changes, "invoiceNumber", inv.getInvoiceNumber(), number);
+    track(changes, rows, "invoiceNumber", inv.getInvoiceNumber(), number);
     inv.setInvoiceNumber(number);
-    track(changes, "invoiceDate", inv.getInvoiceDate(), req.invoiceDate());
+    track(changes, rows, "invoiceDate", inv.getInvoiceDate(), req.invoiceDate());
     inv.setInvoiceDate(req.invoiceDate());
-    track(changes, "dueDate", inv.getDueDate(), req.dueDate());
+    track(changes, rows, "dueDate", inv.getDueDate(), req.dueDate());
     inv.setDueDate(req.dueDate());
     String currency = blankToNull(req.currency()) == null ? null : req.currency().trim().toUpperCase(Locale.ROOT);
-    track(changes, "currency", inv.getCurrency(), currency);
+    track(changes, rows, "currency", inv.getCurrency(), currency);
     inv.setCurrency(currency);
     // a credit note is stored negative whichever sign the reviewer typed (type.signed is the identity for invoices)
-    track(changes, "subtotal", inv.getSubtotal(), type.signed(req.subtotal()));
+    track(changes, rows, "subtotal", inv.getSubtotal(), type.signed(req.subtotal()));
     inv.setSubtotal(type.signed(req.subtotal()));
-    track(changes, "tax", inv.getTax(), type.signed(req.tax()));
+    track(changes, rows, "tax", inv.getTax(), type.signed(req.tax()));
     inv.setTax(type.signed(req.tax()));
-    track(changes, "total", inv.getTotal(), type.signed(req.total()));
+    track(changes, rows, "total", inv.getTotal(), type.signed(req.total()));
     inv.setTotal(type.signed(req.total()));
 
+    String category = req.expenseCategory() == null ? inv.getExpenseCategory() : blankToNull(req.expenseCategory());
+    track(changes, rows, "expenseCategory", inv.getExpenseCategory(), category);
+    inv.setExpenseCategory(category);
+
     List<LineItemEntity> items = toLineItems(req.lineItems(), type);
-    if (!sameLines(inv.getLineItems(), items)) changes.put("lineItems", items.size() + " line(s) edited");
+    if (!sameLines(inv.getLineItems(), items)) {
+      changes.put("lineItems", items.size() + " line(s) edited");
+      rows.add(new String[] {"lineItems", inv.getLineItems().size() + " line(s)", items.size() + " line(s)"});
+    }
     inv.replaceLineItems(items);
 
     InvoiceStatus before = inv.getStatus();
     inv.setHumanReviewed(true);
     InvoiceStatus next = validation.revalidate(inv);
-    track(changes, "status", inv.getStatus(), next);
+    if (next != inv.getStatus()) changes.put("status", inv.getStatus() + " -> " + next);
     inv.setStatus(next);
     invoices.saveAndFlush(inv);
     if (next != before) webhooks.invoiceEvent(next == InvoiceStatus.VALIDATED ? "invoice.validated" : "invoice.needs_review", inv);
 
+    for (String[] r : rows) corrections.save(new InvoiceCorrectionEntity(inv, r[0], r[1], r[2], me.userId()));
+    List<String> learned = vendorMemory.learn(inv, snapshot, me.userId());
+    if (!learned.isEmpty()) changes.put("vendorMemoryLearned", learned);
     audit.log(me.organizationId(), me.userId(), "INVOICE_CORRECTED", AuditService.INVOICE, inv.getId(), changes);
     status.publish(inv);
     validation.recheckNewerOfSameVendor(inv).forEach(status::publish);
@@ -387,10 +425,13 @@ public class InvoiceService {
     return true;
   }
 
-  private static void track(Map<String, Object> changes, String field, Object before, Object after) {
+  private static void track(Map<String, Object> changes, List<String[]> rows, String field, Object before, Object after) {
     boolean same = before instanceof BigDecimal a && after instanceof BigDecimal b ? a.compareTo(b) == 0
         : Objects.equals(before, after);
-    if (!same) changes.put(field, display(before) + " -> " + display(after));
+    if (!same) {
+      changes.put(field, display(before) + " -> " + display(after));
+      rows.add(new String[] {field, before == null ? null : display(before), after == null ? null : display(after)});
+    }
   }
 
   private static String display(Object v) {

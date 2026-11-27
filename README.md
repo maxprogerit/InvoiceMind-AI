@@ -73,6 +73,22 @@ Without an `OPENAI_API_KEY` the application still starts; uploads then end as **
 5. As admin, add a policy under *Knowledge* (for example "invoices above 10,000 EUR need two approvals") and press
    *Why was this flagged?* on an invoice: the answer cites the passage it came from.
 
+## Duplicates, vendors and vendor memory
+
+- **Duplicates by meaning.** Same vendor + same invoice number (also a re-scan or a resend as another file) is a
+  duplicate and cannot be approved. Same vendor + same total within 7 days but another number is a *possible*
+  duplicate: a person decides. An identical file reuses the stored result: the model is not called again. Rules and
+  examples: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md#vendors-and-duplicates).
+- **Vendors.** Matched by tax/VAT id first, then by name or alias; an unknown vendor is created *unverified* and must
+  be confirmed once (*Vendors* page or on the invoice) before its invoices can be approved.
+- **Vendor memory is not model training.** When a person corrects an invoice, InvoiceMind stores plain rules for that
+  vendor: "this vendor's `USD` means `CAD`", "no due date printed: invoice date + 30 days", "expense category:
+  Hosting", "the misread name *Northwlnd Traders Ltd* is this vendor". They are applied to the vendor's next invoices
+  by ordinary code, each filled-in field is marked *from vendor memory*, and every rule is listed on the *Vendors* page
+  where it can be removed. Nothing is sent to the model and no model is fine-tuned.
+- **Review queues.** *Needs review*, *Possible duplicate*, *New vendor* and *Overdue*, with counts, on the invoice list.
+  Every correction is stored field by field (before, after, who, when) and shown on the invoice.
+
 ## Optional features
 
 Off by default; each is switched on with environment variables (all listed, with comments, in [`.env.example`](.env.example)).

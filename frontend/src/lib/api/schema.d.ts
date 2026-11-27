@@ -660,6 +660,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/invoices/{id}/corrections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["corrections"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/invoices/{id}/audit": {
         parameters: {
             query?: never;
@@ -668,6 +684,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["audit"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/invoices/queues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["queues"];
         put?: never;
         post?: never;
         delete?: never;
@@ -916,6 +948,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/vendors/{id}/memory/{memoryId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["forget"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/vendors/{id}/aliases/{aliasId}": {
         parameters: {
             query?: never;
@@ -994,18 +1042,36 @@ export interface components {
             id: number;
             alias: string;
         };
+        MemoryDto: {
+            /** Format: int64 */
+            id: number;
+            field: string;
+            whenExtracted?: string;
+            value: string;
+            learnedByName?: string;
+            /** Format: date-time */
+            learnedAt: string;
+            /** Format: int32 */
+            timesApplied: number;
+            /** Format: uuid */
+            learnedFromInvoice?: string;
+        };
         VendorDto: {
             /** Format: uuid */
             id: string;
             name: string;
             taxId?: string;
             defaultCurrency?: string;
+            /** Format: int32 */
+            paymentTermsDays?: number;
+            defaultCategory?: string;
             /** @enum {string} */
             status: "UNVERIFIED" | "VERIFIED";
             verifiedByName?: string;
             /** Format: date-time */
             verifiedAt?: string;
             aliases: components["schemas"]["AliasDto"][];
+            memory: components["schemas"]["MemoryDto"][];
             /** Format: int64 */
             invoiceCount: number;
             /** Format: date-time */
@@ -1043,6 +1109,7 @@ export interface components {
             tax?: number;
             total?: number;
             lineItems?: components["schemas"]["LineItemDto"][];
+            expenseCategory?: string;
             /** Format: int64 */
             version?: number;
         };
@@ -1090,6 +1157,8 @@ export interface components {
             vendorTaxId?: string;
             vendor?: components["schemas"]["VendorRef"];
             duplicate: components["schemas"]["DuplicateInfo"];
+            expenseCategory?: string;
+            memoryApplied: components["schemas"]["MemoryAppliedDto"][];
             fieldConfidence?: {
                 [key: string]: number;
             };
@@ -1126,6 +1195,13 @@ export interface components {
             message: string;
             /** Format: uuid */
             relatedInvoiceId?: string;
+        };
+        MemoryAppliedDto: {
+            field: string;
+            value: string;
+            extracted?: string;
+            /** Format: int64 */
+            memoryId?: number;
         };
         OcrInfo: {
             engine?: string;
@@ -1468,6 +1544,16 @@ export interface components {
             /** Format: int32 */
             pageCount?: number;
         };
+        CorrectionDto: {
+            /** Format: int64 */
+            id: number;
+            field: string;
+            oldValue?: string;
+            newValue?: string;
+            userName?: string;
+            /** Format: date-time */
+            at: string;
+        };
         AuditEntryDto: {
             /** Format: int64 */
             id: number;
@@ -1483,6 +1569,16 @@ export interface components {
             };
             /** Format: date-time */
             createdAt: string;
+        };
+        QueueCounts: {
+            /** Format: int64 */
+            needsReview: number;
+            /** Format: int64 */
+            possibleDuplicate: number;
+            /** Format: int64 */
+            unverifiedVendor: number;
+            /** Format: int64 */
+            overdue: number;
         };
         FxStatus: {
             baseCurrency: string;
@@ -2208,6 +2304,7 @@ export interface operations {
                 minTotal?: number;
                 maxTotal?: number;
                 documentType?: "INVOICE" | "CREDIT_NOTE";
+                queue?: "NEEDS_REVIEW" | "POSSIBLE_DUPLICATE" | "UNVERIFIED_VENDOR" | "OVERDUE";
                 page?: number;
                 size?: number;
                 sort?: string;
@@ -2854,6 +2951,28 @@ export interface operations {
             };
         };
     };
+    corrections: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CorrectionDto"][];
+                };
+            };
+        };
+    };
     audit: {
         parameters: {
             query?: never;
@@ -2872,6 +2991,26 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["AuditEntryDto"][];
+                };
+            };
+        };
+    };
+    queues: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["QueueCounts"];
                 };
             };
         };
@@ -3205,6 +3344,29 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ByStatus"];
+                };
+            };
+        };
+    };
+    forget: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                memoryId: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["VendorDto"];
                 };
             };
         };

@@ -13,14 +13,16 @@ import { Input, Label } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/misc";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { useAddAlias, useRemoveAlias, useUpdateVendor, useVendors, useVerifyVendor } from "@/lib/api/hooks";
+import { useAddAlias, useForgetMemory, useRemoveAlias, useUpdateVendor, useVendors, useVerifyVendor } from "@/lib/api/hooks";
 import type { Vendor } from "@/lib/api/types";
+import { describeMemory } from "@/lib/vendor-memory";
 import { formatDate } from "@/lib/format";
 
 function EditVendor({ vendor, onClose }: { vendor: Vendor; onClose: () => void }) {
   const update = useUpdateVendor();
   const addAlias = useAddAlias();
   const removeAlias = useRemoveAlias();
+  const forget = useForgetMemory();
   const [name, setName] = useState(vendor.name);
   const [taxId, setTaxId] = useState(vendor.taxId ?? "");
   const [currency, setCurrency] = useState(vendor.defaultCurrency ?? "");
@@ -83,6 +85,35 @@ function EditVendor({ vendor, onClose }: { vendor: Vendor; onClose: () => void }
                 <Plus /> Add
               </Button>
             </div>
+          </div>
+          <div>
+            <Label>Learned from corrections</Label>
+            <p className="mb-2 text-xs text-dim">
+              Plain rules taken from people&apos;s corrections and applied to this vendor&apos;s next invoices (marked there as
+              &quot;from vendor memory&quot;). Not AI training: remove a rule and it stops.
+            </p>
+            {vendor.memory.length === 0 && <span className="text-xs text-dim">nothing yet</span>}
+            <ul className="space-y-1.5">
+              {vendor.memory.map((m) => (
+                <li key={m.id} className="flex items-center justify-between gap-2 rounded-control border border-line px-3 py-2 text-sm">
+                  <div className="min-w-0">
+                    <div>{describeMemory(m)}</div>
+                    <div className="font-mono text-[11px] text-dim">
+                      {m.learnedByName ? `${m.learnedByName}, ` : ""}
+                      {formatDate(m.learnedAt)} · used {m.timesApplied}×
+                    </div>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label={`Forget: ${describeMemory(m)}`}
+                    onClick={() => forget.mutate({ id: vendor.id, memoryId: m.id }, { onError: (e) => toast.error(e.message) })}
+                  >
+                    <X />
+                  </Button>
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
         <DialogFooter>

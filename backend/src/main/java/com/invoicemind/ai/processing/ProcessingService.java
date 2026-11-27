@@ -15,6 +15,7 @@ import com.invoicemind.ai.invoice.InvoiceStatus;
 import com.invoicemind.ai.invoice.LineItemEntity;
 import com.invoicemind.ai.vendor.VendorEntity;
 import com.invoicemind.ai.vendor.VendorService;
+import com.invoicemind.ai.vendor.memory.VendorMemoryService;
 import com.invoicemind.ai.notification.NotificationService;
 import com.invoicemind.ai.storage.FileStorage;
 import com.invoicemind.ai.user.Role;
@@ -66,6 +67,7 @@ public class ProcessingService {
 
   private final InvoiceRepository invoices;
   private final VendorService vendors;
+  private final VendorMemoryService memory;
   private final UserOrgAccessRepository access;
   private final FileStorage storage;
   private final AiClient ai;
@@ -78,12 +80,14 @@ public class ProcessingService {
   private final Clock clock;
   private final TransactionTemplate tx;
 
-  public ProcessingService(InvoiceRepository invoices, VendorService vendors, UserOrgAccessRepository access,
+  public ProcessingService(InvoiceRepository invoices, VendorService vendors, VendorMemoryService memory,
+                           UserOrgAccessRepository access,
                            FileStorage storage, AiClient ai, ValidationService validation, AuditService audit,
                            StatusPublisher status, NotificationService notifications, WebhookOutbox webhooks,
                            ObjectMapper mapper, Clock clock, PlatformTransactionManager txManager) {
     this.invoices = invoices;
     this.vendors = vendors;
+    this.memory = memory;
     this.access = access;
     this.storage = storage;
     this.ai = ai;
@@ -241,6 +245,8 @@ public class ProcessingService {
       inv.setTax(type.signed(money(e.tax())));
       inv.setTotal(type.signed(money(e.total())));
       inv.replaceLineItems(lineItems(e, type));
+      // deterministic defaults learned from earlier corrections of this vendor (currency, terms, category)
+      memory.apply(inv, vendor == null ? null : vendor.matchedBy(), vendorName);
 
       inv.setFieldConfidence(confidenceMap(e));
       inv.setModelNeedsReview(e.needsReview());

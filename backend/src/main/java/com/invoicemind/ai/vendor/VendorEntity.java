@@ -20,6 +20,10 @@ public class VendorEntity {
   /** Normalised tax / VAT id ({@link #normalizeTaxId}); unique per organisation when present. */
   private String taxId;
   private String defaultCurrency;
+  /** Learned from corrections (vendor memory): due date = invoice date + this many days. */
+  private Integer paymentTermsDays;
+  /** Learned from corrections (vendor memory). */
+  private String defaultCategory;
   @Enumerated(EnumType.STRING)
   private VendorStatus status = VendorStatus.UNVERIFIED;
   private UUID verifiedBy;
