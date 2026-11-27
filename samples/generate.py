@@ -5,7 +5,7 @@ Docker so the fonts and poppler are present:
 
     docker build -t invoicemind-samples samples
     docker run --rm -v "$PWD/samples:/out" invoicemind-samples
-    docker run --rm -v "$PWD/samples:/out" invoicemind-samples python generate.py --e2e   # also rewrites samples/e2e
+    docker run --rm -v "$PWD/samples:/out" invoicemind-samples python generate.py --e2e --demo   # also samples/e2e, samples/demo
 
 Every document here is SYNTHETIC: made-up companies, printed with a footer that says so, and labelled
 `"synthetic": true` in its ground truth. Real (redacted) invoices go to samples/real/ instead, see its README.
@@ -469,6 +469,8 @@ def main():
         (gt_dir / f"{spec.id}.json").write_text(json.dumps({"meta": meta, "expected": data}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print("generated", spec.id, name, pages, "page(s)", meta["tags"])
 
+    if "--demo" in sys.argv:
+        write_demo(OUT / "demo")
     if "--e2e" not in sys.argv:
         return
     # Fixtures for the UI end-to-end tests (the rule-based test double understands this English "classic" layout)
@@ -477,6 +479,25 @@ def main():
         spec = Spec(name, "classic", "E2E Fixtures GmbH", "Testweg 1, 10115 Berlin", number, (2026, 3, 14), 30, "EUR", items, "0.19", printed_total=printed)
         (e2e_dir / f"{name}.pdf").write_bytes(render_pdf(spec, label=False))
     print("e2e fixtures written")
+
+
+# The README walk-through (scripts/demo-flow.cjs): English "classic" layout, ISO dates, so the offline test double
+# reads them too. The e-mailed invoice prints a total with two digits swapped (1,457.60 instead of 1,475.60).
+DEMO = [
+    Spec("demo-email-invoice", "classic", "Brightline Office Supplies Ltd", "12 Canal Street, Manchester M1 3HW, United Kingdom", "BOS-2291",
+         (2026, 11, 20), 30, "EUR", [("Ergonomic office chair", 4, "245.00"), ("Standing desk frame", 1, "260.00")], "0.19", printed_total="1457.60"),
+    Spec("demo-hosting", "classic", "Harbor Cloud Hosting BV", "Keizersgracht 210, 1016 DZ Amsterdam, Netherlands", "HCH-7781",
+         (2026, 11, 18), 14, "EUR", [("Dedicated servers (annual)", 2, "3600.00"), ("Managed backup (annual)", 1, "980.00")], "0.21"),
+    Spec("demo-courier", "classic", "Metro Courier Services", "Unit 4, Riverside Park, Leeds LS11 5JX, United Kingdom", "MCS-10442",
+         (2026, 11, 21), 7, "EUR", [("Same-day courier", 3, "12.50")], "0.20"),
+]
+
+
+def write_demo(out: Path) -> None:
+    out.mkdir(parents=True, exist_ok=True)
+    for spec in DEMO:
+        (out / f"{spec.id}.pdf").write_bytes(render_pdf(spec))
+    print("demo documents written to", out)
 
 
 if __name__ == "__main__":

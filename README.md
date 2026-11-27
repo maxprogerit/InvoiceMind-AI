@@ -1,39 +1,96 @@
 # InvoiceMind
 
-Upload an invoice (PDF or photo), and InvoiceMind reads it with OCR, extracts the data with an LLM, checks the
-arithmetic with deterministic rules, lets a human correct and approve it, and gives you analytics and exports.
+**Accounts payable teams retype every supplier invoice by hand and still pay some of them twice; InvoiceMind takes
+invoices from e-mail and uploads, extracts them with OCR and an LLM, lets plain code check every number and catch
+duplicates, sends only the failed checks to a person, and hands approved invoices to Xero or QuickBooks exactly once.**
 
-It is built so that **the model is never trusted**: every value it returns must appear in the document, is
-re-validated by plain Java code, and anything doubtful goes to a person.
+The model only reads. Code validates, computes, deduplicates and decides who may do what: every extracted value must
+appear in the document, Java re-checks the arithmetic, dates, currency and duplicates, and anything that fails goes
+to review.
 
-> **Honest status.** Everything below runs and is tested. The extraction and the knowledge base were run against the real
-> OpenAI API (`gpt-5.5`): 18 of 18 synthetic documents were extracted completely correctly (see
-> [docs/evaluation.md](docs/evaluation.md)), but the set is small and synthetic, so read that as a smoke test of the whole
-> pipeline, not as a production accuracy figure. The integrations (single sign-on, e-mail ingestion, S3 storage) were verified
-> against real *protocol implementations* (an OIDC server, an IMAP server, an S3-compatible store), not against Entra ID, Gmail
-> or AWS themselves. The full, itemised picture is in [docs/STATUS.md](docs/STATUS.md).
+## The flow: e-mail → review → approve → export
 
-![The invoice list: extracted invoices, a credit note with a negative total, and the document next to its data](docs/screenshots/invoices.png)
+| 1. Arrives by e-mail, one check fails | 2. The accountant sees exactly why |
+|---|---|
+| [![Invoice list with review queues; the e-mailed invoice is flagged](docs/screenshots/flow-1-inbox.png)](docs/screenshots/flow-1-inbox.png) | [![Review: total mismatch found by code, new vendor to confirm, approval rule](docs/screenshots/flow-2-review.png)](docs/screenshots/flow-2-review.png) |
+| **3. After the fix, an approver approves** | **4. Approved invoices go to accounting once** |
+| [![Approver view: all checks passed, one approval needed under the EUR rule](docs/screenshots/flow-3-approve.png)](docs/screenshots/flow-3-approve.png) | [![Export page: three approved invoices waiting for the Xero bill import](docs/screenshots/flow-4-export.png)](docs/screenshots/flow-4-export.png) |
 
-*A real run on the sample set with `gpt-5.5`. More screens: [review](docs/screenshots/review.png) (validation findings, document
-beside editable fields), [analysis](docs/screenshots/analytics.png), [approvals](docs/screenshots/approvals.png),
-[knowledge](docs/screenshots/knowledge.png), [upload](docs/screenshots/upload.png). The "AI cost" tile uses the placeholder
-prices from `.env.example`; set `OPENAI_PRICE_*` to the real ones.*
+A supplier e-mails invoice BOS-2291 to the organisation's intake address. Its printed total has two digits swapped,
+so the deterministic check flags it (*subtotal 1240.00 + tax 235.60 = 1475.60, but the total is 1457.60*) and the new
+vendor must be confirmed. The accountant fixes the total; the approval rule for EUR (automatic below 100, one approver
+up to 5,000, two above) asks for one approver; a second invoice of 9,897.80 EUR needed two different approvers and a
+45 EUR one was approved automatically. The export marks all three so they are never exported again.
+
+*Captured by [`scripts/demo-flow.cjs`](scripts/demo-flow.cjs) on the local stack (real backend, database, IMAP
+mailbox, OCR and browser). The values in these screenshots were extracted by the offline rule-based test double
+(`e2e/fake-ai`), because the build environment had no OpenAI key; with a key the same flow uses the model.*
+
+## Evaluation
+
+| | Current set: 32 documents, full `POST /invoices` pipeline | Previous run, 2026-10-15 |
+|---|---|---|
+| Model | not run yet (needs an OpenAI key: `docker compose --profile eval run --rm eval`) | `gpt-5.5`, reasoning effort `none` |
+| Documents | 32 synthetic: 22 text PDFs, 10 scans (2 scanned PDFs), 4 multi-page, 6 multi-rate VAT, 4 with discounts, 2 credit notes | the first 18 of them, before the "synthetic" footer was added |
+| Per-field accuracy (vendor, number, date, currency, subtotal, tax, total) | not run yet | 100 % on every field |
+| Line items | not run yet | 70 of 70 rows, none invented |
+| Auto-validated vs needs review | not run yet | measured differently then: 16 passed, 2 correct documents flagged |
+| False "valid" (wrong but auto-validated) | not run yet | 0 (no document had a wrong value) |
+| Average latency per invoice | not run yet | 3.6 s (slowest 6.3 s) |
+| Average cost per invoice | not run yet | about 1,250 input + 230 output tokens; not priced |
+
+The previous run used the earlier AI service (no deterministic validation step), so its numbers are history, not a
+baseline. What each metric means, how the spend cap (`EVAL_MAX_COST_USD`) works and how to add real redacted invoices:
+[docs/evaluation.md](docs/evaluation.md). The metric code is tested (`extract-service/tests/test_eval_metrics.py`).
+
+## Architecture
+
+```mermaid
+flowchart LR
+  M[Supplier e-mail<br/>IMAP mailbox] -->|poll| B
+  U[Browser<br/>Next.js 15] -->|HTTP, WebSocket| N[Nginx] --> B[Spring Boot backend<br/>vendors, duplicates, approvals,<br/>reminders, export, audit]
+  B --> P[(PostgreSQL + pgvector<br/>data + job queue)]
+  B -->|"POST /invoices<br/>internal network + token"| A[extract-service<br/>FastAPI + Tesseract]
+  A --> O((OpenAI API))
+  B -->|SMTP| R[Due-date reminders]
+  B -->|CSV| X[Xero / QuickBooks import]
+  B -->|signed webhook| W[ERP]
+```
+
+The extract-service has no published port: only the backend reaches it, on an internal Docker network, with a
+service token. Uploads are queued in a Postgres table and processed by workers with `SELECT … FOR UPDATE SKIP LOCKED`
+(no Kafka, no Redis). Details: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Honest limitations
+
+- **Accuracy on real mail is not measured yet.** The evaluation set is synthetic, and the current pipeline has not been
+  run against the real model in this repository's history (see above). Real invoices will be messier.
+- **The README screenshots use the offline test double**, not the model (see the note under them).
+- **Xero's column headers were not checked against a template downloaded from Xero**, and QuickBooks' optional column
+  names were read from Intuit's help pages, not a live import. Try one import in each before relying on it
+  ([docs/ACCOUNTING-EXPORT.md](docs/ACCOUNTING-EXPORT.md)).
+- **E-mail intake needs your own IMAP mailbox** with plus-addressing (Gmail, Outlook, Fastmail …); it was tested against
+  GreenMail, not against those providers. It polls (no IMAP IDLE).
+- **Vendor memory is a set of deterministic rules** (currency, payment terms, category, name aliases learned from
+  corrections), not model training. **Duplicate detection** is exact rules (same vendor + number, same file, or same
+  vendor + total + currency within 7 days for a person to decide), not fuzzy matching of content.
+- More in [Known limitations](#known-limitations).
 
 ## What it does
 
 | | |
 |---|---|
-| **Read** | PDFs with a text layer are read directly; scans and photos go through Tesseract (English, German, Russian). Per-page confidence is kept. |
-| **Extract** | OpenAI structured output turns the text into vendor, number, dates, currency, line items, subtotal, tax, total, with per-field confidence. |
-| **Verify** | Values are grounded against the OCR text; Java rules check sums, tax, dates, currency, duplicates; suspected prompt injection forces review. |
-| **Review** | Document on the left, editable fields on the right; errors and low-confidence fields are highlighted; sums are re-checked as you type. |
-| **Approve** | Roles, comments, four-eyes rule, full audit trail, notifications, live status over WebSocket. |
-| **Understand** | Analytics from real data (spend by vendor and month, review rate, processing time, AI cost). Export to CSV, XLSX, JSON. |
+| **Intake** | Upload PDFs and photos, a whole `.zip` at once, or let suppliers e-mail them to the organisation's address (IMAP). |
+| **Read** | PDFs with a text layer are read directly; scans and photos go through Tesseract (English, German, Russian). |
+| **Extract** | OpenAI structured output; money travels as decimal strings (`BigDecimal` / `Decimal`, never float), currency next to every amount. |
+| **Verify** | Values are grounded against the document text; Java rules check sums, tax, dates, currency; suspected prompt injection forces review. |
+| **Deduplicate** | Same vendor + number or the identical file is a duplicate (the stored extraction is reused, the model is not called again); same vendor, total and currency within 7 days is a *possible* duplicate a person decides. |
+| **Review** | Queues for *needs review*, *possible duplicate*, *new vendor* and *overdue*; field-level corrections are recorded; vendor memory fills in what this vendor's invoices needed last time, marked as such. |
+| **Approve** | ACCOUNTANT / APPROVER / ADMIN; rules per currency (automatic below X, one approver up to Y, two different approvers above Y); nobody approves their own upload; any edit resets approvals. |
+| **Remind** | A daily e-mail digest of invoices overdue or due within 3 days, sent once per organisation and day. |
+| **Export** | Xero and QuickBooks Online bill-import CSV; each invoice is exported once and then leaves the reminders. Also XLSX/CSV/JSON and a signed `invoice.approved` webhook. |
 | **Explain** | Upload your policies; "Why was this flagged?" answers from them with cited sources (RAG on pgvector). |
-| **Credit notes** | Recognised as their own document type, stored with negative amounts, validated with the mirrored rules, filterable and exportable. |
-| **Convert** | Report in one currency: every invoice at the ECB rate of its own date; manual rates for currencies the ECB lacks; anything without a rate is listed as "not converted", never guessed. |
-| **Integrate** | Signed webhooks for ERP / accounting systems, e-mail ingestion (IMAP), single sign-on (OpenID Connect), S3 storage, OpenTelemetry tracing. All optional, see [Optional features](#optional-features). |
+| **More** | Credit notes, currency conversion at ECB rates, analytics, multi-client firms, single sign-on (OIDC), S3 storage, OpenTelemetry tracing. |
 
 ## Quick start (5 commands)
 
@@ -52,26 +109,38 @@ Sign in with a seeded demo account (password is `DEMO_PASSWORD` from `.env`, def
 
 | Account | Role |
 |---|---|
-| `admin@demo.invoicemind.local` | ADMIN: everything, plus team and knowledge management |
+| `admin@demo.invoicemind.local` | ADMIN: everything, plus team, approval rules, e-mail intake and knowledge management |
+| `accountant@demo.invoicemind.local` | ACCOUNTANT: uploads, reviews and corrects, confirms vendors, exports; does not approve |
 | `approver@demo.invoicemind.local` | APPROVER: sees the whole organisation, approves and rejects |
-| `user@demo.invoicemind.local` | ACCOUNTANT: uploads, reviews and corrects, confirms vendors; does not approve |
+| `approver2@demo.invoicemind.local` | APPROVER: the second person for invoices that need two approvals |
 
-Or register your own organisation: you become its admin and can add your team. Set `DEMO_PASSWORD=` (empty) to disable seeding.
+The demo organisation also gets approval rules for EUR, USD and GBP (automatic below 100, two approvers above 5,000).
+No invoices are seeded: they go through the real pipeline (see the walkthrough). Or register your own organisation:
+you become its admin and can add your team. Set `DEMO_PASSWORD=` (empty) to disable seeding.
 
 Without an `OPENAI_API_KEY` the application still starts; uploads then end as **Failed** with the message
 "OPENAI_API_KEY is not configured" instead of producing made-up data.
 
 ### Demo walkthrough
 
-1. **Upload** the PDFs and scans from [`samples/invoices`](samples/invoices) (drag several at once). Watch each one move
-   through *Uploaded → OCR + AI → Validated*, live.
-2. Open an invoice marked **Needs review**: the validation panel says exactly why (for example "Subtotal 1000 + tax 190 =
-   1190, but the total is 1500"), the offending field is highlighted, and the sums check updates as you type. Fix it and press
-   *Save & revalidate*.
-3. As **approver**, open *Approvals*, approve with a comment, or reject with a reason. Everything lands in the *Audit log*.
-4. *Analysis* shows spend and quality metrics computed from your data. *Export* downloads the filtered set as XLSX/CSV/JSON.
-5. As admin, add a policy under *Knowledge* (for example "invoices above 10,000 EUR need two approvals") and press
-   *Why was this flagged?* on an invoice: the answer cites the passage it came from.
+The screenshots above come from this, scripted end to end:
+
+```bash
+node scripts/demo-flow.cjs http://localhost           # needs e-mail intake configured (MAIL_INGEST_* in .env)
+```
+
+It e-mails [`samples/demo/demo-email-invoice.pdf`](samples/demo) (or asks you to send it), uploads two more documents,
+waits for processing, corrects the flagged total as the accountant, confirms the vendors, approves as the approvers
+and exports to Xero. By hand:
+
+1. As **accountant**, upload the files in [`samples/demo`](samples/demo) (or any of [`samples/invoices`](samples/invoices)),
+   or e-mail them to the address under *Settings → E-mail ingestion*. Each moves through *Uploaded → OCR + AI → Validated* live.
+2. Open the queue **Needs review**: the validation panel says exactly why, the offending field is highlighted, and the sums
+   check updates as you type. Fix it, press *Save & revalidate*, and confirm the new vendor.
+3. As **approver**, approve with a comment or reject with a reason. Above the two-approver limit a second, different
+   approver is needed. Everything lands in the *Audit log*.
+4. As accountant, *Export → To accounting* produces the Xero or QuickBooks file; the invoices are marked and not offered again.
+5. As admin, add a policy under *Knowledge* and press *Why was this flagged?* on an invoice: the answer cites the passage.
 
 ## Duplicates, vendors and vendor memory
 
@@ -289,7 +358,7 @@ identifiers and a hidden prompt injection. Real redacted invoices go to `samples
 
 ```bash
 EVAL_MAX_COST_USD=1 docker compose --profile eval run --rm eval   # real pipeline + model; writes docs/evaluation.md
-node scripts/capture-screenshots.cjs              # seeds the demo org with the samples and captures screenshots
+node scripts/demo-flow.cjs http://localhost       # the demo flow; captures docs/screenshots/flow-*.png
 ```
 
 ## Security notes
@@ -300,7 +369,7 @@ neutralisation, audit trail. The full model is in [docs/ARCHITECTURE.md](docs/AR
 
 ## Known limitations
 
-- The evaluation set is synthetic and small (18 documents, one model run): 18/18 on it is a smoke test, not an SLA. Real invoices are messier.
+- The evaluation set is synthetic (32 documents) and the current pipeline has not been measured with the real model yet; see [Evaluation](#evaluation).
 - Access tokens live 15 minutes: disabling a user or changing a role takes effect for already-issued tokens at their expiry (refresh is blocked immediately). An open WebSocket stays authorised until it reconnects.
 - Firms: an e-mail address belongs to one account, so one person cannot work as two separate users for two firms (inside a firm one account reaches many clients). Taking access away, deactivating a client or removing a team member shows in a session that is already open only when its 15-minute token expires (`/auth/me` and refresh check at once). Deactivating a client does not lock out people whose home company it is. The monthly limit is checked per upload without a lock, so simultaneous uploads can overshoot it by a few documents; it counts uploads recorded in the audit trail, so deleting a document does not give the quota back. The firm clients total does not convert currencies. There is no screen to edit a client's name or currency or to set the limit (the API for the first two exists).
 - Zero-value invoices are rejected by validation. Currency conversion uses one rate per invoice date (no hedging, no month-end revaluation); the ECB does not publish every currency, those need manual rates.
@@ -321,10 +390,10 @@ Provider-group to role mapping for SSO, IMAP IDLE, connectors for specific ERP s
 backend/      Spring Boot API, pipeline, validation, knowledge base      (+ Flyway migrations, tests)
 extract-service/ file -> text -> model -> validated JSON; every OpenAI call (+ pytest suite)
 frontend/     Next.js application                                         (+ vitest, Playwright)
-samples/      synthetic invoices, ground truth, generator
+samples/      32 synthetic invoices + ground truth, generator, demo documents, real/ for redacted ones
 eval/         accuracy evaluation harness
 e2e/          offline AI test double for browser tests
 docker/       Nginx configuration
-docs/         ARCHITECTURE, STATUS, evaluation and OCR-COMPARISON (generated), AUDIT-PHASE0 (history)
-scripts/      screenshot capture
+docs/         ARCHITECTURE, STATUS, evaluation (written by eval/run_eval.py), ACCOUNTING-EXPORT, AUDIT-PHASE0 (history)
+scripts/      demo flow and README screenshots (demo-flow.cjs)
 ```
